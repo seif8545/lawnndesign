@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sand-100: #faf0d9;
+  --terra-500: #c4622d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: #fffcf4;
+  color: #21326c;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f5e0b3;
+}
+::-webkit-scrollbar-thumb {
+  background: #21326c;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #16224a;
+}
+
+/* Masonry layout for portfolio */
+.masonry-grid {
+  columns: 2;
+  column-gap: 12px;
+}
+.masonry-grid > * {
+  break-inside: avoid;
+  margin-bottom: 12px;
+}
+@media (min-width: 640px) {
+  .masonry-grid {
+    columns: 3;
+  }
+}
+
+/* Portfolio card hover */
+.portfolio-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.portfolio-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -10px rgba(33, 50, 108, 0.3);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.animate-pulse-soft {
+  animation: pulseSoft 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulseBorder {
+  0% { box-shadow: 0 0 0 0 rgba(33, 50, 108, 0.4); }
+  70% { box-shadow: 0 0 0 4px rgba(33, 50, 108, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(33, 50, 108, 0); }
+}
+.badge-pulse {
+  animation: pulseBorder 2s infinite;
+}
+
+/* Custom Utility Classes */
+.hero-pattern {
+  background-image: radial-gradient(#21326c 0.5px, transparent 0.5px);
+  background-size: 24px 24px;
+}
+.modal-backdrop {
+  background: rgba(33, 50, 108, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+/* Tooltip */
+.tooltip {
+  position: relative;
+}
+.tooltip .tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  background-color: #21326c;
+  color: #ffffff;
+  text-align: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  position: absolute;
+  z-index: 100;
+  bottom: 130%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 220px;
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.tooltip .tooltip-text::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #21326c;
+}
+.tooltip:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Tag pill */
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  background: #f0f4ff;
+  color: #21326c;
+  border: 1px solid #21326c;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
