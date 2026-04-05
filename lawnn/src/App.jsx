@@ -541,17 +541,14 @@ function HomePage({ setView, setSelectedTalent }) {
         </div>
         <div className="max-w-7xl mx-auto">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 bg-white border border-[#21326c]/20 rounded-full px-3 py-1.5 text-xs font-medium text-[#21326c] mb-6 shadow-sm">
-              <Zap size={12} className="text-[#21326c]" />
-              Agency quality, student rates — from Egypt's finest faculties
-            </div>
+            
             <h1 className="font-display text-5xl sm:text-6xl font-black leading-tight mb-4" style={{ color: '#21326c' }}>
-              Shaping the<br />
-              <em className="not-italic" style={{ color: '#ff9044' }}>Vision</em> of<br />
-              Modern Egypt
+              Empowering the next <br />
+              <em className="not-italic" style={{ color: '#ff9044' }}>Generation</em> <br />
+              Of Creators
             </h1>
             <p className="text-lg text-[#21326c] mb-8 leading-relaxed">
-              Hire verified top-tier students for architecture, design, and fine arts. Exceptional creative work at honest rates — or let Lawnn hand-pick your talent.
+              Hire verified top-tier students for architecture, design, and fine arts. Exceptional creative work at honest rates — or let Lawnn pick your talent.
             </p>
             <div className="flex flex-wrap gap-3">
               <button
@@ -577,17 +574,33 @@ function HomePage({ setView, setSelectedTalent }) {
         </div>
       </section>
 
-      {/* Trust Bar */}
-      <div className="py-3 overflow-hidden" style={{ backgroundColor: '#21326c', color: '#ffffff' }}>
-        <div className="flex items-center gap-8 animate-pulse-soft whitespace-nowrap px-4 text-sm font-medium opacity-90">
-          {['Helwan Fine Arts', 'GUC Applied Arts', 'AUC Architecture', 'Cairo University Fine Arts', 'MSA Digital Media', 'AASTMT', 'Misr International University', 'Ain Shams Fine Arts'].map((u, i) => (
+{/* Trust Bar */}
+<div className="py-3 overflow-hidden" style={{ backgroundColor: '#21326c', color: '#ffffff' }}>
+    <div className="animate-marquee flex items-center gap-8 px-4 text-sm font-medium opacity-90 whitespace-nowrap">
+        {[
+            'Helwan Fine Arts', 
+            'GUC Applied Arts', 
+            'AUC Architecture & Fine Arts', 
+            'MSA Arts and Design', 
+            'AASTMT Arts and Design', 
+            'Newgiza Fine Arts', 
+            'Ain Shams Architecture'
+        ].concat([
+            'Helwan Fine Arts', 
+            'GUC Applied Arts', 
+            'AUC Architecture & Fine Arts', 
+            'MSA Arts and Design', 
+            'AASTMT Arts and Design', 
+            'Newgiza Fine Arts', 
+            'Ain Shams Architecture'
+        ]).map((u, i) => (
             <span key={i} className="flex items-center gap-2 flex-shrink-0">
-              <GraduationCap size={14} />
-              {u}
+                <GraduationCap size={14} />
+                {u}
             </span>
-          ))}
-        </div>
-      </div>
+        ))}
+    </div>
+</div>
 
       {/* Categories & Talent Grid */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
