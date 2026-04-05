@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lawnn — لون | Coming Soon</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,600&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #fffcf4;
+            color: #21326c;
+            font-family: 'DM Sans', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .bg-pattern {
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            background-image: radial-gradient(#21326c 0.7px, transparent 0.7px);
+            background-size: 30px 30px;
+            opacity: 0.1;
+        }
+        .glow-1 {
+            position: absolute;
+            top: -10%; right: -10%;
+            width: 400px; height: 400px;
+            background: #21326c;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.05;
+            z-index: -1;
+        }
+        .glow-2 {
+            position: absolute;
+            bottom: -10%; left: -10%;
+            width: 300px; height: 300px;
+            background: #ff9044;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.1;
+            z-index: -1;
+        }
+        .container {
+            padding: 2rem;
+            max-width: 800px;
+            animation: fadeIn 1s ease-out forwards;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .logo-image {
+            max-width: 180px; 
+            height: auto;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 4rem;
+            font-weight: 900;
+            margin: 0 0 1.5rem 0;
+            line-height: 1.1;
+        }
+        h1 em {
+            color: #ff9044;
+            font-style: italic;
+        }
+        p {
+            font-size: 1.25rem;
+            color: #21326c;
+            opacity: 0.85;
+            max-width: 600px;
+            margin: 0 auto 3rem auto;
+            line-height: 1.6;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background-color: #ff9044;
+            color: #ffffff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            padding: 16px 36px;
+            border-radius: 50px;
+            box-shadow: 0 10px 20px -5px rgba(255, 144, 68, 0.4);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 25px -5px rgba(255, 144, 68, 0.5);
+            background-color: #ff9f5c;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 2.75rem; }
+            p { font-size: 1.1rem; }
+            .logo-image { max-width: 140px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-pattern"></div>
+    <div class="glow-1"></div>
+    <div class="glow-2"></div>
+
+    <div class="container">
+<img src="images/lawnn.png" alt="Lawnn Logo" class="logo-image">
+        <h1>Something <em>special</em><br>is coming.</h1>
+        <p>We are building the premier platform for Egyptian creative talent.</p>
+        
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLScm-OxEG4iucDm8NreNmvsSaXARH0KJE3Al8JZ8e53AlsmvEw/viewform?usp=header" target="_blank" rel="noopener noreferrer" class="cta-button">
+            Join the Waitlist
+        </a>
+    </div>
+</body>
+</html>
