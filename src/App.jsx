@@ -582,18 +582,18 @@ function CategoryPill({ label, icon: Icon, active, onClick }) {
 function Modal({ open, onClose, title, children, wide = false }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 modal-backdrop" onClick={onClose}>
       <div
-        className={`bg-white rounded-2xl shadow-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto animate-fade-in`}
+        className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'} max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-fade-in`}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-6 border-b border-[#21326c]/20">
-          <h2 className="text-xl font-bold text-[#21326c]">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#21326c]/5 flex items-center justify-center hover:bg-[#21326c]/10 transition-colors">
+        <div className="flex items-center justify-between px-5 py-4 sm:p-6 border-b border-[#21326c]/20">
+          <h2 className="text-lg sm:text-xl font-bold text-[#21326c]">{title}</h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#21326c]/5 flex items-center justify-center hover:bg-[#21326c]/10 transition-colors flex-shrink-0">
             <X size={16} className="text-[#21326c]" />
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="px-5 py-5 sm:p-6">{children}</div>
       </div>
     </div>
   );
@@ -866,7 +866,7 @@ function HomePage({ setView, setSelectedTalent, talents }) {
   return (
     <div className="animate-fade-in">
       {/* Hero */}
-      <section className="hero-pattern py-16 sm:py-24 px-4 relative overflow-hidden">
+      <section className="hero-pattern py-12 sm:py-20 lg:py-24 px-4 relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-8 right-8 w-64 h-64 rounded-full opacity-5" style={{ background: '#21326c', filter: 'blur(60px)' }} />
           <div className="absolute bottom-8 left-8 w-48 h-48 rounded-full opacity-5" style={{ background: '#c4622d', filter: 'blur(50px)' }} />
@@ -874,33 +874,33 @@ function HomePage({ setView, setSelectedTalent, talents }) {
         <div className="max-w-7xl mx-auto">
           <div className="max-w-2xl">
             
-            <h1 className="font-display text-5xl sm:text-6xl font-black leading-tight mb-4" style={{ color: '#21326c' }}>
-              Empowering the next <br />
-              <em className="not-italic" style={{ color: '#ff9044' }}>Generation</em> <br />
+            <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black leading-tight mb-4" style={{ color: '#21326c' }}>
+              Empowering the next{' '}
+              <em className="not-italic" style={{ color: '#ff9044' }}>Generation</em>{' '}
               Of Creators
             </h1>
-            <p className="text-lg text-[#21326c] mb-8 leading-relaxed">
+            <p className="text-base sm:text-lg text-[#21326c] mb-6 sm:mb-8 leading-relaxed">
               Hire verified top-tier students for architecture, design, and fine arts. Exceptional creative work at honest rates — or let Lawnn pick your talent.
             </p>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => setView('jobs')}
-                className="flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-white transition-all hover:opacity-90 shadow-lg"
+                className="flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-semibold text-white transition-all hover:opacity-90 shadow-lg text-sm sm:text-base"
                 style={{ background: '#ff9044' }}
               >
                 Post a Job <ArrowRight size={16} />
               </button>
               <button
                 onClick={() => setView('directory')}
-                className="flex items-center gap-2 px-6 py-3 rounded-full font-semibold bg-white border border-[#21326c]/30 hover:border-[#21326c] transition-all text-[#21326c]"
+                className="flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-semibold bg-white border border-[#21326c]/30 hover:border-[#21326c] transition-all text-[#21326c] text-sm sm:text-base"
               >
                 <Users size={16} /> Browse Talent
               </button>
             </div>
-            <div className="flex items-center gap-6 mt-8 text-sm text-[#21326c]">
-              <span className="flex items-center gap-1.5"><CheckCircle size={14} className="text-[#21326c]" /> 200+ Verified Students</span>
-              <span className="flex items-center gap-1.5"><Building2 size={14} className="text-[#21326c]" /> 12 Faculties</span>
-              <span className="flex items-center gap-1.5"><Star size={14} fill="#db9630" color="#db9630" /> 4.9 Avg. Rating</span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 text-xs sm:text-sm text-[#21326c]">
+              <span className="flex items-center gap-1.5"><CheckCircle size={13} className="text-[#21326c]" /> 200+ Verified Students</span>
+              <span className="flex items-center gap-1.5"><Building2 size={13} className="text-[#21326c]" /> 12 Faculties</span>
+              <span className="flex items-center gap-1.5"><Star size={13} fill="#db9630" color="#db9630" /> 4.9 Avg. Rating</span>
             </div>
           </div>
         </div>
@@ -970,16 +970,16 @@ function HomePage({ setView, setSelectedTalent, talents }) {
 
       {/* VIP Concierge Banner */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
-        <div className="rounded-2xl p-8 relative overflow-hidden" style={{ background: '#21326c' }}>
+        <div className="rounded-2xl p-6 sm:p-8 relative overflow-hidden" style={{ background: '#21326c' }}>
           <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-10" style={{ background: '#db9630', filter: 'blur(60px)', transform: 'translate(30%, -30%)' }} />
-          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
             <div className="text-white">
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles size={18} className="text-yellow-400" />
+                <Sparkles size={16} className="text-yellow-400" />
                 <span className="text-yellow-400 font-semibold text-sm">VIP Concierge</span>
               </div>
-              <h3 className="font-display text-3xl font-bold mb-2 text-white">Let Lawnn do the search</h3>
-              <p className="leading-relaxed max-w-lg text-white/80">
+              <h3 className="font-display text-2xl sm:text-3xl font-bold mb-2 text-white">Let Lawnn do the search</h3>
+              <p className="text-sm sm:text-base leading-relaxed max-w-lg text-white/80">
                 Post your job with VIP Concierge (+200 EGP) and our team hand-picks the top 3 matching students for you. No scrolling, no guesswork — just curated talent delivered.
               </p>
             </div>
@@ -1041,11 +1041,8 @@ function TalentCard({ talent, onClick }) {
         </div>
 
         <div className="flex items-center justify-between pt-3 border-t border-[#21326c]/10">
-          <span className="text-sm font-semibold text-[#21326c]">
-            <span className="text-xs font-normal text-[#21326c] mr-0.5">From</span>
-            {talent.hourlyRate} EGP/hr
-          </span>
           <span className="text-xs text-[#21326c]">{talent.completedJobs} jobs done</span>
+          <span className="text-xs text-[#21326c]">{talent.reviews} reviews</span>
         </div>
       </div>
     </div>
@@ -1122,14 +1119,14 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
         <div>
-          <h1 className="font-display text-3xl font-bold text-[#21326c]">Job Board</h1>
-          <p className="text-[#21326c] mt-1">Live creative briefs from Egypt's top brands and agencies</p>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c]">Job Board</h1>
+          <p className="text-sm text-[#21326c] mt-1">Live creative briefs from Egypt's top brands and agencies</p>
         </div>
         <button
           onClick={() => setShowPostModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-white shadow-md hover:opacity-90 transition-all"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-white shadow-md hover:opacity-90 transition-all text-sm flex-shrink-0"
           style={{ background: '#ff9044' }}
         >
           <Plus size={16} /> Post a Job
@@ -1174,10 +1171,11 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                   ))}
                 </div>
               </div>
-              <div className="sm:text-right flex-shrink-0 flex flex-col items-end gap-1">
-                <div className="text-2xl font-bold text-[#21326c]">{job.budget} EGP{job.budgetType === '/hr' ? '/hr' : ''}</div>
-                <div className="text-xs text-[#21326c]">{job.budgetType === 'Fixed' ? 'Fixed price' : 'Hourly'}</div>
-                <div className="text-xs text-[#21326c] mt-1">{job.applicants} applicants</div>
+              <div className="sm:text-right flex-shrink-0 flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:gap-1">
+                <div>
+                  <div className="text-xl sm:text-2xl font-bold text-[#21326c]">{job.budget} EGP</div>
+                  <div className="text-xs text-[#21326c]">{job.budgetType === 'Fixed' ? 'Fixed price' : 'Hourly rate'} · {job.applicants} applicants</div>
+                </div>
                 {currentUser?.role !== 'admin' && (
                   <button
                     className="mt-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90"
@@ -1456,7 +1454,7 @@ function DirectoryPage({ setView, setSelectedTalent, talents }) {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
       <div className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-[#21326c] mb-1">Talent Directory</h1>
+        <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c] mb-1">Talent Directory</h1>
         <p className="text-sm text-[#21326c]">Verified creative students from Egypt's top faculties</p>
       </div>
 
@@ -1585,19 +1583,19 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
 
         <div className="px-6 pb-6">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-10 mb-4">
-            <div className="flex items-end gap-4">
+            <div className="flex items-end gap-3">
               <div
-                className="w-20 h-20 rounded-2xl border-4 border-white flex items-center justify-center text-white text-xl font-bold shadow-md"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-4 border-white flex items-center justify-center text-white text-lg sm:text-xl font-bold shadow-md flex-shrink-0"
                 style={{ background: talent.avatarColor }}
               >
                 {talent.initials}
               </div>
               <div className="pb-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="font-display text-2xl font-bold text-[#21326c]">{talent.name}</h1>
+                  <h1 className="font-display text-xl sm:text-2xl font-bold text-[#21326c]">{talent.name}</h1>
                   <VerifiedBadge isGrad={talent.isGrad} />
                 </div>
-                <p className="text-sm text-[#21326c]">{talent.university} · {talent.dept}</p>
+                <p className="text-xs sm:text-sm text-[#21326c]">{talent.university} · {talent.dept}</p>
               </div>
             </div>
 
@@ -1642,11 +1640,10 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
           </div>
 
           {/* Stats row */}
-          <div className="flex items-center gap-6 flex-wrap text-sm mb-5">
+          <div className="flex items-center gap-4 flex-wrap text-sm mb-5">
             <StarRating rating={talent.rating} />
             <span className="text-[#21326c]">{talent.reviews} reviews</span>
             <span className="text-[#21326c]">{talent.completedJobs} projects completed</span>
-            <span className="font-semibold text-[#21326c]">{talent.hourlyRate} EGP/hr</span>
           </div>
 
           {/* Bio */}
@@ -1998,7 +1995,7 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
       <div className="mb-8">
-        <h1 className="font-display text-3xl font-bold text-[#21326c] mb-1">Student Feed</h1>
+        <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c] mb-1">Student Feed</h1>
         <p className="text-[#21326c] text-sm">Follow the creative process — <span className="font-semibold">#WIP</span> work from Egypt's top talents</p>
       </div>
 
@@ -2265,7 +2262,7 @@ function ChatPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 animate-fade-in">
-      <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden" style={{ height: 'calc(100vh - 160px)', minHeight: '500px' }}>
+      <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden" style={{ height: 'calc(100dvh - 130px)', minHeight: '480px' }}>
         <div className="flex h-full">
           {/* Contacts Sidebar */}
           <div className={`${showSidebar ? 'flex' : 'hidden'} sm:flex flex-col w-full sm:w-72 border-r border-[#21326c]/10 flex-shrink-0`}>
@@ -2615,7 +2612,7 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
 
   return (
     <div className="animate-fade-in">
-      <section className="hero-pattern py-16 sm:py-24 px-4 relative">
+      <section className="hero-pattern py-12 sm:py-20 px-4 relative">
         {isAdmin && (
           <div className="absolute top-6 right-6">
             {editingAbout ? (
@@ -2638,7 +2635,7 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full mb-6" style={{ background: '#21326c', color: '#fff' }}>
               <Droplets size={12} /> Our Story
             </span>
-            <h1 className="font-display text-5xl font-black text-[#21326c] leading-tight mb-6">
+            <h1 className="font-display text-4xl sm:text-5xl font-black text-[#21326c] leading-tight mb-6">
               Built for Egypt's{' '}
               <em className="not-italic" style={{ color: '#ff9044' }}>Creative</em>{' '}
               Generation
@@ -2908,9 +2905,9 @@ function NewsPage({ newsPosts, setNewsPosts, currentUser }) {
   // ── ARTICLE LIST ──
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-8">
         <div>
-          <h1 className="font-display text-3xl font-bold text-[#21326c] mb-1">News & Insights</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c] mb-1">News & Insights</h1>
           <p className="text-sm text-[#21326c]">Resources, guides, and industry updates for Egypt's creative community</p>
         </div>
         {isAdmin && (
@@ -3239,9 +3236,9 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
-          <h1 className="font-display text-3xl font-bold text-[#21326c] mb-1">Marketplace</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c] mb-1">Marketplace</h1>
           <p className="text-sm text-[#21326c]">Student-made work, prints, and creative assets for sale</p>
         </div>
         {isStudent && (
@@ -3687,7 +3684,7 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
       <div className="mb-6">
-        <h1 className="font-display text-3xl font-bold text-[#21326c] mb-1">Admin Dashboard</h1>
+        <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c] mb-1">Admin Dashboard</h1>
         <p className="text-sm text-[#21326c]">Review content, monitor conversations, manage users</p>
       </div>
 
@@ -3804,9 +3801,9 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
       {/* ── CONVERSATIONS TAB ── */}
       {adminTab === 'conversations' && (
         <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden" style={{ minHeight: '520px' }}>
-          <div className="flex h-full" style={{ minHeight: '520px' }}>
+          <div className="flex flex-col sm:flex-row" style={{ minHeight: '520px' }}>
             {/* Contact list */}
-            <div className="w-64 flex-shrink-0 border-r border-[#21326c]/10 flex flex-col">
+            <div className="w-full sm:w-64 sm:flex-shrink-0 border-b sm:border-b-0 sm:border-r border-[#21326c]/10 flex flex-col" style={{ maxHeight: '180px', overflowY: 'auto' }}>
               <div className="px-4 py-3 border-b border-[#21326c]/10 bg-[#21326c]/5">
                 <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wide">All Conversations</p>
               </div>
@@ -3834,7 +3831,7 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
             </div>
 
             {/* Message thread */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 flex flex-col min-w-0 min-h-0">
               <div className="flex items-center gap-3 p-4 border-b border-[#21326c]/10">
                 <Avatar initials={activeConvo.initials} color={activeConvo.color} size="md" online={activeConvo.online} />
                 <div>
