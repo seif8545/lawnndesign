@@ -7,7 +7,7 @@ import {
   MoreHorizontal, ChevronDown, Camera, Palette, Building2,
   GraduationCap, Sparkles, ArrowRight, Globe, Lock, Droplets,
   BookOpen, Layers, Pen, Video, Image as ImageIcon, Stamp,
-  ExternalLink, Info, UserPlus, TrendingUp, Hash, ThumbsUp,
+  ExternalLink, Info, TrendingUp, Hash, ThumbsUp,
   BarChart2, Zap, Menu, ChevronLeft, ShoppingBag, Package, BadgeCheck,
   Trash2, MessageSquareText, UserCheck
 } from 'lucide-react';
@@ -1522,8 +1522,6 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
   const [showHireModal, setShowHireModal]   = useState(false);
   const [hireForm, setHireForm]             = useState({ title: '', brief: '', budget: '' });
   const [hireSuccess, setHireSuccess]       = useState(false);
-  const [showFullTimeModal, setShowFullTimeModal] = useState(false);
-  const [ftSuccess, setFtSuccess]           = useState(false);
   const [showEditModal, setShowEditModal]   = useState(false);
 
   // Edit profile state
@@ -1554,11 +1552,6 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
   const submitHire = () => {
     setHireSuccess(true);
     setTimeout(() => { setShowHireModal(false); setHireSuccess(false); setHireForm({ title: '', brief: '', budget: '' }); }, 2500);
-  };
-
-  const submitFullTime = () => {
-    setFtSuccess(true);
-    setTimeout(() => { setShowFullTimeModal(false); setFtSuccess(false); }, 2500);
   };
 
   const PORT_COLORS = ['#21326c', '#c4622d', '#db9630', '#3c8762', '#a84f22', '#5ea580'];
@@ -1616,16 +1609,6 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                   >
                     <MessageSquare size={15} /> Message
                   </button>
-
-                  {talent.isGrad && (
-                    <button
-                      onClick={() => setShowFullTimeModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90"
-                      style={{ background: '#ff9044' }}
-                    >
-                      <UserPlus size={15} /> Hire Full-Time
-                    </button>
-                  )}
 
                   <button
                     onClick={() => setShowHireModal(true)}
@@ -1699,7 +1682,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
               <div className="flex items-start gap-2">
                 <Info size={15} className="flex-shrink-0 mt-0.5" style={{ color: '#db9630' }} />
                 <p className="text-xs leading-relaxed text-[#21326c]">
-                  <strong>Graduate Profile:</strong> This talent graduated and is available for freelance projects and full-time opportunities for up to 12 months from graduation. After that, profiles are archived.
+                  <strong>Graduate Profile:</strong> This talent graduated and is available for freelance projects for up to 12 months from graduation. After that, profiles are archived.
                 </p>
               </div>
             </div>
@@ -1765,50 +1748,6 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
             className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50"
             style={{ background: '#ff9044' }}>
             Send Proposal
-          </button>
-        </div>
-      )}
-    </Modal>
-
-    {/* ── HIRE FULL-TIME MODAL ── */}
-    <Modal open={showFullTimeModal} onClose={() => { setShowFullTimeModal(false); setFtSuccess(false); }} title="Full-Time Hire Request">
-      {ftSuccess ? (
-        <div className="text-center py-8">
-          <div className="w-14 h-14 rounded-full bg-[#21326c]/10 flex items-center justify-center mx-auto mb-3">
-            <CheckCircle size={28} className="text-[#21326c]" />
-          </div>
-          <p className="font-display text-lg font-bold text-[#21326c] mb-1">Request Received</p>
-          <p className="text-sm text-[#21326c]/70">The Lawnn team will contact you within 24 hours to arrange the placement process.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 p-3 bg-[#21326c]/5 rounded-xl">
-            <Avatar initials={talent.initials} color={talent.avatarColor} size="md" />
-            <div>
-              <p className="font-semibold text-[#21326c] text-sm">{talent.name}</p>
-              <p className="text-xs text-[#21326c]/60">{talent.dept} · {talent.university}</p>
-            </div>
-          </div>
-          <div className="space-y-3 text-sm text-[#21326c] leading-relaxed">
-            <p>Lawnn manages full-time placement for verified graduate talents. Here's how it works:</p>
-            <ul className="space-y-2">
-              {[
-                'You submit a hire request and we verify the graduate is still available.',
-                'Lawnn coordinates a structured interview process on your behalf.',
-                'Upon successful hire, a one-month salary placement fee is invoiced to your company.',
-                'The student transitions directly — no middleman involvement after placement.',
-              ].map((s, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="w-5 h-5 rounded-full bg-[#21326c] text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                  {s}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <button onClick={submitFullTime}
-            className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all"
-            style={{ background: '#ff9044' }}>
-            Request Full-Time Placement
           </button>
         </div>
       )}
