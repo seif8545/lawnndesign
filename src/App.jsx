@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Search, Bell, MessageSquare, Briefcase, Users, Home, Grid,
   Star, MapPin, ChevronRight, Plus, Filter, X, Send, Paperclip,
@@ -9,7 +9,9 @@ import {
   BookOpen, Layers, Pen, Video, Image as ImageIcon, Stamp,
   ExternalLink, Info, TrendingUp, Hash, ThumbsUp,
   BarChart2, Zap, Menu, ChevronLeft, ShoppingBag, Package, BadgeCheck,
-  Trash2, MessageSquareText, UserCheck
+  Trash2, MessageSquareText, UserCheck, Wallet, CircleDot, Wifi,
+  WifiOff, CalendarCheck, FileImage, Hourglass, PackageCheck,
+  ThumbsDown, CreditCard, PartyPopper
 } from 'lucide-react';
 
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
@@ -30,12 +32,14 @@ const TALENTS = [
     tags: ['3D Viz', 'AutoCAD', 'Revit'],
     bio: 'Third-year Interior Architecture student passionate about blending contemporary Egyptian aesthetics with functional design. Specialised in high-end residential and hospitality projects.',
     hourlyRate: 120,
+    availability: 'open',
+    walletBalance: 3850,
     portfolio: [
-      { color: '#c4622d', label: 'Villa Interior — New Cairo', h: 'tall' },
-      { color: '#21326c', label: 'Co-working Space 3D Viz', h: 'short' },
-      { color: '#db9630', label: 'Boutique Hotel Lobby', h: 'medium' },
-      { color: '#21326c', label: 'Restaurant Moodboard', h: 'short' },
-      { color: '#21326c', label: 'Residential Kitchen Render', h: 'tall' },
+      { id: 'p1', color: '#c4622d', label: 'Villa Interior — New Cairo', h: 'tall', imageUrl: null },
+      { id: 'p2', color: '#21326c', label: 'Co-working Space 3D Viz', h: 'short', imageUrl: null },
+      { id: 'p3', color: '#db9630', label: 'Boutique Hotel Lobby', h: 'medium', imageUrl: null },
+      { id: 'p4', color: '#21326c', label: 'Restaurant Moodboard', h: 'short', imageUrl: null },
+      { id: 'p5', color: '#21326c', label: 'Residential Kitchen Render', h: 'tall', imageUrl: null },
     ],
     completedJobs: 24,
     education: [{ degree: 'B.Sc Interior Architecture', school: 'Helwan University', years: '2022–Present' }],
@@ -56,12 +60,14 @@ const TALENTS = [
     tags: ['Branding', 'Motion', 'Figma'],
     bio: 'Recent GUC Applied Arts graduate with a focus on brand identity systems and motion design. Worked with 5+ Egyptian startups on end-to-end visual identities.',
     hourlyRate: 160,
+    availability: 'busy',
+    walletBalance: 7200,
     portfolio: [
-      { color: '#db9630', label: 'Brand Identity — Cairo Café', h: 'short' },
-      { color: '#c4622d', label: 'Motion Reel 2024', h: 'tall' },
-      { color: '#21326c', label: 'UI System — Fintech App', h: 'medium' },
-      { color: '#21326c', label: 'Packaging — Organic Brand', h: 'short' },
-      { color: '#21326c', label: 'Annual Report Design', h: 'tall' },
+      { id: 'p1', color: '#db9630', label: 'Brand Identity — Cairo Café', h: 'short', imageUrl: null },
+      { id: 'p2', color: '#c4622d', label: 'Motion Reel 2024', h: 'tall', imageUrl: null },
+      { id: 'p3', color: '#21326c', label: 'UI System — Fintech App', h: 'medium', imageUrl: null },
+      { id: 'p4', color: '#21326c', label: 'Packaging — Organic Brand', h: 'short', imageUrl: null },
+      { id: 'p5', color: '#21326c', label: 'Annual Report Design', h: 'tall', imageUrl: null },
     ],
     completedJobs: 47,
     education: [{ degree: 'B.Sc Graphic Design', school: 'German University in Cairo', years: '2020–2024' }],
@@ -85,10 +91,12 @@ const TALENTS = [
     tags: ['Urban Planning', 'BIM', 'SketchUp'],
     bio: 'AUC Architecture sophomore with a deep interest in sustainable urbanism and heritage conservation in the Egyptian context. Awarded Best Studio Project 2024.',
     hourlyRate: 90,
+    availability: 'open',
+    walletBalance: 1200,
     portfolio: [
-      { color: '#21326c', label: 'Urban Masterplan — Alexandria', h: 'medium' },
-      { color: '#db9630', label: 'Heritage Building Survey', h: 'tall' },
-      { color: '#21326c', label: 'Sustainable Housing Concept', h: 'short' },
+      { id: 'p1', color: '#21326c', label: 'Urban Masterplan — Alexandria', h: 'medium', imageUrl: null },
+      { id: 'p2', color: '#db9630', label: 'Heritage Building Survey', h: 'tall', imageUrl: null },
+      { id: 'p3', color: '#21326c', label: 'Sustainable Housing Concept', h: 'short', imageUrl: null },
     ],
     completedJobs: 8,
     education: [{ degree: 'B.Sc Architecture (In Progress)', school: 'American University in Cairo', years: '2022–2026' }],
@@ -109,10 +117,12 @@ const TALENTS = [
     tags: ['Sculpture', 'Ceramics', 'Illustration'],
     bio: 'Fine Arts sculptor exploring the intersection of traditional Egyptian craft and contemporary form. Works in clay, resin, and mixed media. Available for commissions and installations.',
     hourlyRate: 100,
+    availability: 'away',
+    walletBalance: 0,
     portfolio: [
-      { color: '#db9630', label: 'Pharaonic Series — Bronze', h: 'tall' },
-      { color: '#c4622d', label: 'Ceramic Wall Installation', h: 'short' },
-      { color: '#21326c', label: 'Mixed Media Portrait', h: 'medium' },
+      { id: 'p1', color: '#db9630', label: 'Pharaonic Series — Bronze', h: 'tall', imageUrl: null },
+      { id: 'p2', color: '#c4622d', label: 'Ceramic Wall Installation', h: 'short', imageUrl: null },
+      { id: 'p3', color: '#21326c', label: 'Mixed Media Portrait', h: 'medium', imageUrl: null },
     ],
     completedJobs: 15,
     education: [{ degree: 'B.F.A Sculpture', school: 'Helwan University', years: '2021–2025' }],
@@ -133,11 +143,13 @@ const TALENTS = [
     tags: ['UI/UX', 'Prototyping', 'User Research'],
     bio: 'UX designer and MSA graduate with expertise in product design for mobile and web. Completed a thesis on accessibility in Arabic-language interfaces. Currently freelancing full-time.',
     hourlyRate: 180,
+    availability: 'open',
+    walletBalance: 11500,
     portfolio: [
-      { color: '#21326c', label: 'E-commerce App — Cairo', h: 'short' },
-      { color: '#21326c', label: 'Health Tracking Dashboard', h: 'tall' },
-      { color: '#db9630', label: 'Arabic Typography System', h: 'medium' },
-      { color: '#c4622d', label: 'Banking Super App', h: 'short' },
+      { id: 'p1', color: '#21326c', label: 'E-commerce App — Cairo', h: 'short', imageUrl: null },
+      { id: 'p2', color: '#21326c', label: 'Health Tracking Dashboard', h: 'tall', imageUrl: null },
+      { id: 'p3', color: '#db9630', label: 'Arabic Typography System', h: 'medium', imageUrl: null },
+      { id: 'p4', color: '#c4622d', label: 'Banking Super App', h: 'short', imageUrl: null },
     ],
     completedJobs: 39,
     education: [{ degree: 'B.Sc Digital Media Design', school: 'Modern Sciences & Arts Univ.', years: '2020–2024' }],
@@ -161,14 +173,42 @@ const TALENTS = [
     tags: ['Calligraphy', 'Painting', 'Mural'],
     bio: 'Third-year Fine Arts student specialising in Arabic calligraphy and contemporary painting. Has completed 3 public mural commissions in Cairo and exhibited at Cairo Biennale 2023.',
     hourlyRate: 110,
+    availability: 'open',
+    walletBalance: 2100,
     portfolio: [
-      { color: '#c4622d', label: 'Arabic Calligraphy Series', h: 'medium' },
-      { color: '#db9630', label: 'Mixed Media — Nile Study', h: 'tall' },
-      { color: '#21326c', label: 'Public Mural — Zamalek', h: 'short' },
+      { id: 'p1', color: '#c4622d', label: 'Arabic Calligraphy Series', h: 'medium', imageUrl: null },
+      { id: 'p2', color: '#db9630', label: 'Mixed Media — Nile Study', h: 'tall', imageUrl: null },
+      { id: 'p3', color: '#21326c', label: 'Public Mural — Zamalek', h: 'short', imageUrl: null },
     ],
     completedJobs: 19,
     education: [{ degree: 'B.F.A Painting', school: 'Cairo University', years: '2022–2025' }],
     experience: [{ role: 'Teaching Assistant', company: 'Cairo University Arts Faculty', years: '2024–Present' }],
+  },
+  {
+    id: 7,
+    name: 'Yomna Maghraby',
+    university: 'Helwan University — Fine Arts',
+    dept: 'Interior Design',
+    year: 2026,
+    isGrad: false,
+    rating: 4.7,
+    reviews: 6,
+    avatar: null,
+    avatarColor: '#db9630',
+    initials: 'YM',
+    tags: ['AutoCAD', '3ds Max', 'Revit', 'Paintings'],
+    bio: "Fourth-year Interior Design student at Helwan University's Faculty of Fine Arts. Passionate about merging classical Egyptian aesthetics with contemporary spatial design. Experienced in technical drafting and photorealistic 3D visualization.",
+    hourlyRate: 100,
+    availability: 'open',
+    walletBalance: 9000,
+    portfolio: [
+      { id: 'p1', color: '#db9630', label: 'Residential Apartment — Maadi', h: 'tall', imageUrl: null },
+      { id: 'p2', color: '#21326c', label: 'AutoCAD Technical Drawings', h: 'short', imageUrl: null },
+      { id: 'p3', color: '#c4622d', label: 'Watercolour — Interior Study', h: 'medium', imageUrl: null },
+    ],
+    completedJobs: 5,
+    education: [{ degree: 'B.F.A Interior Design (In Progress)', school: 'Helwan University', years: '2022–2026' }],
+    experience: [{ role: 'Freelance Interior Drafter', company: 'Self-employed', years: '2023–Present' }],
   },
 ];
 
@@ -318,6 +358,31 @@ const CHAT_CONTACTS = [
   { id: 4, name: 'Shifa Digital', initials: 'SD', color: '#21326c', lastMsg: 'When can we schedule a call?', time: 'Yesterday', unread: 1, online: false },
 ];
 
+// Per-project seeded chat messages (keyed by projectId)
+const SEED_CHAT_MESSAGES = {
+  'proj-2': [
+    { id: 1, from: 'them', text: 'Hi Yomna! We just confirmed the deposit — excited to get started. Please review the drawings I sent over.', time: '4 days ago' },
+    { id: 2, from: 'me', text: "Got them, thank you! I'll start blocking out the living room and kitchen first. Should have initial renders to share within 5 days.", time: '4 days ago' },
+    { id: 3, from: 'them', text: 'Perfect. One note — the client wants the marble to feel warm, not cold. Think Sinai stone rather than Carrara.', time: '3 days ago' },
+    { id: 4, from: 'me', text: "Absolutely — I was already leaning that way. I'll prepare 3 material options and you can pick the direction.", time: '3 days ago' },
+    { id: 5, from: 'them', text: 'Great renders! Can you adjust the lighting in the master bedroom — it feels a little flat right now?', time: '1 day ago' },
+    { id: 6, from: 'me', text: 'Sure, I can share the V-Ray files once the lighting pass is done. Sending a preview this afternoon.', time: '10:32 AM' },
+  ],
+  'proj-3': [
+    { id: 1, from: 'them', text: 'Laila, the Figma prototype looks really solid. Component structure is very clean.', time: '2 days ago' },
+    { id: 2, from: 'me', text: 'Thank you! I built a full design token system so dark mode and white-labelling are trivial to add later.', time: '2 days ago' },
+    { id: 3, from: 'them', text: 'One request — could we see a dark mode variant of the main dashboard?', time: '1 day ago' },
+    { id: 4, from: 'me', text: "Already done — check the 'Dark' page in the Figma file. All tokens are linked so colours flip automatically.", time: '1 day ago' },
+    { id: 5, from: 'them', text: 'Sent the final brand guide PDF', time: 'Yesterday' },
+  ],
+  'proj-4': [
+    { id: 1, from: 'them', text: 'Yomna, the renders were absolutely stunning. The client approved everything on the first pass.', time: '3 weeks ago' },
+    { id: 2, from: 'me', text: "So glad! The Sinai marble palette really elevated the whole scheme. It was a great brief to work on.", time: '3 weeks ago' },
+    { id: 3, from: 'them', text: "We've released the final payment to your wallet. Left you a 5★ review — well deserved.", time: '2 weeks ago' },
+    { id: 4, from: 'me', text: "Thank you so much! Looking forward to working together on the next one.", time: '2 weeks ago' },
+  ],
+};
+
 const CHAT_MESSAGES = [
   { id: 1, from: 'them', text: 'Hi Nour! I just reviewed your portfolio — absolutely love your interior renders. Can you share the V-Ray project files for the hotel lobby concept?', time: '9:45 AM' },
   { id: 2, from: 'me', text: 'Thank you so much! Really glad you liked it. I can share the files, but I normally send the finished renders as a View-Only PDF first so the composition is locked before handing over assets. Does that work for you?', time: '9:52 AM' },
@@ -330,9 +395,111 @@ const CHAT_MESSAGES = [
 // ─── AUTH / USER DATA ─────────────────────────────────────────────────────────
 
 const MOCK_USERS = [
-  { id: 1, email: 'nour@lawnn.com',   password: 'lawnn123',  role: 'student', name: 'Nour El-Sayed',        initials: 'NE', avatarColor: '#21326c', talentId: 1 },
-  { id: 2, email: 'client@safwa.com', password: 'safwa2024', role: 'client',  name: 'Al-Safwa Dev.',        initials: 'AS', avatarColor: '#c4622d' },
-  { id: 3, email: 'admin@lawnn.com',  password: 'admin2024', role: 'admin',   name: 'Lawnn Admin',          initials: 'LA', avatarColor: '#21326c' },
+  { id: 1, email: 'nour@lawnn.com',          password: 'lawnn123',  role: 'student', name: 'Nour El-Sayed',   initials: 'NE', avatarColor: '#21326c', talentId: 1 },
+  { id: 2, email: 'client@safwa.com',        password: 'safwa2024', role: 'client',  name: 'Al-Safwa Dev.',   initials: 'AS', avatarColor: '#c4622d' },
+  { id: 3, email: 'admin@lawnn.com',         password: 'admin2024', role: 'admin',   name: 'Lawnn Admin',     initials: 'LA', avatarColor: '#21326c' },
+  { id: 4, email: 'yomna@lawnndesign.com',   password: 'youmie272', role: 'student', name: 'Yomna Maghraby',  initials: 'YM', avatarColor: '#db9630', talentId: 7 },
+];
+
+// ─── MOCK PROJECTS (escrow lifecycle) ────────────────────────────────────────
+// Statuses: open → offer_accepted → deposit_paid → in_progress → delivered → completed → reviewed
+const MOCK_PROJECTS = [
+  {
+    id: 'proj-1',
+    title: 'Brand Identity for Al-Safwa Properties',
+    brief: 'We need a full brand identity system — logo, colour palette, typography, and brand guidelines document — for our new residential development arm. Must feel premium and trustworthy, inspired by Egyptian heritage but modern in execution.',
+    budget: 5500,
+    vip: true,
+    clientId: 2,
+    clientName: 'Al-Safwa Dev.',
+    status: 'open',
+    postedAt: '2 days ago',
+    applications: [
+      { id: 'app-1', talentId: 2, talentName: 'Karim Ashraf', talentInitials: 'KA', talentColor: '#c4622d', note: "I've built brand systems for 5 Egyptian startups and this brief is right in my wheelhouse. I'd bring a refined, heritage-rooted identity with a contemporary edge.", samples: ['p1', 'p2', 'p3'], submittedAt: '1 day ago', proposedAmount: 5500 },
+      { id: 'app-2', talentId: 6, talentName: 'Ahmed Khalil', talentInitials: 'AK', talentColor: '#21326c', note: 'My background in calligraphy and contemporary painting gives me a unique angle — a brand that truly feels rooted in Egyptian visual culture.', samples: ['p1', 'p2'], submittedAt: '18 hours ago', proposedAmount: 5200 },
+    ],
+    acceptedApplicationId: null,
+    acceptedTalentId: null,
+    depositAmount: null,
+    depositPaidAt: null,
+    deliveryNote: null,
+    clientApproved: false,
+    clientReview: null,
+    talentReview: null,
+    completedAt: null,
+  },
+  {
+    id: 'proj-2',
+    title: '3D Visualization — New Cairo Villa',
+    brief: 'We need photorealistic 3D renders of a 450m² villa in New Cairo — living room, master bedroom, and kitchen. Deliverables: 8 high-res renders + a 60-second walkthrough animation.',
+    budget: 3800,
+    vip: false,
+    clientId: 2,
+    clientName: 'Al-Safwa Dev.',
+    status: 'deposit_paid',
+    postedAt: '6 days ago',
+    applications: [
+      { id: 'app-3', talentId: 7, talentName: 'Yomna Maghraby', talentInitials: 'YM', talentColor: '#db9630', note: "Interior design is my speciality — I work in AutoCAD, 3ds Max, and Revit daily. I can deliver photorealistic renders with an Egyptian contemporary aesthetic that fits your brief perfectly.", samples: ['p1', 'p2', 'p3'], submittedAt: '5 days ago', proposedAmount: 3800 },
+    ],
+    acceptedApplicationId: 'app-3',
+    acceptedTalentId: 7,
+    depositAmount: 1900,
+    depositPaidAt: '4 days ago',
+    deliveryNote: null,
+    clientApproved: false,
+    clientReview: null,
+    talentReview: null,
+    completedAt: null,
+  },
+  {
+    id: 'proj-3',
+    title: 'UI/UX Design — Client Portal App',
+    brief: 'Design a mobile-first client portal for property buyers: viewing project updates, payment schedules, and document access. iOS + Android. Deliver Figma prototype + design system.',
+    budget: 7200,
+    vip: false,
+    clientId: 2,
+    clientName: 'Al-Safwa Dev.',
+    status: 'delivered',
+    postedAt: '3 weeks ago',
+    applications: [
+      { id: 'app-4', talentId: 5, talentName: 'Laila Mansour', talentInitials: 'LM', talentColor: '#a84f22', note: "I designed a nearly identical product for Fawry Digital — a payment portal used by 200k+ users. I'll bring that enterprise-grade UX thinking to this brief.", samples: ['p1', 'p2', 'p4'], submittedAt: '3 weeks ago', proposedAmount: 7200 },
+    ],
+    acceptedApplicationId: 'app-4',
+    acceptedTalentId: 5,
+    depositAmount: 3600,
+    depositPaidAt: '18 days ago',
+    deliveryNote: "All 8 screens delivered in Figma with auto-layout, component library, and a full design system doc. The prototype is fully interactive — iOS and Android flows included. Loom walkthrough attached.",
+    deliveredAt: '2 days ago',
+    clientApproved: false,
+    clientReview: null,
+    talentReview: null,
+    completedAt: null,
+  },
+  {
+    id: 'proj-4',
+    title: 'Office Interior Design — Headquarters',
+    brief: 'Full interior design concept for our 300m² headquarters in Maadi — open plan workspace, two meeting rooms, and a reception area. Deliverables: concept boards, floor plans, material palette, and 4 renders.',
+    budget: 9000,
+    vip: true,
+    clientId: 2,
+    clientName: 'Al-Safwa Dev.',
+    status: 'reviewed',
+    postedAt: '2 months ago',
+    applications: [
+      { id: 'app-5', talentId: 7, talentName: 'Yomna Maghraby', talentInitials: 'YM', talentColor: '#db9630', note: "Hospitality interiors with an Egyptian character are exactly what I focus on. My AutoCAD and 3ds Max workflow handles projects like this efficiently — I'd love to bring this space to life.", samples: ['p1', 'p3'], submittedAt: '2 months ago', proposedAmount: 9000 },
+    ],
+    acceptedApplicationId: 'app-5',
+    acceptedTalentId: 7,
+    depositAmount: 4500,
+    depositPaidAt: '7 weeks ago',
+    deliveryNote: 'Complete interior design package delivered: concept boards, AutoCAD floor plans, material and finish schedule, and 4 V-Ray renders. Full PDF presentation included.',
+    deliveredAt: '3 weeks ago',
+    clientApproved: true,
+    remainingPaidAt: '2 weeks ago',
+    clientReview: { rating: 5, text: 'Yomna absolutely nailed the brief. The renders were stunning and she incorporated all our feedback efficiently. Will definitely hire again.' },
+    talentReview: { rating: 5, text: 'Al-Safwa was a dream client — clear brief, fast feedback, and paid on time. One of my best projects to date.' },
+    completedAt: '2 weeks ago',
+  },
 ];
 
 // ─── NEWS DATA ────────────────────────────────────────────────────────────────
@@ -510,7 +677,292 @@ const MARKETPLACE_LISTINGS = [
 
 const LISTING_COLORS = ['#21326c', '#c4622d', '#db9630', '#3c8762', '#a84f22', '#5ea580'];
 
+// ─── SKILL LIBRARY ────────────────────────────────────────────────────────────
+const SKILL_LIBRARY = [
+  {
+    category: 'Software & Tools',
+    skills: [
+      'AutoCAD', 'Rhinoceros', 'Blender', '3ds Max', 'SketchUp', 'V-Ray',
+      'Revit', 'Corona Renderer', 'Adobe Photoshop', 'Adobe Illustrator',
+      'Adobe InDesign', 'Figma', 'Procreate', 'Adobe Fresco', 'Corel Painter',
+      'ZBrush', 'Fusion 360', 'Grasshopper', 'Lumion',
+    ],
+  },
+  {
+    category: 'Conceptual Design',
+    skills: ['Spatial Thinking', 'Composition', 'Visual Hierarchy', 'Color Theory'],
+  },
+  {
+    category: 'Space & Architecture',
+    skills: ['Space Planning', 'Material Selection', 'Lighting Design', 'Technical Drawing'],
+  },
+  {
+    category: 'Branding & Identity',
+    skills: ['Branding', 'Identity Design', 'Typography', 'UI Design', 'UX Design'],
+  },
+  {
+    category: 'Form & Craft',
+    skills: ['Form Development', 'Volume Understanding', 'Material Handling', 'Structural Balance', 'Casting', 'Finishing'],
+  },
+  {
+    category: 'Advanced Design',
+    skills: ['Sustainable Design', 'Parametric Design'],
+  },
+  {
+    category: 'Professional Skills',
+    skills: ['Presentation Skills', 'Client Communication', 'Project Management', 'Time Management'],
+  },
+  {
+    category: 'Visualization & Production',
+    skills: ['3D Visualization', 'Rendering Optimization', 'Post-Production', 'Model Making', 'Digital Fabrication', 'File Preparation for Print'],
+  },
+  {
+    category: 'Media & Content',
+    skills: ['Photography', 'Videography', 'Content Creation', 'Social Media Strategy', 'Basic Coding (HTML/CSS)', 'AI Tools Usage'],
+  },
+  {
+    category: 'Drawing & Illustration',
+    skills: ['Style Development', 'Visual Storytelling', 'Freehand Drawing', 'Sketching', 'Perspective Drawing', 'Figure Drawing', 'Technical Drafting', 'Mixed Media Techniques', 'Digital Sketching'],
+  },
+];
+
 // ─── SHARED COMPONENTS ───────────────────────────────────────────────────────
+
+// LinkedIn-style skill picker — searchable list + free-type custom skills
+function SkillPicker({ currentTags, onAdd }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const q = query.trim().toLowerCase();
+  const allSkills = SKILL_LIBRARY.flatMap(c => c.skills);
+
+  const filtered = q
+    ? [{ category: 'Results', skills: allSkills.filter(s => s.toLowerCase().includes(q)) }]
+    : SKILL_LIBRARY;
+
+  const hasExactMatch = allSkills.some(s => s.toLowerCase() === query.trim().toLowerCase());
+  const canAddCustom = query.trim().length > 0 && !hasExactMatch && !currentTags.includes(query.trim());
+
+  const handleAdd = skill => {
+    if (!currentTags.includes(skill)) onAdd(skill);
+  };
+  const handleCustom = () => {
+    if (canAddCustom) { onAdd(query.trim()); setQuery(''); }
+  };
+
+  return (
+    <div className="relative">
+      {open && <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />}
+
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border border-dashed border-[#21326c]/40 text-[#21326c] hover:border-[#21326c] hover:bg-[#21326c]/5 transition-all"
+      >
+        <Plus size={12} /> Add skill
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-2 z-20 bg-white rounded-2xl shadow-2xl border border-[#21326c]/10 w-72 max-h-80 flex flex-col overflow-hidden">
+          {/* Search bar */}
+          <div className="p-3 border-b border-[#21326c]/8 flex-shrink-0">
+            <div className="flex gap-2 items-center">
+              <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-[#21326c]/20 focus-within:border-[#21326c] transition-colors bg-[#21326c]/3">
+                <Search size={12} className="text-[#21326c]/40 flex-shrink-0" />
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Search or type a custom skill…"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      if (canAddCustom) handleCustom();
+                      else if (filtered[0]?.skills?.[0]) handleAdd(filtered[0].skills.find(s => !currentTags.includes(s)) || filtered[0].skills[0]);
+                    }
+                    if (e.key === 'Escape') setOpen(false);
+                  }}
+                  className="flex-1 text-xs text-[#21326c] placeholder:text-[#21326c]/40 bg-transparent outline-none min-w-0"
+                />
+                {query && (
+                  <button onClick={() => setQuery('')} className="text-[#21326c]/30 hover:text-[#21326c]/60 flex-shrink-0">
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+              {canAddCustom && (
+                <button
+                  onClick={handleCustom}
+                  title={`Add "${query.trim()}" as custom skill`}
+                  className="flex-shrink-0 text-xs font-semibold px-3 py-2 rounded-xl text-white transition-opacity hover:opacity-90"
+                  style={{ background: '#21326c' }}
+                >
+                  Add
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Skill list */}
+          <div className="overflow-y-auto flex-1 px-3 py-2 space-y-3">
+            {filtered.map(({ category, skills }) => {
+              const visible = skills.filter(s => !q || s.toLowerCase().includes(q));
+              if (!visible.length) return null;
+              return (
+                <div key={category}>
+                  {!q && (
+                    <p className="text-[9px] font-black text-[#21326c]/30 uppercase tracking-widest mb-1.5 px-0.5">{category}</p>
+                  )}
+                  <div className="flex flex-wrap gap-1">
+                    {visible.map(skill => {
+                      const added = currentTags.includes(skill);
+                      return (
+                        <button
+                          key={skill}
+                          type="button"
+                          disabled={added}
+                          onClick={() => handleAdd(skill)}
+                          className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${
+                            added
+                              ? 'border-[#21326c]/15 text-[#21326c]/30 bg-[#21326c]/5 cursor-default'
+                              : 'border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c] hover:text-white hover:border-[#21326c] cursor-pointer'
+                          }`}
+                        >
+                          {added ? '✓ ' : ''}{skill}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            {q && filtered.every(c => c.skills.filter(s => s.toLowerCase().includes(q)).length === 0) && (
+              <p className="text-xs text-[#21326c]/40 text-center py-3">
+                No match — press Enter or click Add to create <strong>"{query.trim()}"</strong>
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Availability badge — green/amber/gray dot + label
+const AVAILABILITY = {
+  open:  { label: 'Open to work',   color: '#22c55e', bg: '#dcfce7', text: '#15803d' },
+  busy:  { label: 'Busy right now', color: '#f59e0b', bg: '#fef3c7', text: '#92400e' },
+  away:  { label: 'Away',           color: '#9ca3af', bg: '#f3f4f6', text: '#4b5563' },
+};
+function AvailabilityBadge({ status = 'open', compact = false }) {
+  const a = AVAILABILITY[status] || AVAILABILITY.open;
+  if (compact) {
+    return (
+      <span
+        title={a.label}
+        className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+        style={{ background: a.color, boxShadow: `0 0 0 2px white` }}
+      />
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+      style={{ background: a.bg, color: a.text }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: a.color }} />
+      {a.label}
+    </span>
+  );
+}
+
+// Interactive star rating picker (for reviews)
+function StarPicker({ value, onChange, size = 20 }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex gap-1">
+      {[1,2,3,4,5].map(n => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(n)}
+          onMouseEnter={() => setHover(n)}
+          onMouseLeave={() => setHover(0)}
+          className="transition-transform hover:scale-110"
+        >
+          <Star
+            size={size}
+            fill={(hover || value) >= n ? '#db9630' : 'none'}
+            color={(hover || value) >= n ? '#db9630' : '#21326c40'}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Notification panel — dropdown from bell icon
+function NotificationPanel({ notifications, onMarkRead, onMarkAllRead }) {
+  const unread = notifications.filter(n => !n.read).length;
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      {open && <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />}
+      <button
+        onClick={() => { setOpen(o => !o); if (!open) onMarkAllRead?.(); }}
+        className="relative p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors"
+        title="Notifications"
+      >
+        <Bell size={18} />
+        {unread > 0 && (
+          <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-bold" style={{ background: '#ff9044' }}>
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-2 z-40 bg-white rounded-2xl shadow-2xl border border-[#21326c]/10 w-80 max-h-96 flex flex-col overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#21326c]/10 flex items-center justify-between flex-shrink-0">
+            <p className="font-semibold text-[#21326c] text-sm">Notifications</p>
+            {unread > 0 && (
+              <button onClick={onMarkAllRead} className="text-xs text-[#21326c]/50 hover:text-[#21326c] transition-colors">Mark all read</button>
+            )}
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {notifications.length === 0 ? (
+              <p className="text-center text-sm text-[#21326c]/40 py-8">No notifications yet</p>
+            ) : (
+              notifications.map(n => (
+                <div
+                  key={n.id}
+                  onClick={() => onMarkRead(n.id)}
+                  className={`px-4 py-3 border-b border-[#21326c]/5 cursor-pointer hover:bg-[#21326c]/3 transition-colors ${!n.read ? 'bg-[#21326c]/5' : ''}`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: n.iconBg || '#21326c15' }}>
+                      {n.icon === 'money'   && <DollarSign size={14} style={{ color: '#22c55e' }} />}
+                      {n.icon === 'check'   && <CheckCircle size={14} style={{ color: '#21326c' }} />}
+                      {n.icon === 'message' && <MessageSquare size={14} style={{ color: '#21326c' }} />}
+                      {n.icon === 'star'    && <Star size={14} style={{ color: '#db9630' }} />}
+                      {n.icon === 'bag'     && <Briefcase size={14} style={{ color: '#c4622d' }} />}
+                      {!n.icon             && <Bell size={14} style={{ color: '#21326c' }} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs leading-snug text-[#21326c] ${!n.read ? 'font-semibold' : ''}`}>{n.title}</p>
+                      <p className="text-xs text-[#21326c]/50 mt-0.5 leading-snug">{n.body}</p>
+                      <p className="text-[10px] text-[#21326c]/30 mt-1">{n.time}</p>
+                    </div>
+                    {!n.read && <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ background: '#ff9044' }} />}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Avatar({ initials, color, size = 'md', online = false }) {
   const sizes = { sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-14 h-14 text-base', xl: 'w-20 h-20 text-xl' };
@@ -548,14 +1000,17 @@ function StarRating({ rating }) {
   );
 }
 
-function PortfolioBlock({ color, label, height = 'medium' }) {
+function PortfolioBlock({ color, label, height = 'medium', imageUrl }) {
   const heights = { short: 'h-24', medium: 'h-36', tall: 'h-48' };
   return (
     <div
       className={`portfolio-card ${heights[height]} rounded-xl flex items-end p-3 cursor-pointer overflow-hidden`}
-      style={{ background: `linear-gradient(160deg, ${color}cc, ${color})` }}
+      style={imageUrl
+        ? { backgroundImage: `url(${imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+        : { background: `linear-gradient(160deg, ${color}cc, ${color})` }
+      }
     >
-      <span className="text-white text-xs font-medium leading-tight bg-black/20 rounded-lg px-2 py-1">
+      <span className="text-white text-xs font-medium leading-tight bg-black/30 rounded-lg px-2 py-1">
         {label}
       </span>
     </div>
@@ -582,18 +1037,18 @@ function CategoryPill({ label, icon: Icon, active, onClick }) {
 function Modal({ open, onClose, title, children, wide = false }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 modal-backdrop" onClick={onClose}>
+    <div className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:px-4 sm:pb-4 sm:pt-20 modal-backdrop" style={{ zIndex: 1000 }} onClick={onClose}>
       <div
-        className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'} max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-fade-in`}
+        className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'} max-h-[92dvh] sm:max-h-[85vh] overflow-y-auto animate-fade-in`}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 sm:p-6 border-b border-[#21326c]/20">
-          <h2 className="text-lg sm:text-xl font-bold text-[#21326c]">{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#21326c]/5 flex items-center justify-center hover:bg-[#21326c]/10 transition-colors flex-shrink-0">
-            <X size={16} className="text-[#21326c]" />
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#21326c]/20">
+          <h2 className="text-base font-bold text-[#21326c]">{title}</h2>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-[#21326c]/5 flex items-center justify-center hover:bg-[#21326c]/10 transition-colors flex-shrink-0">
+            <X size={14} className="text-[#21326c]" />
           </button>
         </div>
-        <div className="px-5 py-5 sm:p-6">{children}</div>
+        <div className="px-5 py-4">{children}</div>
       </div>
     </div>
   );
@@ -669,7 +1124,7 @@ function LoginModal({ open, onClose, onLogin }) {
         {/* Demo hint */}
         <div className="border-t border-[#21326c]/10 pt-3 space-y-1">
           <p className="text-xs font-semibold text-[#21326c]/40 uppercase tracking-wider">Demo credentials</p>
-          <p className="text-xs text-[#21326c]/50">Student — nour@lawnn.com / lawnn123</p>
+          <p className="text-xs text-[#21326c]/50">Student — yomna@lawnndesign.com / youmie272</p>
           <p className="text-xs text-[#21326c]/50">Client &nbsp;— client@safwa.com / safwa2024</p>
           <p className="text-xs text-[#21326c]/50">Admin &nbsp;— admin@lawnn.com / admin2024</p>
         </div>
@@ -680,14 +1135,14 @@ function LoginModal({ open, onClose, onLogin }) {
 
 // ─── NAVIGATION / HEADER ──────────────────────────────────────────────────────
 
-function TopNav({ view, setView, currentUser, onLoginClick, onLogout }) {
+function TopNav({ view, setView, currentUser, onLoginClick, onLogout, notifications = [], onMarkNotifRead, onMarkAllNotifRead }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const getNavItems = () => {
     if (currentUser?.role === 'student') return [
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'about',       label: 'About Me',    icon: BookOpen },
-      { id: 'news',        label: 'News',         icon: Layers },
+      { id: 'news',        label: 'News',        icon: Layers },
       { id: 'profile',     label: 'My Profile',  icon: Users },
       { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
@@ -695,8 +1150,8 @@ function TopNav({ view, setView, currentUser, onLoginClick, onLogout }) {
     if (currentUser?.role === 'client') return [
       { id: 'home',        label: 'Home',        icon: Home },
       { id: 'directory',   label: 'Talent',      icon: Users },
-      { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
-      { id: 'news',        label: 'News',         icon: Layers },
+      { id: 'projects',    label: 'My Projects', icon: Briefcase },
+      { id: 'news',        label: 'News',        icon: Layers },
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
     ];
@@ -773,10 +1228,10 @@ function TopNav({ view, setView, currentUser, onLoginClick, onLogout }) {
                 </button>
               </>
             ) : (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 {currentUser.role === 'client' && (
                   <button
-                    onClick={() => setView('jobs')}
+                    onClick={() => setView('projects')}
                     className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90"
                     style={{ background: '#ff9044' }}
                   >
@@ -790,7 +1245,12 @@ function TopNav({ view, setView, currentUser, onLoginClick, onLogout }) {
                 >
                   <MessageSquare size={18} />
                 </button>
-                <div className="flex items-center gap-2 pl-3 border-l border-[#21326c]/10">
+                <NotificationPanel
+                  notifications={notifications}
+                  onMarkRead={onMarkNotifRead}
+                  onMarkAllRead={onMarkAllNotifRead}
+                />
+                <div className="flex items-center gap-2 pl-2 border-l border-[#21326c]/10">
                   <Avatar initials={currentUser.initials} color={currentUser.avatarColor} size="sm" />
                   <span className="hidden sm:inline text-sm font-medium text-[#21326c]">
                     {currentUser.name.split(' ')[0]}
@@ -1004,21 +1464,28 @@ function TalentCard({ talent, onClick }) {
       onClick={onClick}
     >
       {/* Mini portfolio preview */}
-      <div className="grid grid-cols-3 gap-0.5 h-28">
+      <div className="grid grid-cols-3 gap-0.5 h-28 relative">
         {talent.portfolio.slice(0, 3).map((item, i) => (
           <div
             key={i}
-            className="h-full flex items-end p-1.5"
-            style={{ background: `linear-gradient(160deg, ${item.color}aa, ${item.color})` }}
+            className="h-full flex items-end p-1.5 overflow-hidden"
+            style={item.imageUrl
+              ? { backgroundImage: `url(${item.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+              : { background: `linear-gradient(160deg, ${item.color}aa, ${item.color})` }
+            }
           >
-            {i === 0 && <span className="text-white text-xs font-medium truncate leading-tight bg-black/20 rounded px-1" style={{ fontSize: '9px' }}>{item.label}</span>}
+            {i === 0 && <span className="text-white text-xs font-medium truncate leading-tight bg-black/30 rounded px-1" style={{ fontSize: '9px' }}>{item.label}</span>}
           </div>
         ))}
+        {/* Availability dot */}
+        <div className="absolute top-2 right-2">
+          <AvailabilityBadge status={talent.availability} compact />
+        </div>
       </div>
 
       {/* Info */}
       <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
+        <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-3">
             <Avatar initials={talent.initials} color={talent.avatarColor} size="md" />
             <div>
@@ -1029,13 +1496,13 @@ function TalentCard({ talent, onClick }) {
           <StarRating rating={talent.rating} />
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap mb-3">
+        <div className="flex items-center gap-2 flex-wrap mb-2">
           <VerifiedBadge isGrad={talent.isGrad} />
-          <span className="text-xs text-[#21326c]">{talent.reviews} reviews</span>
+          <AvailabilityBadge status={talent.availability} />
         </div>
 
         <div className="flex flex-wrap gap-1 mb-3">
-          {talent.tags.map(tag => (
+          {talent.tags.slice(0,3).map(tag => (
             <span key={tag} className="tag-pill">{tag}</span>
           ))}
         </div>
@@ -1488,13 +1955,13 @@ function DirectoryCard({ talent, onClick }) {
             </div>
             <p className="text-sm text-[#21326c]">{talent.university}</p>
             <p className="text-xs text-[#21326c] mt-0.5">{talent.dept}</p>
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
               <StarRating rating={talent.rating} />
               <span className="text-xs text-[#21326c]">{talent.reviews} reviews</span>
-              <span className="text-xs text-[#21326c]">{talent.completedJobs} jobs done</span>
+              <AvailabilityBadge status={talent.availability} />
             </div>
             <div className="flex flex-wrap gap-1 mt-2">
-              {talent.tags.map(tag => (
+              {talent.tags.slice(0,4).map(tag => (
                 <span key={tag} className="tag-pill">{tag}</span>
               ))}
             </div>
@@ -1506,8 +1973,11 @@ function DirectoryCard({ talent, onClick }) {
           {talent.portfolio.slice(0, 3).map((item, i) => (
             <div
               key={i}
-              className="h-16 rounded-lg"
-              style={{ background: `linear-gradient(160deg, ${item.color}aa, ${item.color})` }}
+              className="h-16 rounded-lg overflow-hidden"
+              style={item.imageUrl
+                ? { backgroundImage: `url(${item.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                : { background: `linear-gradient(160deg, ${item.color}aa, ${item.color})` }
+              }
             />
           ))}
         </div>
@@ -1526,7 +1996,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
 
   // Edit profile state
   const [editDraft, setEditDraft] = useState({});
-  const [newTag, setNewTag]       = useState('');
+  // newTag removed — replaced by SkillPicker
   const [newEdu, setNewEdu]       = useState({ degree: '', school: '', years: '' });
   const [newExp, setNewExp]       = useState({ role: '', company: '', years: '' });
   const [newPortItem, setNewPortItem] = useState({ label: '', color: '#21326c', h: 'medium' });
@@ -1537,11 +2007,22 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
     setEditDraft({
       bio: talent.bio,
       tags: [...talent.tags],
+      availability: talent.availability || 'open',
       education: talent.education.map(e => ({ ...e })),
       experience: talent.experience.map(e => ({ ...e })),
       portfolio: talent.portfolio.map(p => ({ ...p })),
     });
     setShowEditModal(true);
+  };
+
+  // Image upload for portfolio items
+  const handlePortfolioImageUpload = (itemId, file) => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setEditDraft(d => ({
+      ...d,
+      portfolio: d.portfolio.map(p => p.id === itemId ? { ...p, imageUrl: url } : p),
+    }));
   };
 
   const saveEdit = () => {
@@ -1571,25 +2052,26 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
 
       {/* Hero */}
       <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden mb-6">
-        {/* Cover */}
-        <div className="h-32 sm:h-44" style={{ background: `linear-gradient(135deg, ${talent.avatarColor}33, ${talent.avatarColor}88)` }} />
+        {/* Cover — avatar is absolutely positioned to straddle the bottom edge */}
+        <div className="relative h-32 sm:h-44" style={{ background: `linear-gradient(135deg, ${talent.avatarColor}33, ${talent.avatarColor}88)` }}>
+          <div
+            className="absolute bottom-0 left-6 translate-y-1/2 w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 border-white flex items-center justify-center text-white text-xl sm:text-2xl font-bold shadow-lg flex-shrink-0 z-10"
+            style={{ background: talent.avatarColor }}
+          >
+            {talent.initials}
+          </div>
+        </div>
 
-        <div className="px-6 pb-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-10 mb-4">
-            <div className="flex items-end gap-3">
-              <div
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-4 border-white flex items-center justify-center text-white text-lg sm:text-xl font-bold shadow-md flex-shrink-0"
-                style={{ background: talent.avatarColor }}
-              >
-                {talent.initials}
+        {/* Body — pt clears the half-protruding avatar */}
+        <div className="px-6 pb-6 pt-14 sm:pt-16">
+          {/* Name row + action buttons — all safely below the cover */}
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-display text-xl sm:text-2xl font-bold text-[#21326c]">{talent.name}</h1>
+                <VerifiedBadge isGrad={talent.isGrad} />
               </div>
-              <div className="pb-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="font-display text-xl sm:text-2xl font-bold text-[#21326c]">{talent.name}</h1>
-                  <VerifiedBadge isGrad={talent.isGrad} />
-                </div>
-                <p className="text-xs sm:text-sm text-[#21326c]">{talent.university} · {talent.dept}</p>
-              </div>
+              <p className="text-xs sm:text-sm text-[#21326c] mt-0.5">{talent.university} · {talent.dept}</p>
             </div>
 
             {/* Actions */}
@@ -1623,11 +2105,21 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
           </div>
 
           {/* Stats row */}
-          <div className="flex items-center gap-4 flex-wrap text-sm mb-5">
+          <div className="flex items-center gap-4 flex-wrap text-sm mb-4">
             <StarRating rating={talent.rating} />
             <span className="text-[#21326c]">{talent.reviews} reviews</span>
             <span className="text-[#21326c]">{talent.completedJobs} projects completed</span>
+            <AvailabilityBadge status={talent.availability} />
           </div>
+
+          {/* Wallet — own profile only */}
+          {isOwnProfile && (
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl mb-4 border border-[#21326c]/10" style={{ background: '#21326c08' }}>
+              <Wallet size={14} className="text-[#21326c]" />
+              <span className="text-sm font-semibold text-[#21326c]">{talent.walletBalance?.toLocaleString() || '0'} EGP</span>
+              <span className="text-xs text-[#21326c]/50">wallet balance</span>
+            </div>
+          )}
 
           {/* Bio */}
           <p className="text-[#21326c] leading-relaxed mb-5 max-w-2xl">{talent.bio}</p>
@@ -1696,7 +2188,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
           </h3>
           <div className="masonry-grid">
             {talent.portfolio.map((item, i) => (
-              <PortfolioBlock key={i} color={item.color} label={item.label} height={item.h} />
+              <PortfolioBlock key={item.id || i} color={item.color} label={item.label} height={item.h} imageUrl={item.imageUrl} />
             ))}
           </div>
         </div>
@@ -1763,10 +2255,33 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
             className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all resize-none" />
         </div>
 
+        {/* Availability */}
+        <div>
+          <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Availability</label>
+          <div className="flex gap-2 flex-wrap">
+            {Object.entries(AVAILABILITY).map(([key, val]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setEditDraft(d => ({ ...d, availability: key }))}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${
+                  (editDraft.availability || 'open') === key
+                    ? 'border-[#21326c]'
+                    : 'border-[#21326c]/15 hover:border-[#21326c]/40'
+                }`}
+                style={(editDraft.availability || 'open') === key ? { background: val.bg, color: val.text, borderColor: val.color } : {}}
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: val.color }} />
+                {val.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Skills */}
         <div>
-          <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">Skills</label>
-          <div className="flex flex-wrap gap-1.5 mb-2">
+          <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Skills</label>
+          <div className="flex flex-wrap gap-1.5 mb-3">
             {(editDraft.tags || []).map(t => (
               <span key={t} className="tag-pill flex items-center gap-1">
                 {t}
@@ -1774,13 +2289,10 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
               </span>
             ))}
           </div>
-          <div className="flex gap-2">
-            <input type="text" placeholder="Add a skill…" value={newTag} onChange={e => setNewTag(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && newTag.trim()) { setEditDraft(d => ({ ...d, tags: [...(d.tags || []), newTag.trim()] })); setNewTag(''); } }}
-              className="flex-1 px-4 py-2.5 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
-            <button onClick={() => { if (newTag.trim()) { setEditDraft(d => ({ ...d, tags: [...(d.tags || []), newTag.trim()] })); setNewTag(''); } }}
-              className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: '#21326c' }}>Add</button>
-          </div>
+          <SkillPicker
+            currentTags={editDraft.tags || []}
+            onAdd={skill => setEditDraft(d => ({ ...d, tags: [...(d.tags || []), skill] }))}
+          />
         </div>
 
         {/* Education */}
@@ -1846,11 +2358,48 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
           <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Portfolio Items</label>
           <div className="space-y-2 mb-3">
             {(editDraft.portfolio || []).map((item, i) => (
-              <div key={i} className="flex items-center gap-3 p-2 bg-[#21326c]/5 rounded-xl">
-                <div className="w-7 h-7 rounded-lg flex-shrink-0" style={{ background: item.color }} />
-                <span className="text-sm text-[#21326c] flex-1">{item.label}</span>
+              <div key={item.id || i} className="flex items-center gap-3 p-2 bg-[#21326c]/5 rounded-xl">
+                {/* Thumbnail */}
+                <div
+                  className="w-12 h-10 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center relative"
+                  style={item.imageUrl
+                    ? { backgroundImage: `url(${item.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                    : { background: item.color }
+                  }
+                >
+                  {!item.imageUrl && (
+                    <label className="cursor-pointer flex items-center justify-center w-full h-full" title="Upload image">
+                      <FileImage size={14} color="white" opacity={0.8} />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => handlePortfolioImageUpload(item.id, e.target.files[0])}
+                      />
+                    </label>
+                  )}
+                  {item.imageUrl && (
+                    <button
+                      onClick={() => setEditDraft(d => ({ ...d, portfolio: d.portfolio.map(p => p.id === item.id ? { ...p, imageUrl: null } : p) }))}
+                      className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity"
+                      title="Remove image"
+                    >
+                      <X size={12} color="white" />
+                    </button>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-[#21326c] font-medium truncate">{item.label}</p>
+                  {!item.imageUrl && (
+                    <label className="text-xs text-[#21326c]/40 hover:text-[#21326c] cursor-pointer flex items-center gap-1 mt-0.5 transition-colors">
+                      <Upload size={10} /> Upload photo
+                      <input type="file" accept="image/*" className="hidden" onChange={e => handlePortfolioImageUpload(item.id, e.target.files[0])} />
+                    </label>
+                  )}
+                  {item.imageUrl && <p className="text-xs text-green-600 mt-0.5">Photo uploaded ✓</p>}
+                </div>
                 <button onClick={() => setEditDraft(d => ({ ...d, portfolio: d.portfolio.filter((_, j) => j !== i) }))}
-                  className="text-[#21326c]/30 hover:text-red-400 transition-colors"><X size={14} /></button>
+                  className="text-[#21326c]/30 hover:text-red-400 transition-colors flex-shrink-0"><X size={14} /></button>
               </div>
             ))}
           </div>
@@ -1869,7 +2418,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                 style={{ background: c, outline: newPortItem.color === c ? `3px solid ${c}` : 'none', outlineOffset: '2px' }} />
             ))}
           </div>
-          <button onClick={() => { if (newPortItem.label) { setEditDraft(d => ({ ...d, portfolio: [...(d.portfolio || []), { ...newPortItem }] })); setNewPortItem({ label: '', color: '#21326c', h: 'medium' }); } }}
+          <button onClick={() => { if (newPortItem.label) { setEditDraft(d => ({ ...d, portfolio: [...(d.portfolio || []), { id: `p${Date.now()}`, ...newPortItem, imageUrl: null }] })); setNewPortItem({ label: '', color: '#21326c', h: 'medium' }); } }}
             className="text-xs font-semibold text-[#21326c] hover:opacity-70 flex items-center gap-1">
             <Plus size={12} /> Add item
           </button>
@@ -2178,18 +2727,46 @@ function FeedPost({ post, onLike, isAdmin, onDelete }) {
 
 // ─── VIEW 6: CHAT ─────────────────────────────────────────────────────────────
 
-function ChatPage() {
-  const [activeContact, setActiveContact] = useState(CHAT_CONTACTS[0]);
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState(CHAT_MESSAGES);
+function ChatPage({ currentUser, projects, talents }) {
+  const isStudent = currentUser?.role === 'student';
+  const isClient  = currentUser?.role === 'client';
+
+  // Derive threads from accepted-offer projects only
+  const threads = (() => {
+    if (isStudent) {
+      return projects
+        .filter(p => p.acceptedTalentId === currentUser.talentId)
+        .map(p => {
+          const initials = p.clientName.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+          return { projectId: p.id, projectTitle: p.title, contactName: p.clientName, contactInitials: initials, contactColor: '#c4622d', status: p.status };
+        });
+    }
+    if (isClient) {
+      return projects
+        .filter(p => p.clientId === currentUser.id && p.acceptedTalentId !== null)
+        .map(p => {
+          const talent = talents.find(t => t.id === p.acceptedTalentId);
+          const app    = p.applications.find(a => a.id === p.acceptedApplicationId);
+          return { projectId: p.id, projectTitle: p.title, contactName: app?.talentName || talent?.name || '?', contactInitials: talent?.initials || '?', contactColor: talent?.avatarColor || '#21326c', status: p.status };
+        });
+    }
+    return [];
+  })();
+
+  const [activeThread, setActiveThread] = useState(threads[0] || null);
+  const [allMessages, setAllMessages]   = useState(SEED_CHAT_MESSAGES);
+  const [message, setMessage]           = useState('');
   const [showFileMenu, setShowFileMenu] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showSidebar, setShowSidebar]   = useState(true);
   const [showEncryptionInfo, setShowEncryptionInfo] = useState(false);
   const [showChatMore, setShowChatMore] = useState(false);
 
+  const msgs = activeThread ? (allMessages[activeThread.projectId] || []) : [];
+
   const sendMessage = () => {
-    if (!message.trim()) return;
-    setMessages(m => [...m, { id: Date.now(), from: 'me', text: message, time: 'Now' }]);
+    if (!message.trim() || !activeThread) return;
+    const newMsg = { id: Date.now(), from: 'me', text: message, time: 'Now' };
+    setAllMessages(prev => ({ ...prev, [activeThread.projectId]: [...(prev[activeThread.projectId] || []), newMsg] }));
     setMessage('');
   };
 
@@ -2201,183 +2778,169 @@ function ChatPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 animate-fade-in">
-      <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden" style={{ height: 'calc(100dvh - 130px)', minHeight: '480px' }}>
-        <div className="flex h-full">
-          {/* Contacts Sidebar */}
-          <div className={`${showSidebar ? 'flex' : 'hidden'} sm:flex flex-col w-full sm:w-72 border-r border-[#21326c]/10 flex-shrink-0`}>
-            <div className="p-4 border-b border-[#21326c]/10">
-              <h2 className="font-semibold text-[#21326c] mb-3">Messages</h2>
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#21326c]" />
-                <input
-                  type="text"
-                  placeholder="Search conversations..."
-                  className="w-full pl-8 pr-4 py-2 text-sm rounded-full bg-[#21326c]/5 text-[#21326c] placeholder:text-[#21326c] focus:outline-none"
-                />
-              </div>
-            </div>
 
-            <div className="overflow-y-auto flex-1">
-              {CHAT_CONTACTS.map(contact => (
-                <button
-                  key={contact.id}
-                  onClick={() => { setActiveContact(contact); setShowSidebar(false); }}
-                  className={`w-full flex items-center gap-3 p-4 hover:bg-[#21326c]/5 transition-colors text-left ${
-                    activeContact.id === contact.id ? 'bg-[#21326c]/10 border-l-3' : ''
-                  }`}
-                  style={activeContact.id === contact.id ? { borderLeft: '3px solid #21326c' } : {}}
-                >
-                  <Avatar initials={contact.initials} color={contact.color} size="md" online={contact.online} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <p className="text-sm font-semibold text-[#21326c] truncate">{contact.name}</p>
-                      <span className="text-xs text-[#21326c] flex-shrink-0 ml-1">{contact.time}</span>
-                    </div>
-                    <p className="text-xs text-[#21326c] truncate">{contact.lastMsg}</p>
-                  </div>
-                  {contact.unread > 0 && (
-                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ background: '#21326c' }}>
-                      {contact.unread}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* Empty state — no accepted offers yet */}
+      {threads.length === 0 && (
+        <div className="bg-white rounded-2xl border border-[#21326c]/10 p-14 text-center">
+          <MessageSquare size={40} className="mx-auto mb-4 text-[#21326c] opacity-20" />
+          <p className="font-semibold text-[#21326c] mb-1">No conversations yet</p>
+          <p className="text-sm text-[#21326c]/50 max-w-xs mx-auto">
+            {isStudent
+              ? 'Once a client accepts your offer, a direct message channel opens here.'
+              : 'Once you accept an offer on a project, a direct channel with the student opens here.'}
+          </p>
+        </div>
+      )}
 
-          {/* Chat Area */}
-          <div className={`${!showSidebar ? 'flex' : 'hidden'} sm:flex flex-col flex-1 min-w-0`}>
-            {/* Chat Header */}
-            <div className="flex items-center gap-3 p-4 border-b border-[#21326c]/10">
-              <button
-                onClick={() => setShowSidebar(true)}
-                className="sm:hidden p-1 rounded-lg hover:bg-[#21326c]/5"
-              >
-                <ChevronLeft size={18} className="text-[#21326c]" />
-              </button>
-              <Avatar initials={activeContact.initials} color={activeContact.color} size="md" online={activeContact.online} />
-              <div>
-                <p className="font-semibold text-[#21326c] text-sm">{activeContact.name}</p>
-                <p className="text-xs text-[#21326c]">{activeContact.online ? 'Online now' : 'Last seen recently'}</p>
-              </div>
-              <div className="ml-auto flex gap-2 relative">
-                <button onClick={() => setShowEncryptionInfo(v => !v)} className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors" title="Encryption info">
-                  <Shield size={16} />
-                </button>
+      {threads.length > 0 && (
+        <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden" style={{ height: 'calc(100dvh - 130px)', minHeight: '480px' }}>
+          <div className="flex h-full">
+            {/* Thread Sidebar */}
+            <div className={`${showSidebar ? 'flex' : 'hidden'} sm:flex flex-col w-full sm:w-72 border-r border-[#21326c]/10 flex-shrink-0`}>
+              <div className="p-4 border-b border-[#21326c]/10">
+                <h2 className="font-semibold text-[#21326c] mb-3">Messages</h2>
                 <div className="relative">
-                  <button onClick={() => setShowChatMore(v => !v)} className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors">
-                    <MoreHorizontal size={16} />
-                  </button>
-                  {showChatMore && (
-                    <div className="absolute right-0 top-10 bg-white rounded-xl border border-[#21326c]/10 shadow-lg w-44 overflow-hidden z-50 animate-fade-in">
-                      {['Mute notifications', 'Archive conversation', 'Clear chat history'].map(opt => (
-                        <button key={opt} onClick={() => setShowChatMore(false)}
-                          className="w-full px-4 py-2.5 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors text-left">
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#21326c]/40" />
+                  <input type="text" placeholder="Search..." className="w-full pl-8 pr-4 py-2 text-sm rounded-full bg-[#21326c]/5 text-[#21326c] placeholder:text-[#21326c]/40 focus:outline-none" />
                 </div>
-                {showEncryptionInfo && (
-                  <div className="absolute right-0 top-12 bg-white rounded-xl border border-[#21326c]/10 shadow-xl w-72 p-4 z-50 animate-fade-in">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Shield size={16} className="text-[#21326c]" />
-                      <p className="font-semibold text-[#21326c] text-sm">End-to-End Encrypted</p>
-                      <button onClick={() => setShowEncryptionInfo(false)} className="ml-auto text-[#21326c]/30 hover:text-[#21326c]"><X size={14} /></button>
-                    </div>
-                    <p className="text-xs text-[#21326c]/70 leading-relaxed">Messages are encrypted in transit. Files shared through Lawnn Secure Vault are access-logged and watermarked. Lawnn admins can monitor conversations for platform safety.</p>
-                  </div>
-                )}
               </div>
-            </div>
-
-            {/* Security Notice */}
-            <div className="mx-4 mt-3 px-3 py-2 rounded-xl text-xs text-center" style={{ background: '#f0f4ff', color: '#21326c' }}>
-              <Lock size={11} className="inline mr-1" />
-              End-to-end encrypted · File sharing managed by Lawnn Secure Vault
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map(msg => (
-                <div key={msg.id} className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}>
-                  {msg.from === 'them' && (
-                    <Avatar initials={activeContact.initials} color={activeContact.color} size="sm" />
-                  )}
-                  <div className={`max-w-xs sm:max-w-sm mx-2 px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                    msg.from === 'me'
-                      ? 'bg-[#21326c] text-white rounded-br-sm'
-                      : 'bg-[#21326c]/10 text-[#21326c] rounded-bl-sm'
-                  }`}>
-                    {msg.text}
-                    <p className={`text-xs mt-1 ${msg.from === 'me' ? 'text-white/60' : 'text-[#21326c]/60'}`}>{msg.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Input Area */}
-            <div className="p-4 border-t border-[#21326c]/10">
-              <div className="flex items-end gap-2">
-                {/* File Share Dropdown */}
-                <div className="relative flex-shrink-0">
-                  <button
-                    onClick={() => setShowFileMenu(!showFileMenu)}
-                    className="p-2.5 rounded-xl border border-[#21326c]/20 hover:bg-[#21326c]/5 text-[#21326c] transition-colors"
-                  >
-                    <Paperclip size={18} />
-                  </button>
-
-                  {showFileMenu && (
-                    <div className="absolute bottom-12 left-0 bg-white rounded-2xl border border-[#21326c]/10 shadow-xl w-60 overflow-hidden z-50 animate-fade-in">
-                      <div className="p-3 bg-[#21326c]/5 border-b border-[#21326c]/10">
-                        <p className="text-xs font-semibold text-[#21326c]">Secure File Sharing</p>
+              <div className="overflow-y-auto flex-1">
+                {threads.map(t => {
+                  const threadMsgs = allMessages[t.projectId] || [];
+                  const lastMsg = threadMsgs[threadMsgs.length - 1];
+                  const isActive = activeThread?.projectId === t.projectId;
+                  return (
+                    <button
+                      key={t.projectId}
+                      onClick={() => { setActiveThread(t); setShowSidebar(false); }}
+                      className="w-full flex items-center gap-3 p-4 hover:bg-[#21326c]/5 transition-colors text-left"
+                      style={isActive ? { borderLeft: '3px solid #21326c', background: '#21326c0a' } : {}}
+                    >
+                      <Avatar initials={t.contactInitials} color={t.contactColor} size="md" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <p className="text-sm font-semibold text-[#21326c] truncate">{t.contactName}</p>
+                          {lastMsg && <span className="text-xs text-[#21326c]/40 flex-shrink-0 ml-1">{lastMsg.time}</span>}
+                        </div>
+                        <p className="text-xs text-[#21326c]/50 truncate">{lastMsg?.text || t.projectTitle}</p>
                       </div>
-                      {FILE_OPTIONS.map(opt => (
-                        <button
-                          key={opt.label}
-                          onClick={() => setShowFileMenu(false)}
-                          className="w-full flex items-center gap-3 p-3 hover:bg-[#21326c]/5 transition-colors text-left"
-                        >
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${opt.color}20` }}>
-                            <opt.icon size={15} style={{ color: opt.color }} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-[#21326c]">{opt.label}</p>
-                            <p className="text-xs text-[#21326c]">{opt.desc}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex-1 relative">
-                  <textarea
-                    rows={1}
-                    value={message}
-                    onChange={e => setMessage(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    placeholder="Message..."
-                    className="w-full px-4 py-2.5 rounded-2xl border border-[#21326c]/20 text-[#21326c] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]"
-                    style={{ maxHeight: '100px' }}
-                  />
-                </div>
-
-                <button
-                  onClick={sendMessage}
-                  disabled={!message.trim()}
-                  className="p-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 flex-shrink-0"
-                  style={{ background: '#ff9044' }}
-                >
-                  <Send size={18} />
-                </button>
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {/* Chat Area */}
+            {activeThread && (
+              <div className={`${!showSidebar ? 'flex' : 'hidden'} sm:flex flex-col flex-1 min-w-0`}>
+                {/* Header */}
+                <div className="flex items-center gap-3 p-4 border-b border-[#21326c]/10">
+                  <button onClick={() => setShowSidebar(true)} className="sm:hidden p-1 rounded-lg hover:bg-[#21326c]/5">
+                    <ChevronLeft size={18} className="text-[#21326c]" />
+                  </button>
+                  <Avatar initials={activeThread.contactInitials} color={activeThread.contactColor} size="md" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-[#21326c] text-sm">{activeThread.contactName}</p>
+                    <p className="text-xs text-[#21326c]/50 truncate">re: {activeThread.projectTitle}</p>
+                  </div>
+                  <div className="flex gap-2 relative flex-shrink-0">
+                    <button onClick={() => setShowEncryptionInfo(v => !v)} className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors" title="Security info">
+                      <Shield size={16} />
+                    </button>
+                    <div className="relative">
+                      <button onClick={() => setShowChatMore(v => !v)} className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors">
+                        <MoreHorizontal size={16} />
+                      </button>
+                      {showChatMore && (
+                        <div className="absolute right-0 top-10 bg-white rounded-xl border border-[#21326c]/10 shadow-lg w-44 overflow-hidden z-50 animate-fade-in">
+                          {['Mute notifications', 'Archive conversation', 'Clear chat history'].map(opt => (
+                            <button key={opt} onClick={() => setShowChatMore(false)} className="w-full px-4 py-2.5 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors text-left">{opt}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {showEncryptionInfo && (
+                      <div className="absolute right-0 top-12 bg-white rounded-xl border border-[#21326c]/10 shadow-xl w-72 p-4 z-50 animate-fade-in">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Shield size={16} className="text-[#21326c]" />
+                          <p className="font-semibold text-[#21326c] text-sm">Encrypted & Monitored</p>
+                          <button onClick={() => setShowEncryptionInfo(false)} className="ml-auto text-[#21326c]/30 hover:text-[#21326c]"><X size={14} /></button>
+                        </div>
+                        <p className="text-xs text-[#21326c]/70 leading-relaxed">Messages are encrypted in transit. Files shared through Lawnn Secure Vault are access-logged and watermarked. Lawnn admins may monitor conversations for platform safety.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Security notice */}
+                <div className="mx-4 mt-3 px-3 py-2 rounded-xl text-xs text-center" style={{ background: '#f0f4ff', color: '#21326c' }}>
+                  <Lock size={11} className="inline mr-1" />
+                  Encrypted · Lawnn Secure Vault · Admin-monitored for safety
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {msgs.length === 0 && (
+                    <p className="text-center text-sm text-[#21326c]/40 pt-8">No messages yet — say hello!</p>
+                  )}
+                  {msgs.map(msg => (
+                    <div key={msg.id} className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}>
+                      {msg.from === 'them' && <Avatar initials={activeThread.contactInitials} color={activeThread.contactColor} size="sm" />}
+                      <div className={`max-w-xs sm:max-w-sm mx-2 px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${msg.from === 'me' ? 'bg-[#21326c] text-white rounded-br-sm' : 'bg-[#21326c]/10 text-[#21326c] rounded-bl-sm'}`}>
+                        {msg.text}
+                        <p className={`text-xs mt-1 ${msg.from === 'me' ? 'text-white/60' : 'text-[#21326c]/60'}`}>{msg.time}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Input */}
+                <div className="p-4 border-t border-[#21326c]/10">
+                  <div className="flex items-end gap-2">
+                    <div className="relative flex-shrink-0">
+                      <button onClick={() => setShowFileMenu(!showFileMenu)} className="p-2.5 rounded-xl border border-[#21326c]/20 hover:bg-[#21326c]/5 text-[#21326c] transition-colors">
+                        <Paperclip size={18} />
+                      </button>
+                      {showFileMenu && (
+                        <div className="absolute bottom-12 left-0 bg-white rounded-2xl border border-[#21326c]/10 shadow-xl w-60 overflow-hidden z-50 animate-fade-in">
+                          <div className="p-3 bg-[#21326c]/5 border-b border-[#21326c]/10">
+                            <p className="text-xs font-semibold text-[#21326c]">Secure File Sharing</p>
+                          </div>
+                          {FILE_OPTIONS.map(opt => (
+                            <button key={opt.label} onClick={() => setShowFileMenu(false)} className="w-full flex items-center gap-3 p-3 hover:bg-[#21326c]/5 transition-colors text-left">
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${opt.color}20` }}>
+                                <opt.icon size={15} style={{ color: opt.color }} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-[#21326c]">{opt.label}</p>
+                                <p className="text-xs text-[#21326c]/50">{opt.desc}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <textarea
+                        rows={1}
+                        value={message}
+                        onChange={e => setMessage(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                        placeholder="Message..."
+                        className="w-full px-4 py-2.5 rounded-2xl border border-[#21326c]/20 text-[#21326c] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40"
+                        style={{ maxHeight: '100px' }}
+                      />
+                    </div>
+                    <button onClick={sendMessage} disabled={!message.trim()} className="p-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 flex-shrink-0" style={{ background: '#ff9044' }}>
+                      <Send size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -2392,11 +2955,10 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
   // ── Student: inline edit ────────────────────────────────────────────────────
   const [editing, setEditing]     = useState(false);
   const [draft, setDraft]         = useState(null);
-  const [newSkill, setNewSkill]   = useState('');
   const [saved, setSaved]         = useState(false);
 
   const startEdit = () => {
-    setDraft({ bio: talent.bio, tags: [...talent.tags] });
+    setDraft({ bio: talent.bio, tags: [...talent.tags], availability: talent.availability || 'open' });
     setEditing(true);
   };
   const cancelEdit = () => { setEditing(false); setDraft(null); };
@@ -2406,13 +2968,6 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
     setDraft(null);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
-  };
-  const addSkill = () => {
-    const trimmed = newSkill.trim();
-    if (trimmed && !draft.tags.includes(trimmed)) {
-      setDraft(d => ({ ...d, tags: [...d.tags, trimmed] }));
-    }
-    setNewSkill('');
   };
   const removeSkill = tag => setDraft(d => ({ ...d, tags: d.tags.filter(t => t !== tag) }));
 
@@ -2458,22 +3013,21 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
         )}
 
         <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden">
-          <div className="h-28" style={{ background: `linear-gradient(135deg, ${talent.avatarColor}33, ${talent.avatarColor}88)` }} />
-          <div className="px-6 pb-6">
-            <div className="-mt-8 mb-5 flex items-end gap-4">
-              <div
-                className="w-16 h-16 rounded-2xl border-4 border-white flex items-center justify-center text-white text-lg font-bold shadow-md"
-                style={{ background: talent.avatarColor }}
-              >
-                {talent.initials}
+          <div className="relative h-28" style={{ background: `linear-gradient(135deg, ${talent.avatarColor}33, ${talent.avatarColor}88)` }}>
+            <div
+              className="absolute bottom-0 left-6 translate-y-1/2 w-18 h-18 rounded-2xl border-4 border-white flex items-center justify-center text-white text-lg font-bold shadow-lg z-10"
+              style={{ background: talent.avatarColor, width: '4.5rem', height: '4.5rem' }}
+            >
+              {talent.initials}
+            </div>
+          </div>
+          <div className="px-6 pb-6 pt-12">
+            <div className="mb-5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-display text-xl font-bold text-[#21326c]">{talent.name}</h2>
+                <VerifiedBadge isGrad={talent.isGrad} />
               </div>
-              <div className="pb-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="font-display text-xl font-bold text-[#21326c]">{talent.name}</h2>
-                  <VerifiedBadge isGrad={talent.isGrad} />
-                </div>
-                <p className="text-sm text-[#21326c]">{talent.university}</p>
-              </div>
+              <p className="text-sm text-[#21326c] mt-0.5">{talent.university}</p>
             </div>
 
             <div className="space-y-5">
@@ -2497,7 +3051,7 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
               {/* Skills */}
               <div>
                 <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Skills</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mb-2">
                   {display.tags.map(tag => (
                     <span key={tag} className="tag-pill flex items-center gap-1">
                       {tag}
@@ -2508,26 +3062,44 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
                       )}
                     </span>
                   ))}
-                  {editing && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        value={newSkill}
-                        onChange={e => setNewSkill(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && addSkill()}
-                        placeholder="Add skill…"
-                        className="text-xs px-3 py-1 rounded-full border border-dashed border-[#21326c]/40 focus:outline-none focus:border-[#21326c] text-[#21326c] w-28"
-                      />
-                      <button onClick={addSkill} className="w-6 h-6 rounded-full flex items-center justify-center text-white" style={{ background: '#21326c' }}>
-                        <Plus size={12} />
-                      </button>
-                    </div>
-                  )}
                 </div>
+                {editing && (
+                  <SkillPicker
+                    currentTags={draft.tags}
+                    onAdd={skill => setDraft(d => ({ ...d, tags: [...d.tags, skill] }))}
+                  />
+                )}
+              </div>
+
+              {/* Availability */}
+              <div>
+                <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Availability</label>
+                {editing ? (
+                  <div className="flex gap-2 flex-wrap">
+                    {Object.entries(AVAILABILITY).map(([key, val]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setDraft(d => ({ ...d, availability: key }))}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${
+                          (draft.availability || 'open') === key
+                            ? 'border-[#21326c]'
+                            : 'border-[#21326c]/15 hover:border-[#21326c]/40'
+                        }`}
+                        style={(draft.availability || 'open') === key ? { background: val.bg, color: val.text, borderColor: val.color } : {}}
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ background: val.color }} />
+                        {val.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <AvailabilityBadge status={display.availability || talent.availability} />
+                )}
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-2 gap-3 text-center">
+              <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="rounded-xl p-3" style={{ background: '#21326c08' }}>
                   <p className="font-bold text-[#21326c] text-lg leading-tight">{talent.completedJobs}</p>
                   <p className="text-xs text-[#21326c] mt-0.5">Projects</p>
@@ -2535,6 +3107,10 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
                 <div className="rounded-xl p-3" style={{ background: '#21326c08' }}>
                   <p className="font-bold text-[#21326c] text-lg leading-tight">{talent.rating}★</p>
                   <p className="text-xs text-[#21326c] mt-0.5">Rating</p>
+                </div>
+                <div className="rounded-xl p-3" style={{ background: '#21326c08' }}>
+                  <p className="font-bold text-[#21326c] text-lg leading-tight">{(talent.walletBalance || 0).toLocaleString()}</p>
+                  <p className="text-xs text-[#21326c] mt-0.5">EGP Wallet</p>
                 </div>
               </div>
             </div>
@@ -3423,53 +3999,53 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
       )}
 
       {/* ── CREATE / EDIT MODAL ── */}
-      <Modal open={showListingModal} onClose={() => setShowListingModal(false)} title={editingListing ? 'Edit Listing' : 'List an Item'} wide>
-        <div className="space-y-4">
+      <Modal open={showListingModal} onClose={() => setShowListingModal(false)} title={editingListing ? 'Edit Listing' : 'List an Item'}>
+        <div className="space-y-3">
           <div>
-            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">Title *</label>
+            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1">Title *</label>
             <input
               type="text"
               placeholder="e.g. Original Calligraphy Print"
               value={listingForm.title}
               onChange={e => setListingForm(f => ({ ...f, title: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40"
+              className="w-full px-3 py-2.5 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">Description</label>
+            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1">Description</label>
             <textarea
-              rows={3}
-              placeholder="Describe what you're selling — materials, size, condition, what's included…"
+              rows={2}
+              placeholder="Materials, size, condition, what's included…"
               value={listingForm.description}
               onChange={e => setListingForm(f => ({ ...f, description: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all resize-none placeholder:text-[#21326c]/40"
+              className="w-full px-3 py-2.5 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all resize-none placeholder:text-[#21326c]/40"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1">
               Price (EGP) *
-              {editingListing && <span className="ml-2 font-normal text-[#21326c]/40 normal-case">(cannot be changed after listing)</span>}
+              {editingListing && <span className="ml-2 font-normal text-[#21326c]/40 normal-case">(locked after listing)</span>}
             </label>
             <div className="relative">
-              <DollarSign size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#21326c]/40" />
+              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#21326c]/40" />
               <input
                 type="number"
                 placeholder="e.g. 1200"
                 value={listingForm.price}
                 onChange={e => setListingForm(f => ({ ...f, price: e.target.value }))}
                 disabled={!!editingListing}
-                className="w-full pl-9 pr-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40 disabled:opacity-40 disabled:cursor-not-allowed"
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">Card Colour</label>
+            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1">Card Colour</label>
             <div className="flex gap-2">
               {LISTING_COLORS.map(c => (
                 <button
                   key={c}
                   onClick={() => setListingForm(f => ({ ...f, color: c }))}
-                  className="w-8 h-8 rounded-lg transition-transform hover:scale-110"
+                  className="w-7 h-7 rounded-lg transition-transform hover:scale-110"
                   style={{ background: c, outline: listingForm.color === c ? `3px solid ${c}` : 'none', outlineOffset: '2px' }}
                 />
               ))}
@@ -3478,13 +4054,13 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
           <button
             onClick={saveListing}
             disabled={!listingForm.title.trim() || (!editingListing && !listingForm.price)}
-            className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-2.5 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             style={{ background: '#ff9044' }}
           >
             {editingListing ? 'Save Changes' : 'Submit for Review'}
           </button>
           {!editingListing && (
-            <p className="text-xs text-center text-[#21326c]/50">Your listing will go live once approved by the Lawnn admin team.</p>
+            <p className="text-xs text-center text-[#21326c]/50">Goes live once approved by Lawnn admin.</p>
           )}
         </div>
       </Modal>
@@ -3590,9 +4166,18 @@ function PendingSection({ title, icon: Icon, color, items, onApprove, onReject, 
   );
 }
 
-function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings }) {
+function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents }) {
   const [adminTab, setAdminTab] = useState('content');
-  const [activeConvo, setActiveConvo] = useState(CHAT_CONTACTS[0]);
+
+  // Derive admin chat threads from all accepted-offer projects
+  const adminThreads = projects
+    .filter(p => p.acceptedTalentId !== null)
+    .map(p => {
+      const talent = talents.find(t => t.id === p.acceptedTalentId);
+      const app    = p.applications.find(a => a.id === p.acceptedApplicationId);
+      return { projectId: p.id, projectTitle: p.title, talentName: app?.talentName || talent?.name || '?', clientName: p.clientName, talentInitials: talent?.initials || '?', talentColor: talent?.avatarColor || '#21326c', status: p.status };
+    });
+  const [activeConvo, setActiveConvo] = useState(adminThreads[0] || null);
 
   const approveFeedPost = post => {
     setFeedPosts(ps => [post, ...ps]);
@@ -3740,54 +4325,63 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
       {/* ── CONVERSATIONS TAB ── */}
       {adminTab === 'conversations' && (
         <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden" style={{ minHeight: '520px' }}>
+          {adminThreads.length === 0 ? (
+            <div className="p-12 text-center">
+              <MessageSquare size={36} className="mx-auto mb-3 text-[#21326c] opacity-20" />
+              <p className="font-semibold text-[#21326c] mb-1">No active conversations</p>
+              <p className="text-sm text-[#21326c]/50">Conversations appear here once offers are accepted on projects.</p>
+            </div>
+          ) : (
           <div className="flex flex-col sm:flex-row" style={{ minHeight: '520px' }}>
-            {/* Contact list */}
-            <div className="w-full sm:w-64 sm:flex-shrink-0 border-b sm:border-b-0 sm:border-r border-[#21326c]/10 flex flex-col" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+            {/* Thread list */}
+            <div className="w-full sm:w-64 sm:flex-shrink-0 border-b sm:border-b-0 sm:border-r border-[#21326c]/10 flex flex-col">
               <div className="px-4 py-3 border-b border-[#21326c]/10 bg-[#21326c]/5">
-                <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wide">All Conversations</p>
+                <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wide">All Conversations ({adminThreads.length})</p>
               </div>
               <div className="flex-1 overflow-y-auto divide-y divide-[#21326c]/5">
-                {CHAT_CONTACTS.map(contact => (
-                  <button
-                    key={contact.id}
-                    onClick={() => setActiveConvo(contact)}
-                    className="w-full flex items-center gap-3 p-3 hover:bg-[#21326c]/5 transition-colors text-left"
-                    style={activeConvo.id === contact.id ? { background: '#21326c10', borderLeft: '3px solid #21326c' } : {}}
-                  >
-                    <Avatar initials={contact.initials} color={contact.color} size="sm" online={contact.online} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-[#21326c] truncate">{contact.name}</p>
-                      <p className="text-xs text-[#21326c]/50 truncate">{contact.lastMsg}</p>
-                    </div>
-                    {contact.unread > 0 && (
-                      <span className="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ background: '#c4622d', fontSize: '10px' }}>
-                        {contact.unread}
-                      </span>
-                    )}
-                  </button>
-                ))}
+                {adminThreads.map(t => {
+                  const msgs = SEED_CHAT_MESSAGES[t.projectId] || [];
+                  const last = msgs[msgs.length - 1];
+                  const isActive = activeConvo?.projectId === t.projectId;
+                  return (
+                    <button
+                      key={t.projectId}
+                      onClick={() => setActiveConvo(t)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-[#21326c]/5 transition-colors text-left"
+                      style={isActive ? { background: '#21326c10', borderLeft: '3px solid #21326c' } : {}}
+                    >
+                      <Avatar initials={t.talentInitials} color={t.talentColor} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-[#21326c] truncate">{t.talentName} ↔ {t.clientName}</p>
+                        <p className="text-xs text-[#21326c]/50 truncate">{last?.text || t.projectTitle}</p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Message thread */}
+            {/* Message thread — read-only */}
+            {activeConvo && (
             <div className="flex-1 flex flex-col min-w-0 min-h-0">
               <div className="flex items-center gap-3 p-4 border-b border-[#21326c]/10">
-                <Avatar initials={activeConvo.initials} color={activeConvo.color} size="md" online={activeConvo.online} />
-                <div>
-                  <p className="font-semibold text-[#21326c] text-sm">{activeConvo.name}</p>
-                  <p className="text-xs text-[#21326c]/50">{activeConvo.online ? 'Online' : 'Offline'} · Read-only view</p>
+                <Avatar initials={activeConvo.talentInitials} color={activeConvo.talentColor} size="md" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-[#21326c] text-sm">{activeConvo.talentName} ↔ {activeConvo.clientName}</p>
+                  <p className="text-xs text-[#21326c]/50 truncate">re: {activeConvo.projectTitle}</p>
                 </div>
-                <div className="ml-auto">
-                  <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ background: '#21326c10', color: '#21326c' }}>
-                    <Shield size={10} className="inline mr-1" />Admin Monitor
-                  </span>
-                </div>
+                <span className="text-xs px-2 py-1 rounded-full font-medium flex-shrink-0" style={{ background: '#21326c10', color: '#21326c' }}>
+                  <Shield size={10} className="inline mr-1" />Admin Monitor
+                </span>
+              </div>
+              <div className="mx-4 mt-3 px-3 py-2 rounded-xl text-xs text-center" style={{ background: '#fff8e1', color: '#92400e' }}>
+                <Shield size={11} className="inline mr-1" />Read-only admin view — participants are not notified
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {CHAT_MESSAGES.map(msg => (
+                {(SEED_CHAT_MESSAGES[activeConvo.projectId] || []).map(msg => (
                   <div key={msg.id} className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}>
                     {msg.from === 'them' && (
-                      <Avatar initials={activeConvo.initials} color={activeConvo.color} size="sm" />
+                      <Avatar initials={activeConvo.talentInitials} color={activeConvo.talentColor} size="sm" />
                     )}
                     <div className={`max-w-sm mx-2 px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                       msg.from === 'me'
@@ -3800,13 +4394,15 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
                   </div>
                 ))}
               </div>
-              <div className="p-3 border-t border-[#21326c]/10 bg-[#21326c]/3">
+              <div className="p-3 border-t border-[#21326c]/10" style={{ background: '#21326c03' }}>
                 <p className="text-xs text-center text-[#21326c]/40">
                   <Lock size={10} className="inline mr-1" />Admins can view but not send messages in monitored conversations
                 </p>
               </div>
             </div>
+            )}
           </div>
+          )}
         </div>
       )}
 
@@ -3845,13 +4441,991 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
   );
 }
 
+// ─── VIEW: PROJECTS (client escrow flow) ─────────────────────────────────────
+
+const PROJECT_STATUS_STEPS = ['open', 'offer_accepted', 'deposit_paid', 'in_progress', 'delivered', 'completed', 'reviewed'];
+const PROJECT_STATUS_LABELS = {
+  open:           { label: 'Reviewing Offers',  color: '#21326c',  bg: '#21326c12' },
+  offer_accepted: { label: 'Offer Accepted',    color: '#a84f22',  bg: '#a84f2212' },
+  deposit_paid:   { label: 'Deposit Paid',      color: '#db9630',  bg: '#db963012' },
+  in_progress:    { label: 'In Progress',       color: '#2563eb',  bg: '#2563eb12' },
+  delivered:      { label: 'Delivery Received', color: '#7c3aed',  bg: '#7c3aed12' },
+  completed:      { label: 'Completed',         color: '#16a34a',  bg: '#16a34a12' },
+  reviewed:       { label: 'Reviewed',          color: '#059669',  bg: '#05966912' },
+};
+
+function ProjectStatusBadge({ status }) {
+  const s = PROJECT_STATUS_LABELS[status] || PROJECT_STATUS_LABELS.open;
+  return (
+    <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: s.bg, color: s.color }}>
+      {s.label}
+    </span>
+  );
+}
+
+function EscrowStepper({ status }) {
+  const steps = [
+    { key: 'open',           label: 'Post' },
+    { key: 'offer_accepted', label: 'Accept Offer' },
+    { key: 'deposit_paid',   label: 'Pay Deposit' },
+    { key: 'in_progress',    label: 'In Progress' },
+    { key: 'delivered',      label: 'Delivery' },
+    { key: 'completed',      label: 'Full Payment' },
+    { key: 'reviewed',       label: 'Review' },
+  ];
+  const idx = PROJECT_STATUS_STEPS.indexOf(status);
+  return (
+    <div className="flex items-center gap-0 overflow-x-auto pb-1">
+      {steps.map((step, i) => {
+        const done    = i < idx;
+        const active  = i === idx;
+        const future  = i > idx;
+        return (
+          <div key={step.key} className="flex items-center flex-shrink-0">
+            <div className="flex flex-col items-center gap-1">
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 border-2 transition-all ${
+                  done   ? 'border-[#16a34a] bg-[#16a34a] text-white' :
+                  active ? 'border-[#21326c] bg-[#21326c] text-white' :
+                  'border-[#21326c]/20 bg-white text-[#21326c]/30'
+                }`}
+              >
+                {done ? '✓' : i + 1}
+              </div>
+              <span className={`text-[9px] font-semibold whitespace-nowrap ${active ? 'text-[#21326c]' : done ? 'text-[#16a34a]' : 'text-[#21326c]/30'}`}>
+                {step.label}
+              </span>
+            </div>
+            {i < steps.length - 1 && (
+              <div className={`h-0.5 w-6 mx-1 mb-4 flex-shrink-0 ${done ? 'bg-[#16a34a]' : 'bg-[#21326c]/15'}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProjectsPage({ projects, setProjects, currentUser, setView, setSelectedTalent, talents, addNotification }) {
+  const [selected, setSelected] = useState(null);
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ rating: 0, text: '' });
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [tab, setTab] = useState('active'); // active | completed
+
+  const myProjects = projects.filter(p => p.clientId === currentUser?.id);
+  const activeProjects = myProjects.filter(p => !['completed','reviewed'].includes(p.status));
+  const doneProjects = myProjects.filter(p => ['completed','reviewed'].includes(p.status));
+  const displayProjects = tab === 'active' ? activeProjects : doneProjects;
+
+  // Refresh selected when projects update
+  const proj = selected ? projects.find(p => p.id === selected.id) : null;
+
+  const updateProject = (id, patch) => {
+    setProjects(ps => ps.map(p => p.id === id ? { ...p, ...patch } : p));
+    setSelected(p => p ? { ...p, ...patch } : null);
+  };
+
+  // Accept an application
+  const acceptApp = (projId, appId) => {
+    const app = proj.applications.find(a => a.id === appId);
+    updateProject(projId, {
+      status: 'offer_accepted',
+      acceptedApplicationId: appId,
+      acceptedTalentId: app.talentId,
+    });
+    addNotification({
+      icon: 'bag', title: `Offer accepted — ${proj.title}`,
+      body: `You accepted ${app.talentName}'s application. Pay the 50% deposit to get started.`,
+      time: 'Just now',
+    });
+  };
+
+  // Pay deposit
+  const payDeposit = (projId) => {
+    const deposit = Math.round(proj.budget * 0.5);
+    updateProject(projId, { status: 'deposit_paid', depositAmount: deposit, depositPaidAt: 'Just now' });
+    addNotification({
+      icon: 'money', title: 'Deposit paid!',
+      body: `${deposit.toLocaleString()} EGP held in escrow. ${proj.acceptedApp?.talentName || 'The student'} can now start working.`,
+      time: 'Just now', iconBg: '#dcfce7',
+    });
+    // Notify talent (simulated — in real app this hits their notification feed)
+    const acceptedApp = proj.applications.find(a => a.id === proj.acceptedApplicationId);
+    if (acceptedApp) {
+      addNotification({
+        icon: 'money', title: `Deposit received for "${proj.title}"`,
+        body: `${deposit.toLocaleString()} EGP is now held in escrow. You can start working!`,
+        time: 'Just now', iconBg: '#dcfce7',
+      });
+    }
+  };
+
+  // Approve delivery & release full payment
+  const approveDelivery = (projId) => {
+    const remaining = proj.budget - (proj.depositAmount || 0);
+    updateProject(projId, {
+      status: 'completed',
+      clientApproved: true,
+      remainingPaidAt: 'Just now',
+      completedAt: 'Just now',
+    });
+    // Add wallet balance to the talent
+    if (proj.acceptedTalentId) {
+      const talent = talents.find(t => t.id === proj.acceptedTalentId);
+      if (talent) {
+        // In a real app this calls an API. Here we update talents state.
+        // We call onUpdateTalent via addNotification pattern if we pass setTalents
+        addNotification({
+          icon: 'money', title: `${remaining.toLocaleString()} EGP released to talent`,
+          body: `Full payment for "${proj.title}" has been released. Total paid: ${proj.budget.toLocaleString()} EGP.`,
+          time: 'Just now', iconBg: '#dcfce7',
+        });
+      }
+    }
+  };
+
+  // Submit client review
+  const submitReview = (projId) => {
+    if (!reviewForm.rating) return;
+    updateProject(projId, {
+      status: 'reviewed',
+      clientReview: { rating: reviewForm.rating, text: reviewForm.text },
+    });
+    setReviewSubmitted(true);
+    setReviewForm({ rating: 0, text: '' });
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c]">My Projects</h1>
+          <p className="text-sm text-[#21326c] mt-1">Track your projects and manage payments</p>
+        </div>
+        <button
+          onClick={() => setShowPostModal(true)}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-white shadow-md hover:opacity-90 transition-all text-sm flex-shrink-0"
+          style={{ background: '#ff9044' }}
+        >
+          <Plus size={16} /> New Project
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-[#21326c]/5 p-1 rounded-xl w-fit">
+        {[['active','Active'], ['completed','Completed']].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === id ? 'bg-white text-[#21326c] shadow-sm' : 'text-[#21326c]/60 hover:text-[#21326c]'}`}
+          >
+            {label} {id === 'active' ? `(${activeProjects.length})` : `(${doneProjects.length})`}
+          </button>
+        ))}
+      </div>
+
+      {displayProjects.length === 0 ? (
+        <div className="text-center py-16">
+          <div className="w-16 h-16 rounded-2xl bg-[#21326c]/5 flex items-center justify-center mx-auto mb-4">
+            <Briefcase size={28} className="text-[#21326c]/30" />
+          </div>
+          <p className="text-[#21326c] font-semibold mb-1">{tab === 'active' ? 'No active projects' : 'No completed projects yet'}</p>
+          <p className="text-sm text-[#21326c]/50 mb-5">Post a project to find the right student for your brief</p>
+          <button onClick={() => setShowPostModal(true)}
+            className="px-6 py-3 rounded-full font-semibold text-white hover:opacity-90 transition-all"
+            style={{ background: '#ff9044' }}
+          >
+            Post Your First Project
+          </button>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {displayProjects.map(p => (
+            <div
+              key={p.id}
+              onClick={() => { setSelected(p); setReviewSubmitted(false); }}
+              className="bg-white rounded-2xl border border-[#21326c]/10 p-5 sm:p-6 cursor-pointer hover:border-[#21326c]/30 transition-all"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <h3 className="font-semibold text-[#21326c] text-base">{p.title}</h3>
+                    {p.vip && <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fdf0d3', color: '#21326c', border: '1px solid #e4ae50' }}><Sparkles size={9} className="inline mr-1" />VIP</span>}
+                  </div>
+                  <p className="text-sm text-[#21326c]/60">{p.postedAt} · {p.budget.toLocaleString()} EGP</p>
+                </div>
+                <ProjectStatusBadge status={p.status} />
+              </div>
+              <EscrowStepper status={p.status} />
+              {p.status === 'open' && (
+                <p className="text-xs text-[#21326c]/50 mt-3">{p.applications.length} application{p.applications.length !== 1 ? 's' : ''} — click to review</p>
+              )}
+              {['deposit_paid','in_progress'].includes(p.status) && (
+                <div className="mt-3 flex items-center gap-2 text-xs font-medium text-[#2563eb]">
+                  <Hourglass size={13} /> Student is working · {(p.depositAmount || 0).toLocaleString()} EGP held in escrow
+                </div>
+              )}
+              {p.status === 'delivered' && (
+                <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#7c3aed]">
+                  <PackageCheck size={13} /> Delivery received — click to review and release payment
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── PROJECT DETAIL PANEL ── */}
+      {proj && (
+        <div className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:px-4 sm:pb-4 sm:pt-20 modal-backdrop" style={{ zIndex: 1000 }} onClick={() => setSelected(null)}>
+          <div
+            className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[88vh] overflow-y-auto animate-fade-in flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Panel header */}
+            <div className="flex items-start justify-between px-6 py-5 border-b border-[#21326c]/10 flex-shrink-0">
+              <div className="flex-1 pr-4">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <h2 className="font-display text-lg font-bold text-[#21326c]">{proj.title}</h2>
+                  <ProjectStatusBadge status={proj.status} />
+                </div>
+                <p className="text-xs text-[#21326c]/50">{proj.postedAt} · {proj.budget.toLocaleString()} EGP budget</p>
+              </div>
+              <button onClick={() => setSelected(null)} className="w-8 h-8 rounded-full bg-[#21326c]/5 flex items-center justify-center hover:bg-[#21326c]/10 transition-colors flex-shrink-0">
+                <X size={16} className="text-[#21326c]" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-6 flex-1 overflow-y-auto">
+              {/* Stepper */}
+              <EscrowStepper status={proj.status} />
+
+              {/* Escrow summary */}
+              <div className="rounded-2xl p-4 grid grid-cols-3 gap-3 text-center" style={{ background: '#21326c06', border: '1px solid #21326c10' }}>
+                <div>
+                  <p className="text-xs text-[#21326c]/50 mb-0.5">Total Budget</p>
+                  <p className="font-bold text-[#21326c]">{proj.budget.toLocaleString()} EGP</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#21326c]/50 mb-0.5">Deposit (50%)</p>
+                  <p className={`font-bold ${proj.depositAmount ? 'text-[#16a34a]' : 'text-[#21326c]/30'}`}>
+                    {proj.depositAmount ? `${proj.depositAmount.toLocaleString()} EGP` : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#21326c]/50 mb-0.5">On Completion</p>
+                  <p className={`font-bold ${proj.clientApproved ? 'text-[#16a34a]' : 'text-[#21326c]/30'}`}>
+                    {proj.depositAmount ? `${(proj.budget - proj.depositAmount).toLocaleString()} EGP` : `${Math.round(proj.budget * 0.5).toLocaleString()} EGP`}
+                  </p>
+                </div>
+              </div>
+
+              {/* ── STEP: open — Review applications ── */}
+              {proj.status === 'open' && (
+                <div>
+                  <h3 className="font-semibold text-[#21326c] mb-3 flex items-center gap-2">
+                    <Users size={16} /> Applications ({proj.applications.length})
+                  </h3>
+                  {proj.applications.length === 0 ? (
+                    <p className="text-sm text-[#21326c]/50 text-center py-6 border border-dashed border-[#21326c]/20 rounded-2xl">
+                      No applications yet — check back soon
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {proj.applications.map(app => {
+                        const talent = talents.find(t => t.id === app.talentId);
+                        return (
+                          <div key={app.id} className="rounded-2xl border border-[#21326c]/10 p-4">
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => { setSelected(null); setSelectedTalent(talent); setView('profile'); }}
+                                  className="flex-shrink-0"
+                                >
+                                  <Avatar initials={app.talentInitials} color={app.talentColor} size="md" />
+                                </button>
+                                <div>
+                                  <p className="font-semibold text-[#21326c] text-sm">{app.talentName}</p>
+                                  <p className="text-xs text-[#21326c]/50">{app.submittedAt}</p>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <p className="font-bold text-[#21326c]">{(app.proposedAmount || proj.budget).toLocaleString()} EGP</p>
+                                {talent && <div className="mt-0.5"><AvailabilityBadge status={talent.availability} /></div>}
+                              </div>
+                            </div>
+                            <p className="text-sm text-[#21326c] leading-relaxed mb-3 italic">"{app.note}"</p>
+                            {talent && (
+                              <div className="flex flex-wrap gap-1 mb-3">
+                                {talent.tags.slice(0,4).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}
+                              </div>
+                            )}
+                            <div className="flex gap-2 flex-wrap">
+                              <button
+                                onClick={() => acceptApp(proj.id, app.id)}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all"
+                                style={{ background: '#21326c' }}
+                              >
+                                <CheckCircle size={14} /> Accept This Offer
+                              </button>
+                              <button
+                                onClick={() => { setSelected(null); setSelectedTalent(talent); setView('profile'); }}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
+                              >
+                                View Profile
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── STEP: offer_accepted — Pay deposit ── */}
+              {proj.status === 'offer_accepted' && (() => {
+                const app = proj.applications.find(a => a.id === proj.acceptedApplicationId);
+                const talent = app ? talents.find(t => t.id === app.talentId) : null;
+                const deposit = Math.round(proj.budget * 0.5);
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 rounded-2xl" style={{ background: '#21326c08', border: '1px solid #21326c15' }}>
+                      {talent && <Avatar initials={talent.initials} color={talent.avatarColor} size="md" />}
+                      <div>
+                        <p className="font-semibold text-[#21326c] text-sm">{app?.talentName}</p>
+                        <p className="text-xs text-[#21326c]/60">Offer accepted — waiting for deposit</p>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border-2 border-dashed border-[#21326c]/20 p-5 text-center space-y-3">
+                      <CreditCard size={32} className="text-[#21326c]/40 mx-auto" />
+                      <div>
+                        <p className="font-display text-2xl font-bold text-[#21326c]">{deposit.toLocaleString()} EGP</p>
+                        <p className="text-sm text-[#21326c]/60 mt-0.5">50% deposit · held in escrow by Lawnn</p>
+                      </div>
+                      <p className="text-xs text-[#21326c]/50 leading-relaxed max-w-xs mx-auto">
+                        Your deposit is protected. It's released to the student only when you approve the final delivery.
+                      </p>
+                      <button
+                        onClick={() => payDeposit(proj.id)}
+                        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all"
+                        style={{ background: '#ff9044' }}
+                      >
+                        Pay {deposit.toLocaleString()} EGP Deposit
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── STEP: deposit_paid / in_progress — Waiting for delivery ── */}
+              {['deposit_paid', 'in_progress'].includes(proj.status) && (() => {
+                const app = proj.applications.find(a => a.id === proj.acceptedApplicationId);
+                const talent = app ? talents.find(t => t.id === app.talentId) : null;
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 rounded-2xl" style={{ background: '#21326c08', border: '1px solid #21326c15' }}>
+                      {talent && <Avatar initials={talent.initials} color={talent.avatarColor} size="md" />}
+                      <div className="flex-1">
+                        <p className="font-semibold text-[#21326c] text-sm">{app?.talentName} is working on your project</p>
+                        <p className="text-xs text-[#21326c]/60">Deposit paid {proj.depositPaidAt}</p>
+                      </div>
+                      <AvailabilityBadge status="busy" />
+                    </div>
+                    <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: '#fef3c7', border: '1px solid #f59e0b40' }}>
+                      <Hourglass size={20} className="text-amber-600 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-800">Waiting for delivery</p>
+                        <p className="text-xs text-amber-700 mt-0.5">You'll be notified when {app?.talentName?.split(' ')[0]} submits their work.</p>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl p-4 border border-[#21326c]/10" style={{ background: '#21326c04' }}>
+                      <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Escrow Summary</p>
+                      <div className="flex justify-between text-sm text-[#21326c] mb-1">
+                        <span>Deposit paid</span><span className="font-semibold text-green-600">{(proj.depositAmount||0).toLocaleString()} EGP ✓</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-[#21326c]">
+                        <span>On delivery approval</span><span className="font-semibold text-[#21326c]/50">{(proj.budget - (proj.depositAmount||0)).toLocaleString()} EGP</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── STEP: delivered — Approve delivery ── */}
+              {proj.status === 'delivered' && (() => {
+                const app = proj.applications.find(a => a.id === proj.acceptedApplicationId);
+                const talent = app ? talents.find(t => t.id === app.talentId) : null;
+                const remaining = proj.budget - (proj.depositAmount || 0);
+                return (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl p-4" style={{ background: '#f3e8ff', border: '1px solid #c084fc40' }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <PackageCheck size={18} className="text-purple-600" />
+                        <p className="font-semibold text-purple-800 text-sm">{app?.talentName} submitted their delivery</p>
+                        <span className="text-xs text-purple-600 ml-auto">{proj.deliveredAt}</span>
+                      </div>
+                      {proj.deliveryNote && (
+                        <p className="text-sm text-purple-700 leading-relaxed italic">"{proj.deliveryNote}"</p>
+                      )}
+                    </div>
+                    {talent && (
+                      <button
+                        onClick={() => { setSelected(null); setSelectedTalent(talent); setView('profile'); }}
+                        className="flex items-center gap-2 text-sm font-semibold text-[#21326c] hover:opacity-70 transition-opacity"
+                      >
+                        <Avatar initials={talent.initials} color={talent.avatarColor} size="sm" />
+                        View {talent.name}'s portfolio
+                        <ChevronRight size={14} />
+                      </button>
+                    )}
+                    <div className="rounded-2xl border-2 border-dashed border-green-300 p-5 text-center space-y-3">
+                      <PartyPopper size={32} className="text-green-500 mx-auto" />
+                      <div>
+                        <p className="font-display text-xl font-bold text-[#21326c]">Happy with the work?</p>
+                        <p className="text-sm text-[#21326c]/60 mt-1">Approving releases <strong>{remaining.toLocaleString()} EGP</strong> to the student.</p>
+                      </div>
+                      <button
+                        onClick={() => approveDelivery(proj.id)}
+                        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all"
+                        style={{ background: '#16a34a' }}
+                      >
+                        Approve & Release {remaining.toLocaleString()} EGP
+                      </button>
+                      <p className="text-xs text-[#21326c]/40">If you need revisions, message {app?.talentName?.split(' ')[0]} directly.</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── STEP: completed — Leave review ── */}
+              {proj.status === 'completed' && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: '#dcfce7', border: '1px solid #22c55e40' }}>
+                    <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-green-800">Payment released successfully</p>
+                      <p className="text-xs text-green-700 mt-0.5">Full {proj.budget.toLocaleString()} EGP paid · {proj.completedAt}</p>
+                    </div>
+                  </div>
+                  {!reviewSubmitted ? (
+                    <div className="rounded-2xl border border-[#21326c]/10 p-5 space-y-4">
+                      <h3 className="font-semibold text-[#21326c]">Leave a Review</h3>
+                      <div>
+                        <p className="text-xs text-[#21326c]/60 mb-2">Your rating</p>
+                        <StarPicker value={reviewForm.rating} onChange={r => setReviewForm(f => ({ ...f, rating: r }))} size={28} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#21326c]/60 mb-2">Your feedback (optional)</p>
+                        <textarea
+                          rows={3}
+                          value={reviewForm.text}
+                          onChange={e => setReviewForm(f => ({ ...f, text: e.target.value }))}
+                          placeholder="Share what it was like to work with this student..."
+                          className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-sm text-[#21326c] resize-none focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40"
+                        />
+                      </div>
+                      <button
+                        onClick={() => submitReview(proj.id)}
+                        disabled={!reviewForm.rating}
+                        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{ background: '#ff9044' }}
+                      >
+                        Submit Review
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 rounded-2xl border border-[#21326c]/10">
+                      <Star size={32} fill="#db9630" color="#db9630" className="mx-auto mb-2" />
+                      <p className="font-semibold text-[#21326c]">Review submitted!</p>
+                      <p className="text-sm text-[#21326c]/60 mt-1">Thanks for your feedback.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── STEP: reviewed — All done ── */}
+              {proj.status === 'reviewed' && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl p-5 text-center" style={{ background: '#21326c08', border: '1px solid #21326c15' }}>
+                    <div className="flex justify-center gap-0.5 mb-3">
+                      {[1,2,3,4,5].map(n => (
+                        <Star key={n} size={22} fill={n <= (proj.clientReview?.rating || 5) ? '#db9630' : 'none'} color={n <= (proj.clientReview?.rating || 5) ? '#db9630' : '#21326c20'} />
+                      ))}
+                    </div>
+                    <p className="text-sm text-[#21326c] italic mb-1">"{proj.clientReview?.text}"</p>
+                    <p className="text-xs text-[#21326c]/40">Your review · {proj.completedAt}</p>
+                  </div>
+                  {proj.talentReview && (
+                    <div className="rounded-2xl p-4 border border-[#21326c]/10">
+                      <p className="text-xs font-semibold text-[#21326c]/50 uppercase tracking-wider mb-2">Student's review of you</p>
+                      <div className="flex gap-0.5 mb-1">
+                        {[1,2,3,4,5].map(n => (
+                          <Star key={n} size={14} fill={n <= proj.talentReview.rating ? '#db9630' : 'none'} color={n <= proj.talentReview.rating ? '#db9630' : '#21326c20'} />
+                        ))}
+                      </div>
+                      <p className="text-sm text-[#21326c] italic">"{proj.talentReview.text}"</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Project Modal (simple re-use of job post UI) */}
+      <Modal open={showPostModal} onClose={() => setShowPostModal(false)} title="Post a New Project" wide>
+        <NewProjectForm
+          currentUser={currentUser}
+          onSubmit={(project) => {
+            setProjects(ps => [{ ...project, clientId: currentUser.id, clientName: currentUser.name, status: 'open', applications: [], acceptedApplicationId: null, acceptedTalentId: null, depositAmount: null, depositPaidAt: null, deliveryNote: null, clientApproved: false, clientReview: null, talentReview: null, completedAt: null, postedAt: 'Just now' }, ...ps]);
+            setShowPostModal(false);
+            addNotification({ icon: 'bag', title: 'Project posted!', body: 'Students can now apply to your project.', time: 'Just now' });
+          }}
+        />
+      </Modal>
+    </div>
+  );
+}
+
+function NewProjectForm({ currentUser, onSubmit }) {
+  const [form, setForm] = useState({ title: '', brief: '', budget: '', skills: [], vip: false });
+  const [newSkill, setNewSkill] = useState('');
+  const addSkill = () => { const s = newSkill.trim(); if (s && !form.skills.includes(s)) setForm(f => ({ ...f, skills: [...f.skills, s] })); setNewSkill(''); };
+  return (
+    <div className="space-y-5">
+      <div>
+        <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Project Title *</label>
+        <input type="text" placeholder="e.g. Brand Identity for F&B Startup" value={form.title}
+          onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Brief *</label>
+        <textarea rows={4} placeholder="Describe your project — deliverables, style, timeline..." value={form.brief}
+          onChange={e => setForm(f => ({ ...f, brief: e.target.value }))}
+          className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] resize-none placeholder:text-[#21326c]/40" />
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Budget (EGP) *</label>
+        <div className="relative">
+          <DollarSign size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#21326c]/40" />
+          <input type="number" placeholder="e.g. 3500" value={form.budget}
+            onChange={e => setForm(f => ({ ...f, budget: e.target.value }))}
+            className="w-full pl-9 pr-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] placeholder:text-[#21326c]/40" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Required Skills</label>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {form.skills.map(s => (
+            <span key={s} className="tag-pill flex items-center gap-1">{s}
+              <button onClick={() => setForm(f => ({ ...f, skills: f.skills.filter(x => x !== s) }))} className="ml-0.5 hover:opacity-60"><X size={10} /></button>
+            </span>
+          ))}
+        </div>
+        <SkillPicker currentTags={form.skills} onAdd={s => setForm(f => ({ ...f, skills: [...f.skills, s] }))} />
+      </div>
+      <button
+        onClick={() => onSubmit({ id: `proj-${Date.now()}`, title: form.title, brief: form.brief, budget: parseInt(form.budget) || 0, tags: form.skills, vip: form.vip })}
+        disabled={!form.title || !form.brief || !form.budget}
+        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{ background: '#ff9044' }}
+      >
+        Post Project
+      </button>
+    </div>
+  );
+}
+
+// ─── ONBOARDING FLOW ─────────────────────────────────────────────────────────
+
+function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone }) {
+  const [step, setStep] = useState(0);
+  const [skillQuery, setSkillQuery] = useState('');
+
+  // Student onboarding draft
+  const talent = currentUser?.role === 'student' ? talents.find(t => t.id === currentUser.talentId) : null;
+  const [draft, setDraft] = useState({
+    bio: talent?.bio || '',
+    availability: talent?.availability || 'open',
+    tags: talent?.tags ? [...talent.tags] : [],
+  });
+
+  // Client onboarding interest selection
+  const CLIENT_INTERESTS = [
+    { id: 'branding',      label: 'Brand & Identity',         icon: Palette },
+    { id: 'interior',      label: 'Interior & Architecture',  icon: Building2 },
+    { id: 'ux',            label: 'UI/UX & Digital',          icon: Layers },
+    { id: 'illustration',  label: 'Illustration & Fine Art',  icon: ImageIcon },
+    { id: 'motion',        label: 'Motion & Video',           icon: Video },
+    { id: 'photography',   label: 'Photography',              icon: Camera },
+  ];
+  const [interests, setInterests] = useState([]);
+
+  const isStudent = currentUser?.role === 'student';
+  const isClient  = currentUser?.role === 'client';
+
+  const STUDENT_STEPS = 3;
+  const CLIENT_STEPS  = 3;
+  const totalSteps = isStudent ? STUDENT_STEPS : CLIENT_STEPS;
+
+  const handleStudentDone = () => {
+    if (talent) onUpdateTalent({ ...talent, ...draft });
+    onDone();
+  };
+
+  const toggleInterest = id => setInterests(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  // — STUDENT STEPS —
+  const studentSteps = [
+    // Step 0: Welcome
+    {
+      title: "Welcome to Lawnn! 🎨",
+      sub: "Egypt's best creative students, in one place. Let's set up your profile in 2 minutes.",
+      content: (
+        <div className="space-y-6">
+          <div className="rounded-2xl p-6 text-center" style={{ background: 'linear-gradient(135deg, #21326c15, #21326c05)' }}>
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: '#21326c' }}>
+              <Avatar initials={currentUser?.initials || '?'} color={currentUser?.avatarColor || '#21326c'} size="lg" />
+            </div>
+            <h3 className="font-display text-xl font-bold text-[#21326c] mb-1">{currentUser?.name}</h3>
+            <p className="text-sm text-[#21326c]/60">{talent?.university} · {talent?.dept}</p>
+            <div className="mt-3 flex justify-center">
+              <VerifiedBadge isGrad={talent?.isGrad} />
+            </div>
+          </div>
+          <div className="space-y-3">
+            {[
+              { icon: Users,        text: 'Get discovered by Egypt\'s top brands and agencies' },
+              { icon: Briefcase,    text: 'Apply to curated creative briefs on the Job Board' },
+              { icon: Wallet,       text: 'Get paid securely via escrow on every project' },
+              { icon: Award,        text: 'Build your verified portfolio with real client reviews' },
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#21326c06' }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#21326c15' }}>
+                  <Icon size={15} className="text-[#21326c]" />
+                </div>
+                <p className="text-sm text-[#21326c]">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+      cta: "Let's set up my profile →",
+    },
+    // Step 1: Bio + Availability
+    {
+      title: 'Tell clients about you',
+      sub: 'A strong bio increases your chances of getting hired significantly.',
+      content: (
+        <div className="space-y-5">
+          <div>
+            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Your Bio</label>
+            <textarea
+              rows={4}
+              value={draft.bio}
+              onChange={e => setDraft(d => ({ ...d, bio: e.target.value }))}
+              placeholder="Describe your style, what you love to make, and what makes you different..."
+              className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] resize-none placeholder:text-[#21326c]/40 transition-all"
+            />
+            <p className="text-xs text-[#21326c]/40 mt-1">{draft.bio.length} characters — aim for 100–200</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Availability</label>
+            <div className="flex gap-2 flex-wrap">
+              {Object.entries(AVAILABILITY).map(([key, val]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setDraft(d => ({ ...d, availability: key }))}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${
+                    draft.availability === key ? 'border-2' : 'border-[#21326c]/15 hover:border-[#21326c]/40'
+                  }`}
+                  style={draft.availability === key ? { background: val.bg, color: val.text, borderColor: val.color } : {}}
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ background: val.color }} />
+                  {val.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ),
+      cta: 'Next: Add your skills →',
+    },
+    // Step 2: Skills — full inline browser
+    {
+      title: 'Add your skills',
+      sub: 'Skills help clients find you. Add at least 3 to show up in searches.',
+      wide: true,
+      content: (() => {
+        const q = skillQuery.trim().toLowerCase();
+        const allSkills = SKILL_LIBRARY.flatMap(c => c.skills);
+        const visibleCategories = q
+          ? [{ category: 'Search results', skills: allSkills.filter(s => s.toLowerCase().includes(q)) }]
+          : SKILL_LIBRARY;
+        const canAddCustom = q && !allSkills.some(s => s.toLowerCase() === q);
+
+        return (
+          <div className="flex flex-col gap-3 h-full">
+            {/* Selected skills */}
+            <div className="flex flex-wrap gap-1.5 min-h-8">
+              {draft.tags.length === 0
+                ? <p className="text-sm text-[#21326c]/40 italic self-center">No skills yet — tap any skill below to add it</p>
+                : draft.tags.map(tag => (
+                    <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: '#21326c', color: '#fff' }}>
+                      {tag}
+                      <button onClick={() => setDraft(d => ({ ...d, tags: d.tags.filter(t => t !== tag) }))} className="opacity-70 hover:opacity-100 ml-0.5"><X size={10} /></button>
+                    </span>
+                  ))
+              }
+            </div>
+
+            {/* Search bar */}
+            <div className="relative flex-shrink-0">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#21326c]/40" />
+              <input
+                type="text"
+                value={skillQuery}
+                onChange={e => setSkillQuery(e.target.value)}
+                placeholder="Search or type a custom skill…"
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[#21326c]/20 text-sm text-[#21326c] focus:ring-2 focus:ring-[#21326c] focus:outline-none placeholder:text-[#21326c]/35 transition-all"
+              />
+              {skillQuery && (
+                <button onClick={() => setSkillQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#21326c]/30 hover:text-[#21326c]"><X size={13} /></button>
+              )}
+            </div>
+
+            {/* Skill browser — scrollable */}
+            <div className="overflow-y-auto flex-1 space-y-4 pr-0.5" style={{ overscrollBehavior: 'contain' }}>
+              {canAddCustom && (
+                <button
+                  onClick={() => { setDraft(d => ({ ...d, tags: [...d.tags, skillQuery.trim()] })); setSkillQuery(''); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 rounded-xl border-2 border-dashed border-[#21326c]/30 text-sm text-[#21326c] hover:border-[#21326c]/60 hover:bg-[#21326c]/5 transition-all"
+                >
+                  <Plus size={14} /> Add "{skillQuery.trim()}" as a custom skill
+                </button>
+              )}
+              {visibleCategories.map(({ category, skills }) => {
+                const available = skills.filter(s => !draft.tags.includes(s));
+                if (available.length === 0) return null;
+                return (
+                  <div key={category}>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#21326c]/40 mb-2">{category}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {available.map(skill => (
+                        <button
+                          key={skill}
+                          onClick={() => setDraft(d => ({ ...d, tags: [...d.tags, skill] }))}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c] hover:text-white hover:border-[#21326c] transition-all"
+                        >
+                          <Plus size={9} />{skill}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {visibleCategories.every(({ skills }) => skills.filter(s => !draft.tags.includes(s)).length === 0) && !canAddCustom && (
+                <p className="text-sm text-[#21326c]/40 text-center py-4">All matching skills added!</p>
+              )}
+            </div>
+
+            <p className="text-xs text-[#21326c]/40 text-right flex-shrink-0">{draft.tags.length} skill{draft.tags.length !== 1 ? 's' : ''} added</p>
+          </div>
+        );
+      })(),
+      cta: draft.tags.length === 0 ? 'Skip for now' : 'Complete Setup ✓',
+    },
+  ];
+
+  // — CLIENT STEPS —
+  const clientSteps = [
+    // Step 0: Welcome
+    {
+      title: 'Welcome to Lawnn! 🎨',
+      sub: "Hire Egypt's top creative students for your projects — fast, fairly, and safely.",
+      content: (
+        <div className="space-y-4">
+          <div className="rounded-2xl p-5" style={{ background: 'linear-gradient(135deg, #21326c, #c4622d)' }}>
+            <div className="flex items-center gap-3 mb-4">
+              <Avatar initials={currentUser?.initials || '?'} color="rgba(255,255,255,0.2)" size="md" />
+              <div>
+                <p className="font-semibold text-white text-sm">{currentUser?.name}</p>
+                <p className="text-xs text-white/70">Client account</p>
+              </div>
+            </div>
+            <p className="text-white/80 text-sm leading-relaxed">Browse 200+ verified students from 12 of Egypt's top creative faculties.</p>
+          </div>
+          <div className="space-y-2">
+            {[
+              { icon: Search,       text: 'Browse the talent directory and find the right match' },
+              { icon: Send,         text: 'Post a brief and let students apply to your project' },
+              { icon: BadgeCheck,   text: 'Accept an offer, pay a protected deposit, and start' },
+              { icon: Wallet,       text: 'Pay the balance only when you approve the delivery' },
+              { icon: Star,         text: 'Leave a review and build a history of great work' },
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#21326c06' }}>
+                <Icon size={14} className="text-[#21326c] flex-shrink-0" />
+                <p className="text-sm text-[#21326c]">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+      cta: "Let's explore talent →",
+    },
+    // Step 1: Interests
+    {
+      title: 'What do you usually need?',
+      sub: "Select the types of creative work you hire for. We'll tailor your experience.",
+      content: (
+        <div className="grid grid-cols-2 gap-2">
+          {CLIENT_INTERESTS.map(({ id, label, icon: Icon }) => {
+            const sel = interests.includes(id);
+            return (
+              <button
+                key={id}
+                onClick={() => toggleInterest(id)}
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                  sel ? 'border-[#21326c] bg-[#21326c]/5' : 'border-[#21326c]/15 hover:border-[#21326c]/30'
+                }`}
+              >
+                <Icon size={18} className={sel ? 'text-[#21326c]' : 'text-[#21326c]/40'} />
+                <span className={`text-sm font-semibold ${sel ? 'text-[#21326c]' : 'text-[#21326c]/60'}`}>{label}</span>
+                {sel && <CheckCircle size={14} className="text-[#21326c] ml-auto flex-shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      ),
+      cta: interests.length === 0 ? 'Skip' : 'Next: How it works →',
+    },
+    // Step 2: How escrow works
+    {
+      title: 'Your money is protected',
+      sub: 'Lawnn uses escrow — you only pay in full when you approve the final delivery.',
+      content: (
+        <div className="space-y-3">
+          {[
+            { num: '1', title: 'Post your project',   body: 'Describe your brief and budget. Students apply within 24–48 hours.', color: '#21326c' },
+            { num: '2', title: 'Accept an offer',      body: 'Review student portfolios and applications, then accept the best fit.', color: '#a84f22' },
+            { num: '3', title: 'Pay 50% deposit',     body: 'Your deposit is held by Lawnn — not released until you approve delivery.', color: '#db9630' },
+            { num: '4', title: 'Receive delivery',    body: 'The student submits their work. Review it at your own pace.', color: '#2563eb' },
+            { num: '5', title: 'Approve & pay balance', body: 'Happy with the work? Release the final 50% and leave a review.', color: '#16a34a' },
+          ].map(({ num, title, body, color }) => (
+            <div key={num} className="flex gap-3 p-3 rounded-xl" style={{ background: `${color}08`, border: `1px solid ${color}20` }}>
+              <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white mt-0.5" style={{ background: color }}>
+                {num}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#21326c]">{title}</p>
+                <p className="text-xs text-[#21326c]/60 mt-0.5 leading-relaxed">{body}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+      cta: 'Start exploring →',
+    },
+  ];
+
+  const steps = isStudent ? studentSteps : clientSteps;
+  const current = steps[step];
+  const isLast = step === totalSteps - 1;
+
+  const handleNext = () => {
+    if (isLast) {
+      if (isStudent) handleStudentDone();
+      else onDone();
+    } else {
+      setStep(s => s + 1);
+    }
+  };
+
+  const isWideStep = !!current.wide;
+
+  return (
+    <div className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:px-4 sm:pb-4 sm:pt-20" style={{ zIndex: 1000, background: 'rgba(33,50,108,0.5)', backdropFilter: 'blur(8px)' }}>
+      <div
+        className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full flex flex-col overflow-hidden animate-fade-in"
+        style={{
+          maxWidth: isWideStep ? 580 : 448,
+          height: isWideStep ? '95dvh' : undefined,
+          maxHeight: isWideStep ? '95dvh' : '92dvh',
+        }}
+      >
+        {/* Progress dots */}
+        <div className="flex items-center justify-center gap-2 pt-5 pb-2 flex-shrink-0">
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-full transition-all"
+              style={{
+                width: i === step ? 24 : 8,
+                height: 8,
+                background: i <= step ? '#21326c' : '#21326c20',
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="px-6 pt-4 pb-2 flex-shrink-0">
+          <h2 className="font-display text-2xl font-bold text-[#21326c] mb-1">{current.title}</h2>
+          <p className="text-sm text-[#21326c]/60 leading-relaxed">{current.sub}</p>
+        </div>
+
+        <div className={`px-6 py-4 flex-1 min-h-0 ${isWideStep ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
+          {current.content}
+        </div>
+
+        {/* CTA */}
+        <div className="px-6 pb-6 pt-2 flex-shrink-0 space-y-2">
+          <button
+            onClick={handleNext}
+            className="w-full py-3.5 rounded-2xl font-semibold text-white hover:opacity-90 transition-all text-sm"
+            style={{ background: isLast ? '#16a34a' : '#ff9044' }}
+          >
+            {current.cta}
+          </button>
+          {!isLast && (
+            <button onClick={onDone} className="w-full py-2 text-sm text-[#21326c]/40 hover:text-[#21326c] transition-colors">
+              Skip setup
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
+
+// Seed notifications for logged-in roles (demo)
+const SEED_NOTIFICATIONS = {
+  student: [
+    { id: 'n1', icon: 'money',   title: 'Deposit received for "Office Interior Design"', body: '4,500 EGP is held in escrow. Start working!', time: '2 days ago', read: false, iconBg: '#dcfce7' },
+    { id: 'n2', icon: 'star',    title: 'Al-Safwa Dev. left you a 5★ review', body: '"Nour absolutely nailed the brief. Will hire again."', time: '2 weeks ago', read: true },
+    { id: 'n3', icon: 'money',   title: '4,500 EGP released to your wallet', body: 'Full payment for "Office Interior Design" released.', time: '2 weeks ago', read: true, iconBg: '#dcfce7' },
+    { id: 'n4', icon: 'bag',     title: 'New job matching your skills', body: '"UI Design for Fintech App" — 4,500 EGP · Apply now', time: '3 days ago', read: false },
+  ],
+  client: [
+    { id: 'n1', icon: 'check',   title: 'New application on "Brand Identity"', body: 'Karim Ashraf applied to your project.', time: '1 day ago', read: false },
+    { id: 'n2', icon: 'check',   title: 'New application on "Brand Identity"', body: 'Ahmed Khalil also applied. Review both.', time: '18 hours ago', read: false },
+    { id: 'n3', icon: 'bag',     title: 'Delivery received — Client Portal App', body: 'Laila Mansour submitted the final files.', time: '2 days ago', read: false },
+    { id: 'n4', icon: 'money',   title: 'Project complete — Office Interior Design', body: 'Full 9,000 EGP paid. Don\'t forget to leave a review!', time: '2 weeks ago', read: true, iconBg: '#dcfce7' },
+  ],
+};
 
 export default function App() {
   const [view, setView] = useState('home');
   const [selectedTalent, setSelectedTalent] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Lifted mutable state so edits propagate across all views
   const [talents, setTalents]                   = useState(TALENTS);
@@ -3862,21 +5436,36 @@ export default function App() {
   const [pendingJobs, setPendingJobs]                   = useState([]);
   const [listings, setListings]                         = useState(MARKETPLACE_LISTINGS);
   const [pendingListings, setPendingListings]           = useState([]);
+  const [projects, setProjects]                         = useState(MOCK_PROJECTS);
+  const [notifications, setNotifications]               = useState([]);
   const [aboutContent, setAboutContent] = useState({
     para1: "Lawnn was born from a simple observation: Egypt's art and design faculties produce world-class talent, but that talent rarely gets the visibility or opportunity it deserves.",
     para2: "We built a platform that verifies students from Egypt's top creative institutions, connects them with real clients and briefs, and gives them the tools to grow a sustainable creative career — all while they're still studying.",
   });
 
+  const addNotification = (notif) => {
+    setNotifications(ns => [{ ...notif, id: `n-${Date.now()}`, read: false }, ...ns]);
+  };
+  const markNotifRead = (id) => setNotifications(ns => ns.map(n => n.id === id ? { ...n, read: true } : n));
+  const markAllNotifsRead = () => setNotifications(ns => ns.map(n => ({ ...n, read: true })));
+
   const handleLogin = user => {
     setCurrentUser(user);
+    // Seed role-specific demo notifications
+    setNotifications(SEED_NOTIFICATIONS[user.role] || []);
+    // Show onboarding for student and client (once per session)
+    if (user.role === 'student' || user.role === 'client') {
+      setShowOnboarding(true);
+    }
     if (user.role === 'student') setView('feed');
-    else if (user.role === 'client') setView('home');
+    else if (user.role === 'client') setView('projects');
     else if (user.role === 'admin') setView('admin');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     setView('home');
+    setNotifications([]);
   };
 
   const handleUpdateTalent = updated => {
@@ -3900,14 +5489,17 @@ export default function App() {
         return <JobBoardPage setView={handleNavChange} jobs={jobs} setJobs={setJobs} pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} currentUser={currentUser} />;
       case 'directory':
         return <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
-      case 'profile':
-        return selectedTalent
-          ? <ProfilePage talent={selectedTalent} setView={handleNavChange} currentUser={currentUser} onUpdateTalent={handleUpdateTalent} />
+      case 'profile': {
+        const profileTalent = selectedTalent
+          || (currentUser?.talentId ? talents.find(t => t.id === currentUser.talentId) : null);
+        return profileTalent
+          ? <ProfilePage talent={profileTalent} setView={handleNavChange} currentUser={currentUser} onUpdateTalent={handleUpdateTalent} />
           : <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
+      }
       case 'feed':
         return <FeedPage feedPosts={feedPosts} setFeedPosts={setFeedPosts} pendingFeedPosts={pendingFeedPosts} setPendingFeedPosts={setPendingFeedPosts} currentUser={currentUser} />;
       case 'chat':
-        return <ChatPage />;
+        return <ChatPage currentUser={currentUser} projects={projects} talents={talents} />;
       case 'about':
         return (
           <AboutPage
@@ -3922,12 +5514,17 @@ export default function App() {
         return <NewsPage newsPosts={newsPosts} setNewsPosts={setNewsPosts} currentUser={currentUser} />;
       case 'marketplace':
         return <MarketplacePage listings={listings} setListings={setListings} pendingListings={pendingListings} setPendingListings={setPendingListings} currentUser={currentUser} />;
+      case 'projects':
+        return currentUser?.role === 'client'
+          ? <ProjectsPage projects={projects} setProjects={setProjects} currentUser={currentUser} setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} addNotification={addNotification} />
+          : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       case 'admin':
         return currentUser?.role === 'admin'
           ? <AdminPage
               pendingFeedPosts={pendingFeedPosts} setPendingFeedPosts={setPendingFeedPosts} setFeedPosts={setFeedPosts}
               pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} setJobs={setJobs}
               pendingListings={pendingListings} setPendingListings={setPendingListings} setListings={setListings}
+              projects={projects} talents={talents}
             />
           : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       default:
@@ -3943,13 +5540,26 @@ export default function App() {
         currentUser={currentUser}
         onLoginClick={() => setShowLogin(true)}
         onLogout={handleLogout}
+        notifications={notifications}
+        onMarkNotifRead={markNotifRead}
+        onMarkAllNotifRead={markAllNotifsRead}
       />
 
       <LoginModal
         open={showLogin}
         onClose={() => setShowLogin(false)}
-        onLogin={handleLogin}
+        onLogin={user => { handleLogin(user); setShowLogin(false); }}
       />
+
+      {/* Onboarding overlay */}
+      {showOnboarding && currentUser && (
+        <OnboardingFlow
+          currentUser={currentUser}
+          talents={talents}
+          onUpdateTalent={handleUpdateTalent}
+          onDone={() => setShowOnboarding(false)}
+        />
+      )}
 
       <main>{renderView()}</main>
 
