@@ -1,17 +1,16 @@
 import { useState, useRef } from 'react';
 import {
-  Search, Bell, MessageSquare, Briefcase, Users, Home, Grid,
-  Star, MapPin, ChevronRight, Plus, Filter, X, Send, Paperclip,
-  Heart, MessageCircle, Share2, Play, Eye, Download, Shield,
-  CheckCircle, Award, Clock, DollarSign, Tag, Upload, FileText,
-  MoreHorizontal, ChevronDown, Camera, Palette, Building2,
-  GraduationCap, Sparkles, ArrowRight, Globe, Lock, Droplets,
-  BookOpen, Layers, Pen, Video, Image as ImageIcon, Stamp,
-  ExternalLink, Info, TrendingUp, Hash, ThumbsUp,
-  BarChart2, Zap, Menu, ChevronLeft, ShoppingBag, Package, BadgeCheck,
-  Trash2, MessageSquareText, UserCheck, Wallet, CircleDot, Wifi,
-  WifiOff, CalendarCheck, FileImage, Hourglass, PackageCheck,
-  ThumbsDown, CreditCard, PartyPopper
+  Search, Bell, MessageSquare, Briefcase, Users, Home,
+  Star, ChevronRight, Plus, X, Send, Paperclip,
+  Heart, MessageCircle, Share2, Play, Shield,
+  CheckCircle, Clock, DollarSign, Upload,
+  MoreHorizontal, Camera, Building2,
+  GraduationCap, Sparkles, ArrowRight, Lock, Droplets,
+  BookOpen, Pen, Video, Image as ImageIcon,
+  ExternalLink, Info, TrendingUp, Hash,
+  Zap, Menu, ChevronLeft, ShoppingBag, Package, BadgeCheck,
+  Trash2, Wallet, FileImage, Hourglass, PackageCheck,
+  CreditCard, PartyPopper
 } from 'lucide-react';
 
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
@@ -351,13 +350,6 @@ const FEED_POSTS = [
   },
 ];
 
-const CHAT_CONTACTS = [
-  { id: 1, name: 'Nour El-Sayed', initials: 'NE', color: '#21326c', lastMsg: 'Sure, I can share the V-Ray files...', time: '10:32 AM', unread: 2, online: true },
-  { id: 2, name: 'Al-Safwa Developments', initials: 'AS', color: '#c4622d', lastMsg: 'Great renders! Can you adjust...', time: '9:15 AM', unread: 0, online: false },
-  { id: 3, name: 'Karim Ashraf', initials: 'KA', color: '#db9630', lastMsg: 'Sent the final brand guide PDF', time: 'Yesterday', unread: 0, online: true },
-  { id: 4, name: 'Shifa Digital', initials: 'SD', color: '#21326c', lastMsg: 'When can we schedule a call?', time: 'Yesterday', unread: 1, online: false },
-];
-
 // Per-project seeded chat messages (keyed by projectId)
 const SEED_CHAT_MESSAGES = {
   'proj-2': [
@@ -382,15 +374,6 @@ const SEED_CHAT_MESSAGES = {
     { id: 4, from: 'me', text: "Thank you so much! Looking forward to working together on the next one.", time: '2 weeks ago' },
   ],
 };
-
-const CHAT_MESSAGES = [
-  { id: 1, from: 'them', text: 'Hi Nour! I just reviewed your portfolio — absolutely love your interior renders. Can you share the V-Ray project files for the hotel lobby concept?', time: '9:45 AM' },
-  { id: 2, from: 'me', text: 'Thank you so much! Really glad you liked it. I can share the files, but I normally send the finished renders as a View-Only PDF first so the composition is locked before handing over assets. Does that work for you?', time: '9:52 AM' },
-  { id: 3, from: 'them', text: 'That actually makes perfect sense — especially at this early stage. Go ahead with the PDF first, we\'ll review internally and get back to you.', time: '10:01 AM' },
-  { id: 4, from: 'me', text: 'Perfect. Also I\'ll apply a watermark with your company name so the images are protected during review. Sending now 📎', time: '10:04 AM' },
-  { id: 5, from: 'them', text: 'Great. We also need a few tweaks on the material palette — the marble in the living room feels too cold. Something warmer?', time: '10:18 AM' },
-  { id: 6, from: 'me', text: 'Absolutely — I was thinking travertine or a warm Sinai marble. I\'ll prepare 3 material options and send swatches this afternoon.', time: '10:32 AM' },
-];
 
 // ─── AUTH / USER DATA ─────────────────────────────────────────────────────────
 
@@ -675,7 +658,17 @@ const MARKETPLACE_LISTINGS = [
   },
 ];
 
-const LISTING_COLORS = ['#21326c', '#c4622d', '#db9630', '#3c8762', '#a84f22', '#5ea580'];
+// ─── SHARED COLOR PALETTE ───────────────────────────────────────────────────────
+const PRIMARY_COLOR = '#21326c';
+const PALETTE_COLORS = [PRIMARY_COLOR, '#c4622d', '#db9630', '#3c8762', '#a84f22', '#5ea580'];
+const LISTING_COLORS = PALETTE_COLORS;
+
+// ─── SHARED FORM TEMPLATES ────────────────────────────────────────────────────────
+const EMPTY_NEWS_FORM = { title: '', excerpt: '', bodyText: '', category: 'Career Advice', readTime: '5 min read', color: PRIMARY_COLOR };
+const EMPTY_LISTING_FORM = { title: '', description: '', price: '', color: PRIMARY_COLOR };
+
+// ─── DATE/TIME FORMATS ────────────────────────────────────────────────────────────
+const DATE_FORMAT_OPTIONS = { year: 'numeric', month: 'long', day: 'numeric' };
 
 // ─── SKILL LIBRARY ────────────────────────────────────────────────────────────
 const SKILL_LIBRARY = [
@@ -2004,6 +1997,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
   const isOwnProfile = currentUser?.role === 'student' && currentUser?.talentId === talent?.id;
 
   const openEdit = () => {
+    if (!talent) return; // Guard against null talent
     setEditDraft({
       bio: talent.bio,
       tags: [...talent.tags],
@@ -2026,6 +2020,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
   };
 
   const saveEdit = () => {
+    if (!talent) return; // Guard against null talent
     onUpdateTalent({ ...talent, ...editDraft });
     setShowEditModal(false);
   };
@@ -2034,8 +2029,6 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
     setHireSuccess(true);
     setTimeout(() => { setShowHireModal(false); setHireSuccess(false); setHireForm({ title: '', brief: '', budget: '' }); }, 2500);
   };
-
-  const PORT_COLORS = ['#21326c', '#c4622d', '#db9630', '#3c8762', '#a84f22', '#5ea580'];
 
   if (!talent) return null;
 
@@ -2412,7 +2405,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
             </select>
           </div>
           <div className="flex gap-2 mb-2">
-            {PORT_COLORS.map(c => (
+            {PALETTE_COLORS.map(c => (
               <button key={c} onClick={() => setNewPortItem(n => ({ ...n, color: c }))}
                 className="w-7 h-7 rounded-lg transition-transform hover:scale-110"
                 style={{ background: c, outline: newPortItem.color === c ? `3px solid ${c}` : 'none', outlineOffset: '2px' }} />
@@ -2958,11 +2951,13 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
   const [saved, setSaved]         = useState(false);
 
   const startEdit = () => {
+    if (!talent) return; // Guard against null talent
     setDraft({ bio: talent.bio, tags: [...talent.tags], availability: talent.availability || 'open' });
     setEditing(true);
   };
   const cancelEdit = () => { setEditing(false); setDraft(null); };
   const saveEdit = () => {
+    if (!talent) return; // Guard against null talent
     onUpdateTalent({ ...talent, ...draft });
     setEditing(false);
     setDraft(null);
@@ -3229,7 +3224,7 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
 // ─── VIEW: NEWS ───────────────────────────────────────────────────────────────
 
 const NEWS_CATEGORIES = ['Career Advice', 'Business', 'Industry', 'Legal', 'Design', 'Technology'];
-const NEWS_COLORS     = ['#21326c', '#c4622d', '#db9630', '#3c8762', '#a84f22', '#5ea580'];
+const NEWS_COLORS     = PALETTE_COLORS;
 
 function ArticleBodyBlock({ block }) {
   if (block.type === 'heading') {
@@ -3265,8 +3260,7 @@ function NewsPage({ newsPosts, setNewsPosts, currentUser }) {
   const [deleteConfirm, setDeleteConfirm]     = useState(null);
 
   // body is stored as plain text in the form, split on blank lines into paragraphs on save
-  const emptyForm = { title: '', excerpt: '', bodyText: '', category: 'Career Advice', readTime: '5 min read', color: '#21326c' };
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(EMPTY_NEWS_FORM);
 
   const bodyToText = body => (body || [])
     .filter(b => b.type === 'paragraph')
@@ -3279,7 +3273,7 @@ function NewsPage({ newsPosts, setNewsPosts, currentUser }) {
     .filter(Boolean)
     .map(t => ({ type: 'paragraph', text: t }));
 
-  const openCreate = () => { setForm(emptyForm); setEditingPost(null); setShowModal(true); };
+  const openCreate = () => { setForm(EMPTY_NEWS_FORM); setEditingPost(null); setShowModal(true); };
   const openEdit   = post => {
     setForm({
       title: post.title,
@@ -3304,7 +3298,7 @@ function NewsPage({ newsPosts, setNewsPosts, currentUser }) {
       }
     } else {
       const now = new Date();
-      const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const dateStr = now.toLocaleDateString('en-US', DATE_FORMAT_OPTIONS);
       const newPost = { id: Date.now(), author: 'Lawnn Admin', date: dateStr, title: form.title, excerpt: form.excerpt, body, category: form.category, readTime: form.readTime, color: form.color };
       setNewsPosts(ps => [newPost, ...ps]);
     }
@@ -3614,8 +3608,7 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
   const [replyText, setReplyText]           = useState({});
   const [offerSent, setOfferSent]           = useState(null);
 
-  const emptyForm = { title: '', description: '', price: '', color: '#21326c' };
-  const [listingForm, setListingForm] = useState(emptyForm);
+  const [listingForm, setListingForm] = useState(EMPTY_LISTING_FORM);
 
   // Student's own listings (pending + active/sold)
   const myListings = isStudent
@@ -3630,7 +3623,7 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
 
   // ── Create / Edit ────────────────────────────────────────────────────────────
   const openCreate = () => {
-    setListingForm(emptyForm);
+    setListingForm(EMPTY_LISTING_FORM);
     setEditingListing(null);
     setShowListingModal(true);
     if (isStudent) setTab('mine');
@@ -3661,7 +3654,7 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
         color: listingForm.color,
         seller: { name: currentUser.name, initials: currentUser.initials, avatarColor: currentUser.avatarColor, talentId: currentUser.talentId },
         status: 'pending',
-        postedAt: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+        postedAt: new Date().toLocaleDateString('en-US', DATE_FORMAT_OPTIONS),
         offers: [],
       };
       setPendingListings(ls => [...ls, newListing]);
@@ -4444,6 +4437,7 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
 // ─── VIEW: PROJECTS (client escrow flow) ─────────────────────────────────────
 
 const PROJECT_STATUS_STEPS = ['open', 'offer_accepted', 'deposit_paid', 'in_progress', 'delivered', 'completed', 'reviewed'];
+const PROJECT_DONE_STATUSES = ['completed', 'reviewed'];
 const PROJECT_STATUS_LABELS = {
   open:           { label: 'Reviewing Offers',  color: '#21326c',  bg: '#21326c12' },
   offer_accepted: { label: 'Offer Accepted',    color: '#a84f22',  bg: '#a84f2212' },
@@ -4514,8 +4508,8 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
   const [tab, setTab] = useState('active'); // active | completed
 
   const myProjects = projects.filter(p => p.clientId === currentUser?.id);
-  const activeProjects = myProjects.filter(p => !['completed','reviewed'].includes(p.status));
-  const doneProjects = myProjects.filter(p => ['completed','reviewed'].includes(p.status));
+  const activeProjects = myProjects.filter(p => !PROJECT_DONE_STATUSES.includes(p.status));
+  const doneProjects = myProjects.filter(p => PROJECT_DONE_STATUSES.includes(p.status));
   const displayProjects = tab === 'active' ? activeProjects : doneProjects;
 
   // Refresh selected when projects update
@@ -4529,6 +4523,7 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
   // Accept an application
   const acceptApp = (projId, appId) => {
     const app = proj.applications.find(a => a.id === appId);
+    if (!app) return; // Guard against missing application
     updateProject(projId, {
       status: 'offer_accepted',
       acceptedApplicationId: appId,
