@@ -10,7 +10,8 @@ import {
   ExternalLink, Info, TrendingUp, Hash,
   Zap, Menu, ChevronLeft, ShoppingBag, Package, BadgeCheck,
   Trash2, Wallet, FileImage, Hourglass, PackageCheck,
-  CreditCard, PartyPopper
+  CreditCard, PartyPopper,
+  Grid, Eye, Award, Tag, Palette, Layers, Stamp, MessageSquareText, UserCheck
 } from 'lucide-react';
 
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
