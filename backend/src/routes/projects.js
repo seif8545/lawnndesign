@@ -140,23 +140,26 @@ router.post('/:id/advance', requireAuth, async (req, res) => {
       return res.status(400).json({ error: `Cannot advance from status: ${project.status}` })
   }
 
-  // If completing, credit the remaining 50% to the talent's wallet
-  if (nextStatus === 'completed' && project.talentId) {
-    const remaining = project.budget - (project.depositAmount || 0)
-    await prisma.profile.updateMany({
-      where: { userId: project.talentId },
-      data: { walletBalance: { increment: project.budget } },
+  // Release escrow to the talent on completion. The deposit isn't credited
+  // earlier because it's notionally held in platform escrow until the client
+  // approves delivery. When Paymob is integrated, the deposit will be collected
+  // at `deposit_paid` and the remainder at `completed`; the wallet credit here
+  // represents the full released amount.
+  const updated = await prisma.$transaction(async tx => {
+    if (nextStatus === 'completed' && project.talentId) {
+      await tx.profile.updateMany({
+        where: { userId: project.talentId },
+        data: { walletBalance: { increment: project.budget } },
+      })
+    }
+    return tx.project.update({
+      where: { id: req.params.id },
+      data: { status: nextStatus, ...data },
+      include: {
+        client: { select: { id: true, name: true } },
+        talent: { select: { id: true, name: true } },
+      },
     })
-    void remaining // suppress unused warning
-  }
-
-  const updated = await prisma.project.update({
-    where: { id: req.params.id },
-    data: { status: nextStatus, ...data },
-    include: {
-      client: { select: { id: true, name: true } },
-      talent: { select: { id: true, name: true } },
-    },
   })
 
   return res.json(updated)

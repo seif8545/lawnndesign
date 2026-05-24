@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
 
@@ -8,16 +9,28 @@ const router = Router()
 // All admin routes require auth + admin role
 router.use(requireAuth, requireRole('admin'))
 
-// ── POST /admin/students ──────────────────────────────────────────────────────
-// Create a student account after their application is accepted
-router.post('/students', async (req, res) => {
-  const { name, email, password, university, dept, year, isGrad = false } = req.body
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'name, email, and password are required' })
-  }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' })
+function hashToken(raw) {
+  return crypto.createHash('sha256').update(raw).digest('hex')
+}
+
+function buildInviteUrl(token) {
+  // Use the first allowed frontend origin as the canonical link host.
+  const frontendBase = (process.env.FRONTEND_URL || 'http://localhost:5173')
+    .split(',')[0]
+    .trim()
+  return `${frontendBase}/?token=${token}`
+}
+
+// ── POST /admin/students ──────────────────────────────────────────────────────
+// Invite a new student. Admin does NOT set the password — the student does,
+// via the one-time setup link returned in the response.
+router.post('/students', async (req, res) => {
+  const { name, email, university, dept, year, isGrad = false } = req.body
+
+  if (!name || !email) {
+    return res.status(400).json({ error: 'name and email are required' })
   }
 
   const existing = await prisma.user.findUnique({ where: { email } })
@@ -25,13 +38,19 @@ router.post('/students', async (req, res) => {
     return res.status(409).json({ error: 'An account with this email already exists' })
   }
 
-  const hash     = await bcrypt.hash(password, 12)
-  const initials = name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()
+  // Placeholder password — unguessable random bytes the student never uses.
+  // Replaced when they accept the invite.
+  const placeholder      = crypto.randomBytes(48).toString('hex')
+  const placeholderHash  = await bcrypt.hash(placeholder, 12)
+  const rawToken         = crypto.randomBytes(32).toString('hex')
+  const tokenHash        = hashToken(rawToken)
+  const initials         = name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()
+  const expiresAt        = new Date(Date.now() + INVITE_TTL_MS)
 
   const user = await prisma.user.create({
     data: {
       email,
-      password: hash,
+      password: placeholderHash,
       name,
       role: 'student',
       initials,
@@ -43,20 +62,60 @@ router.post('/students', async (req, res) => {
           isGrad:     Boolean(isGrad),
         },
       },
+      invite: {
+        create: { tokenHash, expiresAt },
+      },
     },
     include: { profile: true },
   })
 
-  const { password: _, ...safeUser } = user
-  return res.status(201).json(safeUser)
+  const { password: _pw, ...safeUser } = user
+  return res.status(201).json({
+    user: safeUser,
+    inviteUrl: buildInviteUrl(rawToken),
+    expiresAt: expiresAt.toISOString(),
+  })
+})
+
+// ── POST /admin/students/:id/reinvite ─────────────────────────────────────────
+// Regenerate a setup link for a student who hasn't accepted yet (or whose
+// link expired). Returns a fresh invite URL.
+router.post('/students/:id/reinvite', async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    include: { invite: true },
+  })
+  if (!user || user.role !== 'student') return res.status(404).json({ error: 'Student not found' })
+  if (user.invite?.acceptedAt) {
+    return res.status(409).json({ error: 'Student has already set their password' })
+  }
+
+  const rawToken  = crypto.randomBytes(32).toString('hex')
+  const tokenHash = hashToken(rawToken)
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MS)
+
+  await prisma.studentInvite.upsert({
+    where:  { userId: user.id },
+    update: { tokenHash, expiresAt, acceptedAt: null },
+    create: { userId: user.id, tokenHash, expiresAt },
+  })
+
+  return res.json({
+    inviteUrl: buildInviteUrl(rawToken),
+    expiresAt: expiresAt.toISOString(),
+  })
 })
 
 // ── GET /admin/students ───────────────────────────────────────────────────────
-// List all student accounts
+// List all student accounts (with invite status so admin can see who hasn't
+// activated yet).
 router.get('/students', async (req, res) => {
   const students = await prisma.user.findMany({
     where: { role: 'student' },
-    include: { profile: { include: { skills: true } } },
+    include: {
+      profile: { include: { skills: true } },
+      invite:  { select: { expiresAt: true, acceptedAt: true } },
+    },
     orderBy: { createdAt: 'desc' },
   })
   return res.json(students.map(({ password, ...u }) => u))

@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:3001'
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 function getToken() {
   return localStorage.getItem('lawnn_token')
@@ -37,9 +37,10 @@ async function request(path, options = {}) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const auth = {
-  login:    (email, password)  => request('/auth/login',    { method: 'POST', body: { email, password } }),
-  register: (fields)           => request('/auth/register', { method: 'POST', body: fields }),
-  me:       ()                 => request('/auth/me'),
+  login:         (email, password)  => request('/auth/login',         { method: 'POST', body: { email, password } }),
+  register:      (fields)           => request('/auth/register',      { method: 'POST', body: fields }),
+  acceptInvite:  (token, password)  => request('/auth/accept-invite', { method: 'POST', body: { token, password } }),
+  me:            ()                 => request('/auth/me'),
 }
 
 // ── Profiles ──────────────────────────────────────────────────────────────────
@@ -65,9 +66,11 @@ export const jobs = {
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 export const admin = {
-  createStudent: (body) => request('/admin/students', { method: 'POST', body }),
-  listStudents:  ()     => request('/admin/students'),
-  deleteStudent: (id)   => request(`/admin/students/${id}`, { method: 'DELETE' }),
+  // Returns { user, inviteUrl, expiresAt }. Admin shares inviteUrl with the student.
+  createStudent:  (body) => request('/admin/students',                  { method: 'POST', body }),
+  reinviteStudent:(id)   => request(`/admin/students/${id}/reinvite`,   { method: 'POST' }),
+  listStudents:   ()     => request('/admin/students'),
+  deleteStudent:  (id)   => request(`/admin/students/${id}`,            { method: 'DELETE' }),
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────────

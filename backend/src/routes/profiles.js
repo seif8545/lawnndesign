@@ -36,7 +36,7 @@ router.get('/:id', async (req, res) => {
   const profile = await prisma.profile.findUnique({
     where: { id: req.params.id },
     include: {
-      user: { select: { id: true, name: true, initials: true, avatarColor: true, email: true } },
+      user: { select: { id: true, name: true, initials: true, avatarColor: true } },
       skills: true,
       portfolio: { orderBy: { sortOrder: 'asc' } },
       education: true,

@@ -1175,6 +1175,75 @@ function LoginModal({ open, onClose, onLogin }) {
   );
 }
 
+// ─── ACCEPT-INVITE MODAL ─────────────────────────────────────────────────────
+// Shown when the URL contains `?token=...` from an admin-issued invite link.
+
+function AcceptInviteModal({ token, onAccept, onClose }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm]   = useState('');
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
+  const [done, setDone]         = useState(false);
+
+  const handleSubmit = async () => {
+    if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (password !== confirm) { setError('Passwords do not match'); return; }
+    setError(''); setLoading(true);
+    try {
+      const { token: jwt, user } = await authApi.acceptInvite(token, password);
+      setToken(jwt);
+      setDone(true);
+      onAccept(user);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal open={true} onClose={onClose} title="Set Your Password">
+      <div className="space-y-4">
+        {done ? (
+          <div className="rounded-xl p-4 text-sm text-[#21326c] border border-green-200" style={{ background: '#dcfce7' }}>
+            You're all set — welcome to Lawnn!
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-[#21326c]/70 leading-relaxed">
+              Your Lawnn account is ready. Choose a password to finish setting up your profile.
+            </p>
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">New Password</label>
+              <input type="password" placeholder="At least 8 characters" value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Confirm Password</label>
+              <input type="password" placeholder="Re-enter your password" value={confirm}
+                onChange={e => { setConfirm(e.target.value); setError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+            </div>
+            {error && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 leading-relaxed">{error}</p>
+            )}
+            <button
+              onClick={handleSubmit}
+              disabled={!password || !confirm || loading}
+              className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: '#ff9044' }}
+            >
+              {loading ? 'Setting password…' : 'Set Password & Sign In'}
+            </button>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // ─── NAVIGATION / HEADER ──────────────────────────────────────────────────────
 
 function TopNav({ view, setView, currentUser, onLoginClick, onLogout, notifications = [], onMarkNotifRead, onMarkAllNotifRead }) {
@@ -2188,7 +2257,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
   const [newExp, setNewExp]       = useState({ role: '', company: '', years: '' });
   const [newPortItem, setNewPortItem] = useState({ label: '', color: '#21326c', h: 'medium' });
 
-  const isOwnProfile = currentUser?.role === 'student' && currentUser?.talentId === talent?.id;
+  const isOwnProfile = currentUser?.role === 'student' && currentUser?.id === talent?.userId;
 
   const openEdit = () => {
     if (!talent) return; // Guard against null talent
@@ -2702,17 +2771,16 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
 
   const handleShare = () => {
     if (!newPost.trim()) return;
-    const talent = currentUser ? TALENTS.find(t => t.id === currentUser.talentId) : null;
     const draft = {
       id: Date.now(),
       author:      currentUser?.name || 'Anonymous',
-      authorColor: talent?.avatarColor || '#21326c',
+      authorColor: currentUser?.avatarColor || '#21326c',
       initials:    currentUser?.initials || '??',
-      university:  talent?.university || '',
+      university:  currentUser?.profile?.university || '',
       time:        'Just now',
       content:     newPost.trim(),
       tags:        (newPost.match(/#\w+/g) || []),
-      imageColor:  talent?.avatarColor || '#21326c',
+      imageColor:  currentUser?.avatarColor || '#21326c',
       imageLabel:  'Attached media',
       likes: 0, comments: 0, shares: 0,
       hasVideo: false, liked: false,
@@ -3327,7 +3395,7 @@ function ChatPage({ currentUser }) {
 function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAboutContent }) {
   const isStudent = currentUser?.role === 'student';
   const isAdmin   = currentUser?.role === 'admin';
-  const talent    = isStudent ? talents.find(t => t.id === currentUser.talentId) : null;
+  const talent    = isStudent ? talents.find(t => t.userId === currentUser.id) : null;
 
   // ── Student: inline edit ────────────────────────────────────────────────────
   const [editing, setEditing]     = useState(false);
@@ -5455,7 +5523,7 @@ function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone }) {
   const [skillQuery, setSkillQuery] = useState('');
 
   // Student onboarding draft
-  const talent = currentUser?.role === 'student' ? talents.find(t => t.id === currentUser.talentId) : null;
+  const talent = currentUser?.role === 'student' ? talents.find(t => t.userId === currentUser.id) : null;
   const [draft, setDraft] = useState({
     bio: talent?.bio || '',
     availability: talent?.availability || 'open',
@@ -5829,24 +5897,104 @@ const SEED_NOTIFICATIONS = {
   ],
 };
 
+// ─── API ↔ talent shape mappers ──────────────────────────────────────────────
+// The downstream components were built against the mock TALENTS shape. These
+// mappers translate to/from the API shape so we don't have to touch every
+// component just to swap data sources.
+
+function mapApiProfile(p) {
+  return {
+    id:           p.id,
+    userId:       p.user.id,
+    name:         p.user.name,
+    initials:     p.user.initials,
+    avatarColor:  p.user.avatarColor,
+    avatar:       p.avatar,
+    bio:          p.bio || '',
+    university:   p.university || '',
+    dept:         p.dept || '',
+    year:         p.year,
+    isGrad:       p.isGrad,
+    rating:       p.rating || 0,
+    reviews:      p.reviewCount || 0,
+    tags:         (p.skills || []).map(s => s.skill),
+    hourlyRate:   p.hourlyRate || 0,
+    availability: p.availability || 'open',
+    walletBalance:p.walletBalance || 0,
+    completedJobs:p.completedJobs || 0,
+    portfolio: (p.portfolio || []).map(item => ({
+      id:       item.id,
+      color:    item.color,
+      label:    item.label,
+      h:        item.height,
+      imageUrl: item.imageUrl,
+      pdfUrl:   item.pdfUrl,
+      pdfName:  item.pdfName,
+    })),
+    education:  p.education  || [],
+    experience: p.experience || [],
+  };
+}
+
+function talentToApiBody(t) {
+  return {
+    bio:          t.bio,
+    availability: t.availability,
+    hourlyRate:   t.hourlyRate,
+    university:   t.university,
+    dept:         t.dept,
+    year:         t.year,
+    isGrad:       t.isGrad,
+    avatar:       t.avatar,
+    skills:       t.tags || [],
+    portfolio:    (t.portfolio || []).map(p => ({
+      label:    p.label,
+      color:    p.color,
+      h:        p.h,
+      imageUrl: p.imageUrl,
+      pdfUrl:   p.pdfUrl,
+      pdfName:  p.pdfName,
+    })),
+    education:  t.education,
+    experience: t.experience,
+  };
+}
+
 export default function App() {
   const [view, setView] = useState('home');
   const [selectedTalent, setSelectedTalent] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [inviteToken, setInviteToken] = useState(null);
 
-  // Hydrate session from stored token on first load
+  // First-load: detect an invite token in the URL, otherwise hydrate from stored JWT.
   useEffect(() => {
-    const token = localStorage.getItem('lawnn_token');
-    if (!token) return;
+    const url = new URL(window.location.href);
+    const t = url.searchParams.get('token');
+    if (t) {
+      setInviteToken(t);
+      // Strip the token from the address bar so a refresh doesn't re-prompt.
+      url.searchParams.delete('token');
+      window.history.replaceState({}, '', url.toString());
+      return;
+    }
+    const stored = localStorage.getItem('lawnn_token');
+    if (!stored) return;
     authApi.me()
       .then(({ user }) => handleLogin(user))
       .catch(() => clearToken()); // token expired or invalid — clear it silently
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lifted mutable state so edits propagate across all views
-  const [talents, setTalents]                   = useState(TALENTS);
+  const [talents, setTalents]                   = useState([]);
+
+  // Load real talent profiles from the backend.
+  useEffect(() => {
+    profiles.list()
+      .then(list => setTalents(list.map(mapApiProfile)))
+      .catch(err => console.warn('[talents] failed to load:', err.message));
+  }, []);
   const [newsPosts, setNewsPosts]               = useState(NEWS_POSTS);
   const [feedPosts, setFeedPosts]                       = useState(FEED_POSTS);
   const [pendingFeedPosts, setPendingFeedPosts]         = useState([]);
@@ -5892,13 +6040,20 @@ export default function App() {
   };
 
   const handleUpdateTalent = updated => {
+    // Optimistic local update — UI reflects the change immediately.
     setTalents(ts => ts.map(t => t.id === updated.id ? updated : t));
     if (selectedTalent?.id === updated.id) setSelectedTalent(updated);
+    // Persist to backend. Only the talent themselves (or admin) can write.
+    if (currentUser?.role === 'student' || currentUser?.role === 'admin') {
+      profiles.update(updated.id, talentToApiBody(updated))
+        .catch(err => console.warn('[profile] save failed:', err.message));
+    }
   };
 
   const handleNavChange = v => {
     if (v === 'profile' && currentUser?.role === 'student') {
-      const talent = talents.find(t => t.id === currentUser.talentId);
+      // Real students: their profile is the one whose userId matches.
+      const talent = talents.find(t => t.userId === currentUser.id);
       if (talent) setSelectedTalent(talent);
     }
     setView(v);
@@ -5914,7 +6069,7 @@ export default function App() {
         return <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       case 'profile': {
         const profileTalent = selectedTalent
-          || (currentUser?.talentId ? talents.find(t => t.id === currentUser.talentId) : null);
+          || (currentUser?.role === 'student' ? talents.find(t => t.userId === currentUser.id) : null);
         return profileTalent
           ? <ProfilePage talent={profileTalent} setView={handleNavChange} currentUser={currentUser} onUpdateTalent={handleUpdateTalent} />
           : <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
@@ -5973,6 +6128,14 @@ export default function App() {
         onClose={() => setShowLogin(false)}
         onLogin={user => { handleLogin(user); setShowLogin(false); }}
       />
+
+      {inviteToken && (
+        <AcceptInviteModal
+          token={inviteToken}
+          onAccept={user => { handleLogin(user); setInviteToken(null); }}
+          onClose={() => setInviteToken(null)}
+        />
+      )}
 
       {/* Onboarding overlay */}
       {showOnboarding && currentUser && (

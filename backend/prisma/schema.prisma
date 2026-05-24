@@ -86,8 +86,24 @@ model User {
   clientConversations   Conversation[]  @relation("ClientConversations")
   talentConversations   Conversation[]  @relation("TalentConversations")
   sentMessages          Message[]       @relation("SentMessages")
+  invite                StudentInvite?
 
   @@map("users")
+}
+
+// ─── Student invites (admin-created accounts) ────────────────────────────────
+// Admin creates the user with a placeholder password; the student sets their
+// real password by following the one-time setup link.
+model StudentInvite {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique  // sha256(raw token); raw token never stored
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("student_invites")
 }
 
 // ─── Talent Profile (students only) ──────────────────────────────────────────

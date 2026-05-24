@@ -48,23 +48,36 @@ router.get('/', async (req, res) => {
 })
 
 // ── Get or create a conversation between two users ────────────────────────────
-// Body: { talentId, projectId? }  (caller is always the client side)
+// Body: { otherUserId, projectId? }
+// Roles are derived from the DB, never trusted from the request body.
 router.post('/', async (req, res) => {
   const { id: userId, role } = req.user
-  const { talentId, projectId } = req.body
+  // Accept `talentId` as a legacy alias so the existing frontend keeps working.
+  const otherUserId = req.body.otherUserId || req.body.talentId
+  const { projectId } = req.body
 
-  if (!talentId) return res.status(400).json({ error: 'talentId required' })
+  if (!otherUserId) return res.status(400).json({ error: 'otherUserId required' })
+  if (otherUserId === userId) return res.status(400).json({ error: 'Cannot start a conversation with yourself' })
   if (role === 'admin') return res.status(403).json({ error: 'Admins cannot create conversations' })
 
-  // Determine who is client and who is talent based on role
+  // Verify the counterparty exists and is the right role.
+  const other = await prisma.user.findUnique({
+    where: { id: otherUserId },
+    select: { id: true, role: true },
+  })
+  if (!other) return res.status(404).json({ error: 'User not found' })
+
+  // Conversations are strictly client ↔ student. Decide which is which from
+  // the actual DB roles, not anything the client sent.
   let clientId, actualTalentId
-  if (role === 'client') {
+  if (role === 'client' && other.role === 'student') {
     clientId = userId
-    actualTalentId = talentId
-  } else {
-    // student initiating: they are the talent
-    clientId = talentId
+    actualTalentId = other.id
+  } else if (role === 'student' && other.role === 'client') {
+    clientId = other.id
     actualTalentId = userId
+  } else {
+    return res.status(400).json({ error: 'Conversations must be between a client and a student' })
   }
 
   // Upsert: find existing or create new

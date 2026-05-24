@@ -1,10 +1,15 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 
 const router = Router()
+
+function hashToken(raw) {
+  return crypto.createHash('sha256').update(raw).digest('hex')
+}
 
 function signToken(user) {
   return jwt.sign(
@@ -86,6 +91,40 @@ router.post('/login', async (req, res) => {
 
   const token = signToken(user)
   return res.json({ token, user: safeUser(user) })
+})
+
+// ── POST /auth/accept-invite ──────────────────────────────────────────────────
+// Public — a newly-invited student sets their initial password using a
+// one-time token issued by /admin/students.
+router.post('/accept-invite', async (req, res) => {
+  const { token, password } = req.body
+
+  if (!token || !password) {
+    return res.status(400).json({ error: 'token and password are required' })
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' })
+  }
+
+  const invite = await prisma.studentInvite.findUnique({
+    where: { tokenHash: hashToken(token) },
+    include: { user: true },
+  })
+  // Generic message — don't leak whether the token existed.
+  if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) {
+    return res.status(400).json({ error: 'This setup link is invalid or has expired.' })
+  }
+
+  const hash = await bcrypt.hash(password, 12)
+
+  const [, , user] = await prisma.$transaction([
+    prisma.user.update({ where: { id: invite.userId }, data: { password: hash } }),
+    prisma.studentInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } }),
+    prisma.user.findUnique({ where: { id: invite.userId }, include: { profile: true } }),
+  ])
+
+  const jwtToken = signToken(user)
+  return res.json({ token: jwtToken, user: safeUser(user) })
 })
 
 // ── GET /auth/me ──────────────────────────────────────────────────────────────
