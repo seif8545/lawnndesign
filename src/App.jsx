@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { auth as authApi, admin as adminApi, conversations as convApi, profiles, setToken, clearToken } from './lib/api.js';
+import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, setToken, clearToken } from './lib/api.js';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket.js';
 import {
   Search, Bell, MessageSquare, Briefcase, Users, Home,
@@ -1629,7 +1629,7 @@ function TalentCard({ talent, onClick }) {
 
 // ─── VIEW 2: JOB BOARD ────────────────────────────────────────────────────────
 
-function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, currentUser }) {
+function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, currentUser, refreshJobs }) {
   const [showPostModal, setShowPostModal] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedJobForApply, setSelectedJobForApply] = useState(null);
@@ -1689,33 +1689,35 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
   };
   const removeJobAttachment = id => setPostForm(f => ({ ...f, attachments: f.attachments.filter(a => a.id !== id) }));
 
-  const handlePost = () => {
-    const job = {
-      id: Date.now(),
-      title: postForm.title,
-      client: currentUser?.name || 'Anonymous',
-      budget: postForm.budget,
-      budgetType: 'Fixed',
-      postedAgo: 'Just now',
-      category: 'Visuals & Branding',
-      tags: postForm.skills,
-      brief: postForm.brief,
-      applicants: 0,
-      vip: postForm.vip,
-      attachments: postForm.attachments,
-    };
-    // Admin posts go live immediately; clients go to pending
-    if (currentUser?.role === 'admin') {
-      setJobs(js => [job, ...js]);
-    } else {
-      setPendingJobs(js => [...js, job]);
+  const handlePost = async () => {
+    try {
+      await jobsApi.create({
+        title:      postForm.title,
+        brief:      postForm.brief,
+        budget:     parseInt(postForm.budget, 10) || 0,
+        budgetType: 'Fixed',
+        category:   'Visuals & Branding',
+        vip:        Boolean(postForm.vip),
+        skills:     postForm.skills,
+        // NOTE: attachments use local blob: URLs from the file picker. Until
+        // file uploads to Supabase Storage are wired up, we send name+type
+        // only and the URL will be unusable to other users.
+        attachments: postForm.attachments.map(a => ({
+          name: a.name, url: a.url, mimeType: a.type,
+        })),
+      });
+      // Admin posts go live immediately — refetch to show the new job.
+      // Client posts are pending — won't show in the public list until approved.
+      if (currentUser?.role === 'admin') await refreshJobs?.();
+      setPostSuccess(true);
+      setTimeout(() => {
+        setShowPostModal(false);
+        setPostSuccess(false);
+        setPostForm({ title: '', brief: '', budget: '', skills: [], vip: false, attachments: [] });
+      }, 2500);
+    } catch (e) {
+      alert(`Couldn't post job: ${e.message}`);
     }
-    setPostSuccess(true);
-    setTimeout(() => {
-      setShowPostModal(false);
-      setPostSuccess(false);
-      setPostForm({ title: '', brief: '', budget: '', skills: [], vip: false, attachments: [] });
-    }, 2500);
   };
 
   const filteredJobs = filterCat === 'all' ? jobs : jobs.filter(j => j.category.toLowerCase().includes(filterCat));
@@ -1790,7 +1792,16 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                 )}
                 {currentUser?.role === 'admin' && (
                   <button
-                    onClick={e => { e.stopPropagation(); setJobs(js => js.filter(j => j.id !== job.id)); }}
+                    onClick={async e => {
+                      e.stopPropagation();
+                      if (!confirm(`Delete "${job.title}"? This can't be undone.`)) return;
+                      try {
+                        await jobsApi.delete(job.id);
+                        setJobs(js => js.filter(j => j.id !== job.id));
+                      } catch (err) {
+                        alert(`Couldn't delete: ${err.message}`);
+                      }
+                    }}
                     className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                   >
                     <Trash2 size={12} /> Delete
@@ -2028,7 +2039,29 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
             </div>
           ) : (
             <button
-              onClick={() => { setApplySuccess(true); setTimeout(() => { setShowApplyModal(false); setApplySuccess(false); setApplyForm({ note: '', samples: [], uploadedFiles: [] }); }, 2500); }}
+              onClick={async () => {
+                if (!selectedJobForApply) return;
+                try {
+                  await jobsApi.apply(selectedJobForApply.id, {
+                    note: applyForm.note,
+                    // Uploaded files only — sample-portfolio refs are local IDs
+                    // that don't mean anything to the backend yet. File-upload
+                    // wiring (Supabase Storage) is a separate task.
+                    files: applyForm.uploadedFiles.map(uf => ({
+                      name: uf.name, url: uf.url, mimeType: uf.type,
+                    })),
+                  });
+                  setApplySuccess(true);
+                  await refreshJobs?.();  // bump applicant count
+                  setTimeout(() => {
+                    setShowApplyModal(false);
+                    setApplySuccess(false);
+                    setApplyForm({ note: '', samples: [], uploadedFiles: [] });
+                  }, 2500);
+                } catch (err) {
+                  alert(`Couldn't submit: ${err.message}`);
+                }
+              }}
               disabled={!applyForm.note || (applyForm.samples.length + applyForm.uploadedFiles.length) === 0}
               className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: '#ff9044' }}
@@ -4725,7 +4758,7 @@ function AdminUsersTab() {
   );
 }
 
-function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser }) {
+function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser, refreshJobs }) {
   const [adminTab, setAdminTab] = useState('content');
 
   const approveFeedPost = post => {
@@ -4734,11 +4767,23 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
   };
   const rejectFeedPost = id => setPendingFeedPosts(ps => ps.filter(p => p.id !== id));
 
-  const approveJob = job => {
-    setJobs(js => [job, ...js]);
-    setPendingJobs(js => js.filter(j => j.id !== job.id));
+  const approveJob = async job => {
+    try {
+      await jobsApi.setStatus(job.id, 'live');
+      // Server is source of truth — refetch splits live/pending again.
+      await refreshJobs?.();
+    } catch (e) {
+      alert(`Couldn't approve: ${e.message}`);
+    }
   };
-  const rejectJob = id => setPendingJobs(js => js.filter(j => j.id !== id));
+  const rejectJob = async id => {
+    try {
+      await jobsApi.delete(id);
+      await refreshJobs?.();
+    } catch (e) {
+      alert(`Couldn't reject: ${e.message}`);
+    }
+  };
 
   const approveListing = listing => {
     setListings(ls => [{ ...listing, status: 'active' }, ...ls]);
@@ -5902,6 +5947,42 @@ function mapApiProfile(p) {
   };
 }
 
+// Format a date-ish value as "2h ago", "3d ago", "Just now", etc.
+function formatRelativeTime(dateInput) {
+  if (!dateInput) return '';
+  const then = new Date(dateInput).getTime();
+  const diff = Date.now() - then;
+  const sec  = Math.floor(diff / 1000);
+  const min  = Math.floor(sec / 60);
+  const hr   = Math.floor(min / 60);
+  const day  = Math.floor(hr / 24);
+  if (sec < 60)  return 'Just now';
+  if (min < 60)  return `${min}m ago`;
+  if (hr  < 24)  return `${hr}h ago`;
+  if (day < 30)  return `${day}d ago`;
+  if (day < 365) return `${Math.floor(day / 30)}mo ago`;
+  return `${Math.floor(day / 365)}y ago`;
+}
+
+function mapApiJob(j) {
+  return {
+    id:         j.id,
+    title:      j.title,
+    brief:      j.brief,
+    budget:     j.budget,                          // number — formatted at render
+    budgetType: j.budgetType || 'Fixed',
+    category:   j.category || 'Visuals & Branding',
+    vip:        Boolean(j.vip),
+    status:     j.status,
+    clientId:   j.clientId,
+    client:     j.client?.name || 'Anonymous',
+    postedAgo:  formatRelativeTime(j.createdAt),
+    tags:       (j.skills || []).map(s => s.skill),
+    attachments:j.attachments || [],
+    applicants: j._count?.applications ?? 0,
+  };
+}
+
 function talentToApiBody(t) {
   return {
     bio:          t.bio,
@@ -5961,10 +6042,23 @@ export default function App() {
       .then(list => setTalents(list.map(mapApiProfile)))
       .catch(err => console.warn('[talents] failed to load:', err.message));
   }, []);
+
+  // Reusable jobs refresher — called on mount and after any mutation.
+  // Admin sees pending jobs via optionalAuth on the backend; split locally.
+  const refreshJobs = useCallback(() => {
+    return jobsApi.list()
+      .then(list => {
+        const mapped = list.map(mapApiJob);
+        setJobs(mapped.filter(j => j.status === 'live'));
+        setPendingJobs(mapped.filter(j => j.status === 'pending'));
+      })
+      .catch(err => console.warn('[jobs] failed to load:', err.message));
+  }, []);
+  useEffect(() => { refreshJobs(); }, [refreshJobs, currentUser]);
   const [newsPosts, setNewsPosts]               = useState(NEWS_POSTS);
   const [feedPosts, setFeedPosts]                       = useState(FEED_POSTS);
   const [pendingFeedPosts, setPendingFeedPosts]         = useState([]);
-  const [jobs, setJobs]                                 = useState(JOBS);
+  const [jobs, setJobs]                                 = useState([]);
   const [pendingJobs, setPendingJobs]                   = useState([]);
   const [listings, setListings]                         = useState(MARKETPLACE_LISTINGS);
   const [pendingListings, setPendingListings]           = useState([]);
@@ -6030,7 +6124,7 @@ export default function App() {
       case 'home':
         return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       case 'jobs':
-        return <JobBoardPage setView={handleNavChange} jobs={jobs} setJobs={setJobs} pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} currentUser={currentUser} />;
+        return <JobBoardPage setView={handleNavChange} jobs={jobs} setJobs={setJobs} pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} currentUser={currentUser} refreshJobs={refreshJobs} />;
       case 'directory':
         return <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       case 'profile': {
@@ -6069,6 +6163,7 @@ export default function App() {
               pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} setJobs={setJobs}
               pendingListings={pendingListings} setPendingListings={setPendingListings} setListings={setListings}
               projects={projects} talents={talents} currentUser={currentUser}
+              refreshJobs={refreshJobs}
             />
           : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       default:

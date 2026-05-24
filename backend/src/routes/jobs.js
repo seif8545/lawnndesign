@@ -1,12 +1,12 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { requireAuth, requireRole } from '../middleware/requireAuth.js'
+import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 
 const router = Router()
 
 // ── GET /jobs ─────────────────────────────────────────────────────────────────
-// Public — list live jobs (pending jobs hidden unless admin)
-router.get('/', async (req, res) => {
+// Public — list live jobs. Admins (when authenticated) also see pending ones.
+router.get('/', optionalAuth, async (req, res) => {
   const { category, skill } = req.query
   const isAdmin = req.user?.role === 'admin'
 
