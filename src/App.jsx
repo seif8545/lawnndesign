@@ -2123,42 +2123,8 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
 // ─── VIEW 3: TALENT DIRECTORY ─────────────────────────────────────────────────
 
 function DirectoryPage({ setView, setSelectedTalent, talents }) {
-  const [realProfiles, setRealProfiles] = useState([]);
-
-  useEffect(() => {
-    profiles.list().then(data => {
-      const mapped = data.map(p => ({
-        id:            p.id,
-        userId:        p.user.id,
-        name:          p.user.name,
-        initials:      p.user.initials,
-        avatarColor:   p.user.avatarColor,
-        avatar:        p.avatar || null,
-        university:    p.university || '',
-        dept:          p.dept || '',
-        year:          p.year || null,
-        isGrad:        p.isGrad || false,
-        availability:  p.availability || 'open',
-        hourlyRate:    p.hourlyRate || 0,
-        rating:        p.rating || 0,
-        reviews:       p.reviewCount || 0,
-        completedJobs: p.completedJobs || 0,
-        tags:          (p.skills || []).map(s => s.skill),
-        portfolio:     (p.portfolio || []).map(item => ({ color: item.color || '#21326c', imageUrl: item.imageUrl || null, label: item.label || '', h: item.height || 'medium' })),
-        education:     p.education || [],
-        experience:    p.experience || [],
-        bio:           p.bio || '',
-      }));
-      setRealProfiles(mapped);
-    }).catch(() => {});
-  }, []);
-
-  // Real profiles from DB come first; append mock talents for visual richness
-  // (mock talents have numeric ids, real ones have cuid strings — no collision)
-  const displayTalents = realProfiles.length > 0
-    ? [...realProfiles, ...talents]
-    : talents;
-
+  // `talents` is fetched once at the App level and already mapped to the
+  // shape DirectoryCard expects — no need for a second fetch here.
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
       <div className="mb-8">
@@ -2167,7 +2133,7 @@ function DirectoryPage({ setView, setSelectedTalent, talents }) {
       </div>
 
       <div className="grid gap-5">
-        {displayTalents.map(talent => (
+        {talents.map(talent => (
           <DirectoryCard
             key={talent.id}
             talent={talent}
