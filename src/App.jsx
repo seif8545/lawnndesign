@@ -1,4 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { auth as authApi, admin as adminApi, conversations as convApi, profiles, setToken, clearToken } from './lib/api.js';
+import { connectSocket, disconnectSocket, getSocket } from './lib/socket.js';
 import {
   Search, Bell, MessageSquare, Briefcase, Users, Home,
   Star, ChevronRight, Plus, X, Send, Paperclip,
@@ -9,7 +11,7 @@ import {
   BookOpen, Pen, Video, Image as ImageIcon,
   ExternalLink, Info, TrendingUp, Hash,
   Zap, Menu, ChevronLeft, ShoppingBag, Package, BadgeCheck,
-  Trash2, Wallet, FileImage, Hourglass, PackageCheck,
+  Trash2, Wallet, FileImage, File, Hourglass, PackageCheck,
   CreditCard, PartyPopper,
   Grid, Eye, Award, Tag, Palette, Layers, Stamp, MessageSquareText, UserCheck
 } from 'lucide-react';
@@ -958,15 +960,17 @@ function NotificationPanel({ notifications, onMarkRead, onMarkAllRead }) {
   );
 }
 
-function Avatar({ initials, color, size = 'md', online = false }) {
+function Avatar({ initials, color, imageUrl, size = 'md', online = false }) {
   const sizes = { sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-14 h-14 text-base', xl: 'w-20 h-20 text-xl' };
   return (
     <div className="relative inline-block">
       <div
-        className={`${sizes[size]} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0`}
-        style={{ background: color }}
+        className={`${sizes[size]} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 overflow-hidden`}
+        style={imageUrl ? {} : { background: color }}
       >
-        {initials}
+        {imageUrl
+          ? <img src={imageUrl} alt={initials} className="w-full h-full object-cover" />
+          : initials}
       </div>
       {online && (
         <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 border-2 border-white rounded-full" />
@@ -994,16 +998,22 @@ function StarRating({ rating }) {
   );
 }
 
-function PortfolioBlock({ color, label, height = 'medium', imageUrl }) {
+function PortfolioBlock({ color, label, height = 'medium', imageUrl, pdfUrl, pdfName }) {
   const heights = { short: 'h-24', medium: 'h-36', tall: 'h-48' };
   return (
     <div
-      className={`portfolio-card ${heights[height]} rounded-xl flex items-end p-3 cursor-pointer overflow-hidden`}
+      className={`portfolio-card ${heights[height]} rounded-xl flex items-end p-3 cursor-pointer overflow-hidden relative`}
       style={imageUrl
         ? { backgroundImage: `url(${imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
         : { background: `linear-gradient(160deg, ${color}cc, ${color})` }
       }
     >
+      {pdfUrl && !imageUrl && (
+        <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-lg px-2 py-1">
+          <File size={10} color="white" />
+          <span className="text-white font-semibold" style={{ fontSize: '9px' }}>PDF</span>
+        </div>
+      )}
       <span className="text-white text-xs font-medium leading-tight bg-black/30 rounded-lg px-2 py-1">
         {label}
       </span>
@@ -1049,79 +1059,117 @@ function Modal({ open, onClose, title, children, wide = false }) {
 }
 
 function LoginModal({ open, onClose, onLogin }) {
-  const [email, setEmail] = useState('');
+  const [mode, setMode]         = useState('login'); // 'login' | 'register'
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [name, setName]         = useState('');
+  const [role, setRole]         = useState('student');
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
 
-  const handleSubmit = () => {
-    setError('');
-    setLoading(true);
-    setTimeout(() => {
-      const user = MOCK_USERS.find(u => u.email === email && u.password === password);
-      if (user) {
-        onLogin(user);
-        onClose();
-        setEmail('');
-        setPassword('');
-      } else {
-        setError('Incorrect email or password. If you were recently accepted, check your welcome email for your admin-generated password.');
-      }
+  const reset = () => { setEmail(''); setPassword(''); setName(''); setError(''); setLoading(false); };
+
+  const switchMode = m => { setMode(m); setError(''); };
+
+  const handleLogin = async () => {
+    setError(''); setLoading(true);
+    try {
+      const { token, user } = await authApi.login(email, password);
+      setToken(token);
+      onLogin(user);
+      onClose();
+      reset();
+    } catch (e) {
+      setError(e.message);
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
+  const handleRegister = async () => {
+    if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    setError(''); setLoading(true);
+    try {
+      const { token, user } = await authApi.register({ email, password, name, role: 'client' });
+      setToken(token);
+      onLogin(user);
+      onClose();
+      reset();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKey = e => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleRegister());
+
   return (
-    <Modal open={open} onClose={onClose} title="Sign In to Lawnn">
+    <Modal open={open} onClose={onClose} title={mode === 'login' ? 'Sign In to Lawnn' : 'Create a Client Account'}>
       <div className="space-y-4">
-        <div className="rounded-xl p-3 text-xs text-[#21326c] leading-relaxed border border-[#21326c]/20" style={{ background: '#21326c08' }}>
-          <strong>Students:</strong> Use the email and admin-generated password from your acceptance email.
+
+        {/* Tab toggle */}
+        <div className="flex rounded-xl overflow-hidden border border-[#21326c]/15">
+          {['login', 'register'].map(m => (
+            <button key={m} onClick={() => switchMode(m)}
+              className={`flex-1 py-2 text-sm font-semibold transition-colors ${mode === m ? 'text-white' : 'text-[#21326c]/60 hover:text-[#21326c]'}`}
+              style={mode === m ? { background: '#21326c' } : {}}>
+              {m === 'login' ? 'Sign In' : 'Sign Up'}
+            </button>
+          ))}
         </div>
+
+        {/* Register-only: client name + info note */}
+        {mode === 'register' && (
+          <>
+            <div className="rounded-xl p-3 text-xs text-[#21326c] leading-relaxed border border-[#21326c]/20" style={{ background: '#21326c08' }}>
+              <strong>Are you a student?</strong> Lawnn accounts for students are created by our team after your application is reviewed. Check your email for your sign-in credentials and use the <strong>Sign In</strong> tab.
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Full Name</label>
+              <input type="text" placeholder="e.g. Ahmed Hassan" value={name}
+                onChange={e => { setName(e.target.value); setError(''); }} onKeyDown={handleKey}
+                className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+            </div>
+          </>
+        )}
+
+        {/* Email */}
         <div>
           <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Email</label>
-          <input
-            type="email"
-            placeholder="your@email.com"
-            value={email}
-            onChange={e => { setEmail(e.target.value); setError(''); }}
-            className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] focus:border-[#21326c] transition-all placeholder:text-[#21326c]/40"
-          />
+          <input type="email" placeholder="your@email.com" value={email}
+            onChange={e => { setEmail(e.target.value); setError(''); }} onKeyDown={handleKey}
+            className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
         </div>
+
+        {/* Password */}
         <div>
           <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Password</label>
-          <input
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={e => { setPassword(e.target.value); setError(''); }}
-            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-            className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] focus:border-[#21326c] transition-all placeholder:text-[#21326c]/40"
-          />
+          <input type="password" placeholder={mode === 'register' ? 'At least 8 characters' : 'Enter your password'} value={password}
+            onChange={e => { setPassword(e.target.value); setError(''); }} onKeyDown={handleKey}
+            className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
         </div>
+
         {error && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 leading-relaxed">{error}</p>
         )}
+
         <button
-          onClick={handleSubmit}
-          disabled={!email || !password || loading}
+          onClick={mode === 'login' ? handleLogin : handleRegister}
+          disabled={!email || !password || (mode === 'register' && !name) || loading}
           className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: '#ff9044' }}
         >
-          {loading ? 'Signing in…' : 'Sign In'}
+          {loading ? (mode === 'login' ? 'Signing in…' : 'Creating account…') : (mode === 'login' ? 'Sign In' : 'Create Account')}
         </button>
+
         <p className="text-center text-xs text-[#21326c]/50">
-          Not a student yet?{' '}
-          <span className="font-medium text-[#21326c] cursor-pointer underline underline-offset-2">
-            Apply to join Lawnn
+          {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+          <span onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+            className="font-medium text-[#21326c] cursor-pointer underline underline-offset-2">
+            {mode === 'login' ? 'Sign up' : 'Sign in'}
           </span>
         </p>
-        {/* Demo hint */}
-        <div className="border-t border-[#21326c]/10 pt-3 space-y-1">
-          <p className="text-xs font-semibold text-[#21326c]/40 uppercase tracking-wider">Demo credentials</p>
-          <p className="text-xs text-[#21326c]/50">Student — yomna@lawnndesign.com / youmie272</p>
-          <p className="text-xs text-[#21326c]/50">Client &nbsp;— client@safwa.com / safwa2024</p>
-          <p className="text-xs text-[#21326c]/50">Admin &nbsp;— admin@lawnn.com / admin2024</p>
-        </div>
       </div>
     </Modal>
   );
@@ -1518,8 +1566,8 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
   const [selectedJobForApply, setSelectedJobForApply] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
   const [applySuccess, setApplySuccess] = useState(false);
-  const [postForm, setPostForm] = useState({ title: '', brief: '', budget: '', skills: [], vip: false });
-  const [applyForm, setApplyForm] = useState({ note: '', samples: [] });
+  const [postForm, setPostForm] = useState({ title: '', brief: '', budget: '', skills: [], vip: false, attachments: [] });
+  const [applyForm, setApplyForm] = useState({ note: '', samples: [], uploadedFiles: [] });
   const [filterCat, setFilterCat] = useState('all');
   const [postSuccess, setPostSuccess] = useState(false);
   const [newSkill, setNewSkill] = useState('');
@@ -1541,12 +1589,36 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
     }));
   };
 
+  const handleApplyFileAdd = files => {
+    const remaining = 3 - applyForm.uploadedFiles.length;
+    if (remaining <= 0) return;
+    const newFiles = Array.from(files).slice(0, remaining).map(file => ({
+      id: `uf-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: file.name,
+      url: URL.createObjectURL(file),
+      type: file.type,
+    }));
+    setApplyForm(f => ({ ...f, uploadedFiles: [...f.uploadedFiles, ...newFiles] }));
+  };
+  const removeApplyFile = id => setApplyForm(f => ({ ...f, uploadedFiles: f.uploadedFiles.filter(uf => uf.id !== id) }));
+
   const addSkill = () => {
     const s = newSkill.trim();
     if (s && !postForm.skills.includes(s)) setPostForm(f => ({ ...f, skills: [...f.skills, s] }));
     setNewSkill('');
   };
   const removeSkill = s => setPostForm(f => ({ ...f, skills: f.skills.filter(sk => sk !== s) }));
+
+  const handleJobAttachmentAdd = files => {
+    const newFiles = Array.from(files).map(file => ({
+      id: `att-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name: file.name,
+      url: URL.createObjectURL(file),
+      type: file.type,
+    }));
+    setPostForm(f => ({ ...f, attachments: [...f.attachments, ...newFiles] }));
+  };
+  const removeJobAttachment = id => setPostForm(f => ({ ...f, attachments: f.attachments.filter(a => a.id !== id) }));
 
   const handlePost = () => {
     const job = {
@@ -1561,6 +1633,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
       brief: postForm.brief,
       applicants: 0,
       vip: postForm.vip,
+      attachments: postForm.attachments,
     };
     // Admin posts go live immediately; clients go to pending
     if (currentUser?.role === 'admin') {
@@ -1572,7 +1645,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
     setTimeout(() => {
       setShowPostModal(false);
       setPostSuccess(false);
-      setPostForm({ title: '', brief: '', budget: '', skills: [], vip: false });
+      setPostForm({ title: '', brief: '', budget: '', skills: [], vip: false, attachments: [] });
     }, 2500);
   };
 
@@ -1698,6 +1771,29 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                 className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] focus:border-[#21326c] transition-all resize-none placeholder:text-[#21326c]"
               />
             </div>
+            {/* Attachments */}
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Reference Files <span className="font-normal text-[#21326c]/50">(optional — images or PDFs)</span></label>
+              {postForm.attachments.length > 0 && (
+                <div className="space-y-2 mb-2">
+                  {postForm.attachments.map(att => (
+                    <div key={att.id} className="flex items-center gap-2 px-3 py-2 bg-[#21326c]/5 rounded-xl">
+                      {att.type.startsWith('image/') ? <ImageIcon size={14} className="text-[#21326c] flex-shrink-0" /> : <File size={14} className="text-[#21326c] flex-shrink-0" />}
+                      <span className="text-sm text-[#21326c] truncate flex-1">{att.name}</span>
+                      {att.type.startsWith('image/') && (
+                        <img src={att.url} alt={att.name} className="w-10 h-8 rounded object-cover flex-shrink-0" />
+                      )}
+                      <button onClick={() => removeJobAttachment(att.id)} className="text-[#21326c]/30 hover:text-red-400 transition-colors flex-shrink-0"><X size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[#21326c]/30 text-sm text-[#21326c]/60 hover:border-[#21326c]/60 hover:text-[#21326c] transition-colors w-full justify-center">
+                <Paperclip size={14} /> Attach photos or PDFs
+                <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={e => handleJobAttachmentAdd(e.target.files)} />
+              </label>
+            </div>
+
             <div>
               <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Budget (EGP) *</label>
               <div className="relative">
@@ -1776,7 +1872,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
       {/* APPLY MODAL */}
       <Modal
         open={showApplyModal}
-        onClose={() => { setShowApplyModal(false); setApplyForm({ note: '', samples: [] }); }}
+        onClose={() => { setShowApplyModal(false); setApplyForm({ note: '', samples: [], uploadedFiles: [] }); }}
         title={`Apply: ${selectedJobForApply?.title || ''}`}
         wide
       >
@@ -1798,9 +1894,11 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-[#21326c] mb-1">Select up to 3 Portfolio Samples</label>
-            <p className="text-xs text-[#21326c] mb-3">Choose pieces that best match this brief</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <label className="block text-sm font-semibold text-[#21326c] mb-1">Portfolio Samples</label>
+            <p className="text-xs text-[#21326c] mb-3">Choose existing pieces or upload your own files (images / PDFs) — up to 3 total</p>
+
+            {/* Existing mock samples */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 mb-3">
               {PORTFOLIO_SAMPLES.map(sample => {
                 const selected = applyForm.samples.includes(sample.id);
                 return (
@@ -1824,7 +1922,31 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                 );
               })}
             </div>
-            <p className="text-xs text-[#21326c] mt-2">{applyForm.samples.length}/3 selected</p>
+
+            {/* Uploaded files */}
+            {applyForm.uploadedFiles.length > 0 && (
+              <div className="space-y-2 mb-2">
+                {applyForm.uploadedFiles.map(uf => (
+                  <div key={uf.id} className="flex items-center gap-2 px-3 py-2 bg-[#21326c]/5 rounded-xl">
+                    {uf.type.startsWith('image/') ? <ImageIcon size={14} className="text-[#21326c] flex-shrink-0" /> : <File size={14} className="text-[#21326c] flex-shrink-0" />}
+                    <span className="text-sm text-[#21326c] truncate flex-1">{uf.name}</span>
+                    {uf.type.startsWith('image/') && (
+                      <img src={uf.url} alt={uf.name} className="w-10 h-8 rounded object-cover flex-shrink-0" />
+                    )}
+                    <button onClick={() => removeApplyFile(uf.id)} className="text-[#21326c]/30 hover:text-red-400 transition-colors flex-shrink-0"><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(applyForm.samples.length + applyForm.uploadedFiles.length) < 3 && (
+              <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[#21326c]/30 text-sm text-[#21326c]/60 hover:border-[#21326c]/60 hover:text-[#21326c] transition-colors w-full justify-center">
+                <Upload size={14} /> Upload portfolio files
+                <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={e => handleApplyFileAdd(e.target.files)} />
+              </label>
+            )}
+
+            <p className="text-xs text-[#21326c] mt-2">{applyForm.samples.length + applyForm.uploadedFiles.length}/3 selected</p>
           </div>
 
           {applySuccess ? (
@@ -1837,8 +1959,8 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
             </div>
           ) : (
             <button
-              onClick={() => { setApplySuccess(true); setTimeout(() => { setShowApplyModal(false); setApplySuccess(false); setApplyForm({ note: '', samples: [] }); }, 2500); }}
-              disabled={!applyForm.note || applyForm.samples.length === 0}
+              onClick={() => { setApplySuccess(true); setTimeout(() => { setShowApplyModal(false); setApplySuccess(false); setApplyForm({ note: '', samples: [], uploadedFiles: [] }); }, 2500); }}
+              disabled={!applyForm.note || (applyForm.samples.length + applyForm.uploadedFiles.length) === 0}
               className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: '#ff9044' }}
             >
@@ -1890,6 +2012,26 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
               </div>
             )}
 
+            {selectedJob.attachments?.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wide mb-2">Reference Files</p>
+                <div className="space-y-2">
+                  {selectedJob.attachments.map(att => (
+                    <a key={att.id} href={att.url} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-3 px-3 py-2 bg-[#21326c]/5 hover:bg-[#21326c]/10 rounded-xl transition-colors group"
+                    >
+                      {att.type.startsWith('image/') ? <ImageIcon size={14} className="text-[#21326c] flex-shrink-0" /> : <File size={14} className="text-[#21326c] flex-shrink-0" />}
+                      <span className="text-sm text-[#21326c] truncate flex-1">{att.name}</span>
+                      {att.type.startsWith('image/') && (
+                        <img src={att.url} alt={att.name} className="w-10 h-8 rounded object-cover flex-shrink-0" />
+                      )}
+                      <ExternalLink size={12} className="text-[#21326c]/30 group-hover:text-[#21326c] flex-shrink-0 transition-colors" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {currentUser?.role === 'student' && (
               <button
                 onClick={() => { setSelectedJob(null); setSelectedJobForApply(selectedJob); setShowApplyModal(true); }}
@@ -1912,6 +2054,42 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
 // ─── VIEW 3: TALENT DIRECTORY ─────────────────────────────────────────────────
 
 function DirectoryPage({ setView, setSelectedTalent, talents }) {
+  const [realProfiles, setRealProfiles] = useState([]);
+
+  useEffect(() => {
+    profiles.list().then(data => {
+      const mapped = data.map(p => ({
+        id:            p.id,
+        userId:        p.user.id,
+        name:          p.user.name,
+        initials:      p.user.initials,
+        avatarColor:   p.user.avatarColor,
+        avatar:        p.avatar || null,
+        university:    p.university || '',
+        dept:          p.dept || '',
+        year:          p.year || null,
+        isGrad:        p.isGrad || false,
+        availability:  p.availability || 'open',
+        hourlyRate:    p.hourlyRate || 0,
+        rating:        p.rating || 0,
+        reviews:       p.reviewCount || 0,
+        completedJobs: p.completedJobs || 0,
+        tags:          (p.skills || []).map(s => s.skill),
+        portfolio:     (p.portfolio || []).map(item => ({ color: item.color || '#21326c', imageUrl: item.imageUrl || null, label: item.label || '', h: item.height || 'medium' })),
+        education:     p.education || [],
+        experience:    p.experience || [],
+        bio:           p.bio || '',
+      }));
+      setRealProfiles(mapped);
+    }).catch(() => {});
+  }, []);
+
+  // Real profiles from DB come first; append mock talents for visual richness
+  // (mock talents have numeric ids, real ones have cuid strings — no collision)
+  const displayTalents = realProfiles.length > 0
+    ? [...realProfiles, ...talents]
+    : talents;
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
       <div className="mb-8">
@@ -1920,7 +2098,7 @@ function DirectoryPage({ setView, setSelectedTalent, talents }) {
       </div>
 
       <div className="grid gap-5">
-        {talents.map(talent => (
+        {displayTalents.map(talent => (
           <DirectoryCard
             key={talent.id}
             talent={talent}
@@ -1987,6 +2165,21 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
   const [hireForm, setHireForm]             = useState({ title: '', brief: '', budget: '' });
   const [hireSuccess, setHireSuccess]       = useState(false);
   const [showEditModal, setShowEditModal]   = useState(false);
+  const [startingChat, setStartingChat]     = useState(false);
+
+  const handleMessageClick = async () => {
+    if (!currentUser || !talent?.userId) return;
+    setStartingChat(true);
+    try {
+      await convApi.create({ talentId: talent.userId });
+      setView('chat');
+    } catch (e) {
+      console.error(e);
+      setView('chat');
+    } finally {
+      setStartingChat(false);
+    }
+  };
 
   // Edit profile state
   const [editDraft, setEditDraft] = useState({});
@@ -2006,17 +2199,26 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
       education: talent.education.map(e => ({ ...e })),
       experience: talent.experience.map(e => ({ ...e })),
       portfolio: talent.portfolio.map(p => ({ ...p })),
+      avatar: talent.avatar || null,
     });
     setShowEditModal(true);
   };
 
-  // Image upload for portfolio items
+  // Image / PDF upload for portfolio items
   const handlePortfolioImageUpload = (itemId, file) => {
     if (!file) return;
     const url = URL.createObjectURL(file);
+    const isPdf = file.type === 'application/pdf';
     setEditDraft(d => ({
       ...d,
-      portfolio: d.portfolio.map(p => p.id === itemId ? { ...p, imageUrl: url } : p),
+      portfolio: d.portfolio.map(p =>
+        p.id === itemId
+          ? { ...p,
+              imageUrl: isPdf ? null : url,
+              pdfUrl:   isPdf ? url  : null,
+              pdfName:  isPdf ? file.name : null }
+          : p
+      ),
     }));
   };
 
@@ -2049,10 +2251,12 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
         {/* Cover — avatar is absolutely positioned to straddle the bottom edge */}
         <div className="relative h-32 sm:h-44" style={{ background: `linear-gradient(135deg, ${talent.avatarColor}33, ${talent.avatarColor}88)` }}>
           <div
-            className="absolute bottom-0 left-6 translate-y-1/2 w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 border-white flex items-center justify-center text-white text-xl sm:text-2xl font-bold shadow-lg flex-shrink-0 z-10"
-            style={{ background: talent.avatarColor }}
+            className="absolute bottom-0 left-6 translate-y-1/2 w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 border-white flex items-center justify-center text-white text-xl sm:text-2xl font-bold shadow-lg flex-shrink-0 z-10 overflow-hidden"
+            style={talent.avatar ? {} : { background: talent.avatarColor }}
           >
-            {talent.initials}
+            {talent.avatar
+              ? <img src={talent.avatar} alt={talent.initials} className="w-full h-full object-cover" />
+              : talent.initials}
           </div>
         </div>
 
@@ -2080,10 +2284,11 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
               ) : (
                 <>
                   <button
-                    onClick={() => setView('chat')}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#21326c]/30 text-sm font-semibold text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
+                    onClick={handleMessageClick}
+                    disabled={startingChat || !currentUser}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#21326c]/30 text-sm font-semibold text-[#21326c] hover:bg-[#21326c]/5 transition-colors disabled:opacity-50"
                   >
-                    <MessageSquare size={15} /> Message
+                    <MessageSquare size={15} /> {startingChat ? 'Opening…' : 'Message'}
                   </button>
 
                   <button
@@ -2182,7 +2387,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
           </h3>
           <div className="masonry-grid">
             {talent.portfolio.map((item, i) => (
-              <PortfolioBlock key={item.id || i} color={item.color} label={item.label} height={item.h} imageUrl={item.imageUrl} />
+              <PortfolioBlock key={item.id || i} color={item.color} label={item.label} height={item.h} imageUrl={item.imageUrl} pdfUrl={item.pdfUrl} pdfName={item.pdfName} />
             ))}
           </div>
         </div>
@@ -2242,6 +2447,43 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
     {/* ── EDIT PROFILE MODAL ── */}
     <Modal open={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Your Profile" wide>
       <div className="space-y-6">
+        {/* Profile Photo */}
+        <div>
+          <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Profile Photo</label>
+          <div className="flex items-center gap-4">
+            <div
+              className="w-16 h-16 rounded-2xl border-2 border-[#21326c]/20 overflow-hidden flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
+              style={editDraft.avatar ? {} : { background: talent.avatarColor }}
+            >
+              {editDraft.avatar
+                ? <img src={editDraft.avatar} alt={talent.initials} className="w-full h-full object-cover" />
+                : talent.initials}
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="cursor-pointer flex items-center gap-2 px-4 py-2 rounded-xl border border-[#21326c]/20 text-sm font-semibold text-[#21326c] hover:bg-[#21326c]/5 transition-colors w-fit">
+                <Camera size={14} /> {editDraft.avatar ? 'Change Photo' : 'Upload Photo'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files[0];
+                    if (file) setEditDraft(d => ({ ...d, avatar: URL.createObjectURL(file) }));
+                  }}
+                />
+              </label>
+              {editDraft.avatar && (
+                <button
+                  onClick={() => setEditDraft(d => ({ ...d, avatar: null }))}
+                  className="text-xs text-red-400 hover:text-red-600 transition-colors flex items-center gap-1 w-fit"
+                >
+                  <X size={10} /> Remove photo
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Bio */}
         <div>
           <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">Bio</label>
@@ -2361,16 +2603,21 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                     : { background: item.color }
                   }
                 >
-                  {!item.imageUrl && (
-                    <label className="cursor-pointer flex items-center justify-center w-full h-full" title="Upload image">
+                  {!item.imageUrl && !item.pdfUrl && (
+                    <label className="cursor-pointer flex items-center justify-center w-full h-full" title="Upload image or PDF">
                       <FileImage size={14} color="white" opacity={0.8} />
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,application/pdf"
                         className="hidden"
                         onChange={e => handlePortfolioImageUpload(item.id, e.target.files[0])}
                       />
                     </label>
+                  )}
+                  {item.pdfUrl && !item.imageUrl && (
+                    <div className="flex items-center justify-center w-full h-full">
+                      <File size={16} color="white" opacity={0.9} />
+                    </div>
                   )}
                   {item.imageUrl && (
                     <button
@@ -2384,13 +2631,22 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-[#21326c] font-medium truncate">{item.label}</p>
-                  {!item.imageUrl && (
+                  {!item.imageUrl && !item.pdfUrl && (
                     <label className="text-xs text-[#21326c]/40 hover:text-[#21326c] cursor-pointer flex items-center gap-1 mt-0.5 transition-colors">
-                      <Upload size={10} /> Upload photo
-                      <input type="file" accept="image/*" className="hidden" onChange={e => handlePortfolioImageUpload(item.id, e.target.files[0])} />
+                      <Upload size={10} /> Upload photo or PDF
+                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => handlePortfolioImageUpload(item.id, e.target.files[0])} />
                     </label>
                   )}
                   {item.imageUrl && <p className="text-xs text-green-600 mt-0.5">Photo uploaded ✓</p>}
+                  {item.pdfUrl && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <p className="text-xs text-green-600 truncate max-w-[110px]">PDF: {item.pdfName}</p>
+                      <button
+                        onClick={() => setEditDraft(d => ({ ...d, portfolio: d.portfolio.map(p => p.id === item.id ? { ...p, pdfUrl: null, pdfName: null } : p) }))}
+                        className="text-[#21326c]/30 hover:text-red-400 transition-colors flex-shrink-0"
+                      ><X size={10} /></button>
+                    </div>
+                  )}
                 </div>
                 <button onClick={() => setEditDraft(d => ({ ...d, portfolio: d.portfolio.filter((_, j) => j !== i) }))}
                   className="text-[#21326c]/30 hover:text-red-400 transition-colors flex-shrink-0"><X size={14} /></button>
@@ -2721,102 +2977,227 @@ function FeedPost({ post, onLike, isAdmin, onDelete }) {
 
 // ─── VIEW 6: CHAT ─────────────────────────────────────────────────────────────
 
-function ChatPage({ currentUser, projects, talents }) {
-  const isStudent = currentUser?.role === 'student';
-  const isClient  = currentUser?.role === 'client';
-
-  // Derive threads from accepted-offer projects only
-  const threads = (() => {
-    if (isStudent) {
-      return projects
-        .filter(p => p.acceptedTalentId === currentUser.talentId)
-        .map(p => {
-          const initials = p.clientName.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-          return { projectId: p.id, projectTitle: p.title, contactName: p.clientName, contactInitials: initials, contactColor: '#c4622d', status: p.status };
-        });
-    }
-    if (isClient) {
-      return projects
-        .filter(p => p.clientId === currentUser.id && p.acceptedTalentId !== null)
-        .map(p => {
-          const talent = talents.find(t => t.id === p.acceptedTalentId);
-          const app    = p.applications.find(a => a.id === p.acceptedApplicationId);
-          return { projectId: p.id, projectTitle: p.title, contactName: app?.talentName || talent?.name || '?', contactInitials: talent?.initials || '?', contactColor: talent?.avatarColor || '#21326c', status: p.status };
-        });
-    }
-    return [];
-  })();
-
-  const [activeThread, setActiveThread] = useState(threads[0] || null);
-  const [allMessages, setAllMessages]   = useState(SEED_CHAT_MESSAGES);
+function ChatPage({ currentUser }) {
+  const [convos, setConvos]             = useState([]);
+  const [activeConvo, setActiveConvo]   = useState(null);
+  const [messages, setMessages]         = useState([]);
   const [message, setMessage]           = useState('');
-  const [showFileMenu, setShowFileMenu] = useState(false);
+  const [typingUsers, setTypingUsers]   = useState({});   // { userId: true }
   const [showSidebar, setShowSidebar]   = useState(true);
   const [showEncryptionInfo, setShowEncryptionInfo] = useState(false);
-  const [showChatMore, setShowChatMore] = useState(false);
+  const [loadingConvos, setLoadingConvos] = useState(true);
+  const [loadingMsgs, setLoadingMsgs]   = useState(false);
+  const [searchQ, setSearchQ]           = useState('');
+  const messagesEndRef                  = useRef(null);
+  const typingTimerRef                  = useRef(null);
+  const textareaRef                     = useRef(null);
 
-  const msgs = activeThread ? (allMessages[activeThread.projectId] || []) : [];
+  const isAdmin = currentUser?.role === 'admin';
 
-  const sendMessage = () => {
-    if (!message.trim() || !activeThread) return;
-    const newMsg = { id: Date.now(), from: 'me', text: message, time: 'Now' };
-    setAllMessages(prev => ({ ...prev, [activeThread.projectId]: [...(prev[activeThread.projectId] || []), newMsg] }));
+  // ── Load conversation list ────────────────────────────────────────────────
+  useEffect(() => {
+    convApi.list().then(data => {
+      setConvos(data);
+      if (data.length > 0) setActiveConvo(data[0]);
+    }).catch(console.error).finally(() => setLoadingConvos(false));
+  }, []);
+
+  // ── Load messages when active convo changes ───────────────────────────────
+  useEffect(() => {
+    if (!activeConvo) return;
+    setLoadingMsgs(true);
+    convApi.messages(activeConvo.id).then(msgs => {
+      setMessages(msgs);
+      // Mark as read
+      const socket = getSocket();
+      if (socket && !isAdmin) socket.emit('mark_read', { conversationId: activeConvo.id });
+      // Clear unread badge
+      setConvos(prev => prev.map(c => c.id === activeConvo.id ? { ...c, unreadCount: 0 } : c));
+    }).catch(console.error).finally(() => setLoadingMsgs(false));
+  }, [activeConvo?.id]);
+
+  // ── Auto-scroll to bottom ─────────────────────────────────────────────────
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // ── Socket event listeners ────────────────────────────────────────────────
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleMessage = (msg) => {
+      // If it's for the active conversation, append it
+      if (msg.conversationId === activeConvo?.id) {
+        setMessages(prev => [...prev, msg]);
+        // Mark it read immediately if we're looking at it
+        if (!isAdmin) socket.emit('mark_read', { conversationId: msg.conversationId });
+      } else {
+        // Bump unread count for the other conversation
+        setConvos(prev => prev.map(c =>
+          c.id === msg.conversationId
+            ? { ...c, unreadCount: (c.unreadCount || 0) + 1, messages: [msg] }
+            : c
+        ));
+      }
+      // Always move that conversation to the top of the list
+      setConvos(prev => {
+        const idx = prev.findIndex(c => c.id === msg.conversationId);
+        if (idx < 0) return prev;
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], updatedAt: msg.createdAt };
+        updated.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        return updated;
+      });
+    };
+
+    const handleTyping = ({ userId, isTyping }) => {
+      setTypingUsers(prev => {
+        const next = { ...prev };
+        if (isTyping) next[userId] = true;
+        else delete next[userId];
+        return next;
+      });
+    };
+
+    const handleMessagesRead = ({ conversationId }) => {
+      if (conversationId === activeConvo?.id) {
+        setMessages(prev => prev.map(m => m.readAt ? m : { ...m, readAt: new Date().toISOString() }));
+      }
+    };
+
+    socket.on('message', handleMessage);
+    socket.on('typing', handleTyping);
+    socket.on('messages_read', handleMessagesRead);
+
+    return () => {
+      socket.off('message', handleMessage);
+      socket.off('typing', handleTyping);
+      socket.off('messages_read', handleMessagesRead);
+    };
+  }, [activeConvo?.id, isAdmin]);
+
+  // ── Send message ──────────────────────────────────────────────────────────
+  const sendMessage = useCallback(() => {
+    const socket = getSocket();
+    if (!message.trim() || !activeConvo || !socket || isAdmin) return;
+    socket.emit('send_message', { conversationId: activeConvo.id, content: message.trim() });
     setMessage('');
+    textareaRef.current?.focus();
+  }, [message, activeConvo, isAdmin]);
+
+  // ── Typing indicator ──────────────────────────────────────────────────────
+  const handleTyping = () => {
+    const socket = getSocket();
+    if (!socket || !activeConvo || isAdmin) return;
+    socket.emit('typing', { conversationId: activeConvo.id, isTyping: true });
+    clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      socket.emit('typing', { conversationId: activeConvo.id, isTyping: false });
+    }, 2000);
   };
 
-  const FILE_OPTIONS = [
-    { icon: Upload, label: 'Standard Upload', desc: 'Recipient can download', color: '#21326c' },
-    { icon: Eye, label: 'View Only PDF', desc: 'No download allowed', color: '#c4622d' },
-    { icon: Stamp, label: 'Apply Watermark', desc: 'Add protection overlay', color: '#db9630' },
-  ];
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const getContact = (conv) => {
+    if (!conv) return null;
+    if (!currentUser) return conv.client;
+    if (currentUser.id === conv.clientId) return conv.talent;
+    if (currentUser.id === conv.talentId) return conv.client;
+    return conv.client; // admin sees client
+  };
 
+  const formatTime = (iso) => {
+    const d = new Date(iso);
+    const now = new Date();
+    const diffDays = Math.floor((now - d) / 86400000);
+    if (diffDays === 0) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' });
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  const filteredConvos = convos.filter(c => {
+    if (!searchQ) return true;
+    const contact = getContact(c);
+    return contact?.name?.toLowerCase().includes(searchQ.toLowerCase())
+      || c.project?.title?.toLowerCase().includes(searchQ.toLowerCase());
+  });
+
+  const typingNames = Object.keys(typingUsers).length > 0 ? 'typing…' : null;
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 animate-fade-in">
 
-      {/* Empty state — no accepted offers yet */}
-      {threads.length === 0 && (
+      {!loadingConvos && convos.length === 0 && (
         <div className="bg-white rounded-2xl border border-[#21326c]/10 p-14 text-center">
           <MessageSquare size={40} className="mx-auto mb-4 text-[#21326c] opacity-20" />
           <p className="font-semibold text-[#21326c] mb-1">No conversations yet</p>
           <p className="text-sm text-[#21326c]/50 max-w-xs mx-auto">
-            {isStudent
-              ? 'Once a client accepts your offer, a direct message channel opens here.'
-              : 'Once you accept an offer on a project, a direct channel with the student opens here.'}
+            {currentUser?.role === 'student'
+              ? 'Once a client contacts you, conversations will appear here.'
+              : isAdmin
+              ? 'All client–talent conversations will appear here.'
+              : 'Start a conversation by messaging a talent from their profile.'}
           </p>
         </div>
       )}
 
-      {threads.length > 0 && (
+      {(loadingConvos || convos.length > 0) && (
         <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden" style={{ height: 'calc(100dvh - 130px)', minHeight: '480px' }}>
           <div className="flex h-full">
-            {/* Thread Sidebar */}
+
+            {/* ── Sidebar ─────────────────────────────────────────────────── */}
             <div className={`${showSidebar ? 'flex' : 'hidden'} sm:flex flex-col w-full sm:w-72 border-r border-[#21326c]/10 flex-shrink-0`}>
               <div className="p-4 border-b border-[#21326c]/10">
                 <h2 className="font-semibold text-[#21326c] mb-3">Messages</h2>
                 <div className="relative">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#21326c]/40" />
-                  <input type="text" placeholder="Search..." className="w-full pl-8 pr-4 py-2 text-sm rounded-full bg-[#21326c]/5 text-[#21326c] placeholder:text-[#21326c]/40 focus:outline-none" />
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQ}
+                    onChange={e => setSearchQ(e.target.value)}
+                    className="w-full pl-8 pr-4 py-2 text-sm rounded-full bg-[#21326c]/5 text-[#21326c] placeholder:text-[#21326c]/40 focus:outline-none"
+                  />
                 </div>
               </div>
               <div className="overflow-y-auto flex-1">
-                {threads.map(t => {
-                  const threadMsgs = allMessages[t.projectId] || [];
-                  const lastMsg = threadMsgs[threadMsgs.length - 1];
-                  const isActive = activeThread?.projectId === t.projectId;
+                {loadingConvos && (
+                  <p className="text-center text-xs text-[#21326c]/40 pt-8">Loading…</p>
+                )}
+                {filteredConvos.map(conv => {
+                  const contact = getContact(conv);
+                  const lastMsg = conv.messages?.[0];
+                  const isActive = activeConvo?.id === conv.id;
                   return (
                     <button
-                      key={t.projectId}
-                      onClick={() => { setActiveThread(t); setShowSidebar(false); }}
+                      key={conv.id}
+                      onClick={() => { setActiveConvo(conv); setShowSidebar(false); }}
                       className="w-full flex items-center gap-3 p-4 hover:bg-[#21326c]/5 transition-colors text-left"
                       style={isActive ? { borderLeft: '3px solid #21326c', background: '#21326c0a' } : {}}
                     >
-                      <Avatar initials={t.contactInitials} color={t.contactColor} size="md" />
+                      <div className="relative flex-shrink-0">
+                        <Avatar
+                          initials={contact?.initials || '?'}
+                          color={contact?.avatarColor || '#21326c'}
+                          imageUrl={contact?.profile?.avatar}
+                          size="md"
+                        />
+                        {conv.unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-white text-[10px] font-bold flex items-center justify-center" style={{ background: '#ff9044' }}>
+                            {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-0.5">
-                          <p className="text-sm font-semibold text-[#21326c] truncate">{t.contactName}</p>
-                          {lastMsg && <span className="text-xs text-[#21326c]/40 flex-shrink-0 ml-1">{lastMsg.time}</span>}
+                          <p className="text-sm font-semibold text-[#21326c] truncate">{contact?.name || '—'}</p>
+                          {lastMsg && <span className="text-xs text-[#21326c]/40 flex-shrink-0 ml-1">{formatTime(lastMsg.createdAt)}</span>}
                         </div>
-                        <p className="text-xs text-[#21326c]/50 truncate">{lastMsg?.text || t.projectTitle}</p>
+                        <p className="text-xs text-[#21326c]/50 truncate">
+                          {lastMsg ? lastMsg.content : (conv.project?.title || 'New conversation')}
+                        </p>
                       </div>
                     </button>
                   );
@@ -2824,35 +3205,32 @@ function ChatPage({ currentUser, projects, talents }) {
               </div>
             </div>
 
-            {/* Chat Area */}
-            {activeThread && (
+            {/* ── Chat area ───────────────────────────────────────────────── */}
+            {activeConvo && (
               <div className={`${!showSidebar ? 'flex' : 'hidden'} sm:flex flex-col flex-1 min-w-0`}>
                 {/* Header */}
                 <div className="flex items-center gap-3 p-4 border-b border-[#21326c]/10">
                   <button onClick={() => setShowSidebar(true)} className="sm:hidden p-1 rounded-lg hover:bg-[#21326c]/5">
                     <ChevronLeft size={18} className="text-[#21326c]" />
                   </button>
-                  <Avatar initials={activeThread.contactInitials} color={activeThread.contactColor} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[#21326c] text-sm">{activeThread.contactName}</p>
-                    <p className="text-xs text-[#21326c]/50 truncate">re: {activeThread.projectTitle}</p>
-                  </div>
-                  <div className="flex gap-2 relative flex-shrink-0">
+                  {(() => {
+                    const contact = getContact(activeConvo);
+                    return (
+                      <>
+                        <Avatar initials={contact?.initials || '?'} color={contact?.avatarColor || '#21326c'} imageUrl={contact?.profile?.avatar} size="md" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-[#21326c] text-sm">{contact?.name || '—'}</p>
+                          <p className="text-xs text-[#21326c]/50 truncate">
+                            {typingNames ? <span className="italic text-[#ff9044]">{typingNames}</span> : (activeConvo.project ? `re: ${activeConvo.project.title}` : 'Direct message')}
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  <div className="relative flex-shrink-0">
                     <button onClick={() => setShowEncryptionInfo(v => !v)} className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors" title="Security info">
                       <Shield size={16} />
                     </button>
-                    <div className="relative">
-                      <button onClick={() => setShowChatMore(v => !v)} className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors">
-                        <MoreHorizontal size={16} />
-                      </button>
-                      {showChatMore && (
-                        <div className="absolute right-0 top-10 bg-white rounded-xl border border-[#21326c]/10 shadow-lg w-44 overflow-hidden z-50 animate-fade-in">
-                          {['Mute notifications', 'Archive conversation', 'Clear chat history'].map(opt => (
-                            <button key={opt} onClick={() => setShowChatMore(false)} className="w-full px-4 py-2.5 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors text-left">{opt}</button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                     {showEncryptionInfo && (
                       <div className="absolute right-0 top-12 bg-white rounded-xl border border-[#21326c]/10 shadow-xl w-72 p-4 z-50 animate-fade-in">
                         <div className="flex items-center gap-2 mb-2">
@@ -2860,7 +3238,7 @@ function ChatPage({ currentUser, projects, talents }) {
                           <p className="font-semibold text-[#21326c] text-sm">Encrypted & Monitored</p>
                           <button onClick={() => setShowEncryptionInfo(false)} className="ml-auto text-[#21326c]/30 hover:text-[#21326c]"><X size={14} /></button>
                         </div>
-                        <p className="text-xs text-[#21326c]/70 leading-relaxed">Messages are encrypted in transit. Files shared through Lawnn Secure Vault are access-logged and watermarked. Lawnn admins may monitor conversations for platform safety.</p>
+                        <p className="text-xs text-[#21326c]/70 leading-relaxed">Messages are encrypted in transit. Lawnn admins may monitor conversations for platform safety.</p>
                       </div>
                     )}
                   </div>
@@ -2869,67 +3247,72 @@ function ChatPage({ currentUser, projects, talents }) {
                 {/* Security notice */}
                 <div className="mx-4 mt-3 px-3 py-2 rounded-xl text-xs text-center" style={{ background: '#f0f4ff', color: '#21326c' }}>
                   <Lock size={11} className="inline mr-1" />
-                  Encrypted · Lawnn Secure Vault · Admin-monitored for safety
+                  End-to-end encrypted · Admin-monitored for safety
+                  {isAdmin && <span className="ml-2 font-semibold">(Read-only)</span>}
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {msgs.length === 0 && (
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {loadingMsgs && <p className="text-center text-sm text-[#21326c]/40 pt-8">Loading messages…</p>}
+                  {!loadingMsgs && messages.length === 0 && (
                     <p className="text-center text-sm text-[#21326c]/40 pt-8">No messages yet — say hello!</p>
                   )}
-                  {msgs.map(msg => (
-                    <div key={msg.id} className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}>
-                      {msg.from === 'them' && <Avatar initials={activeThread.contactInitials} color={activeThread.contactColor} size="sm" />}
-                      <div className={`max-w-xs sm:max-w-sm mx-2 px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${msg.from === 'me' ? 'bg-[#21326c] text-white rounded-br-sm' : 'bg-[#21326c]/10 text-[#21326c] rounded-bl-sm'}`}>
-                        {msg.text}
-                        <p className={`text-xs mt-1 ${msg.from === 'me' ? 'text-white/60' : 'text-[#21326c]/60'}`}>{msg.time}</p>
+                  {messages.map((msg, i) => {
+                    const isMe = msg.senderId === currentUser?.id;
+                    const contact = getContact(activeConvo);
+                    const showAvatar = !isMe && (i === 0 || messages[i - 1]?.senderId !== msg.senderId);
+                    return (
+                      <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+                        {!isMe && (
+                          <div style={{ width: 28, flexShrink: 0 }}>
+                            {showAvatar && (
+                              <Avatar initials={msg.sender?.initials || '?'} color={msg.sender?.avatarColor || '#21326c'} imageUrl={msg.sender?.profile?.avatar} size="sm" />
+                            )}
+                          </div>
+                        )}
+                        <div className={`max-w-xs sm:max-w-sm px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${isMe ? 'bg-[#21326c] text-white rounded-br-sm' : 'bg-[#21326c]/10 text-[#21326c] rounded-bl-sm'}`}>
+                          {msg.content}
+                          <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            <span className={`text-[10px] ${isMe ? 'text-white/50' : 'text-[#21326c]/40'}`}>{formatTime(msg.createdAt)}</span>
+                            {isMe && msg.readAt && <CheckCircle size={10} className="text-white/50" />}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input */}
-                <div className="p-4 border-t border-[#21326c]/10">
-                  <div className="flex items-end gap-2">
-                    <div className="relative flex-shrink-0">
-                      <button onClick={() => setShowFileMenu(!showFileMenu)} className="p-2.5 rounded-xl border border-[#21326c]/20 hover:bg-[#21326c]/5 text-[#21326c] transition-colors">
-                        <Paperclip size={18} />
+                {/* Input — hidden for admin */}
+                {!isAdmin && (
+                  <div className="p-4 border-t border-[#21326c]/10">
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <textarea
+                          ref={textareaRef}
+                          rows={1}
+                          value={message}
+                          onChange={e => { setMessage(e.target.value); handleTyping(); }}
+                          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                          placeholder="Message…"
+                          className="w-full px-4 py-2.5 rounded-2xl border border-[#21326c]/20 text-[#21326c] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40"
+                          style={{ maxHeight: '100px' }}
+                        />
+                      </div>
+                      <button onClick={sendMessage} disabled={!message.trim()} className="p-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 flex-shrink-0" style={{ background: '#ff9044' }}>
+                        <Send size={18} />
                       </button>
-                      {showFileMenu && (
-                        <div className="absolute bottom-12 left-0 bg-white rounded-2xl border border-[#21326c]/10 shadow-xl w-60 overflow-hidden z-50 animate-fade-in">
-                          <div className="p-3 bg-[#21326c]/5 border-b border-[#21326c]/10">
-                            <p className="text-xs font-semibold text-[#21326c]">Secure File Sharing</p>
-                          </div>
-                          {FILE_OPTIONS.map(opt => (
-                            <button key={opt.label} onClick={() => setShowFileMenu(false)} className="w-full flex items-center gap-3 p-3 hover:bg-[#21326c]/5 transition-colors text-left">
-                              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${opt.color}20` }}>
-                                <opt.icon size={15} style={{ color: opt.color }} />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-[#21326c]">{opt.label}</p>
-                                <p className="text-xs text-[#21326c]/50">{opt.desc}</p>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
-                    <div className="flex-1">
-                      <textarea
-                        rows={1}
-                        value={message}
-                        onChange={e => setMessage(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                        placeholder="Message..."
-                        className="w-full px-4 py-2.5 rounded-2xl border border-[#21326c]/20 text-[#21326c] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40"
-                        style={{ maxHeight: '100px' }}
-                      />
-                    </div>
-                    <button onClick={sendMessage} disabled={!message.trim()} className="p-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 flex-shrink-0" style={{ background: '#ff9044' }}>
-                      <Send size={18} />
-                    </button>
                   </div>
-                </div>
+                )}
+              </div>
+            )}
+
+            {/* Placeholder when no active convo on desktop */}
+            {!activeConvo && !loadingConvos && (
+              <div className="hidden sm:flex flex-col flex-1 items-center justify-center text-center p-8">
+                <MessageSquare size={36} className="mb-3 text-[#21326c] opacity-20" />
+                <p className="text-sm text-[#21326c]/40">Select a conversation</p>
               </div>
             )}
           </div>
@@ -4160,18 +4543,156 @@ function PendingSection({ title, icon: Icon, color, items, onApprove, onReject, 
   );
 }
 
-function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents }) {
-  const [adminTab, setAdminTab] = useState('content');
+function AdminUsersTab() {
+  const [students, setStudents]       = useState([]);
+  const [loadingList, setLoadingList] = useState(true);
+  const [showCreate, setShowCreate]   = useState(false);
+  const [form, setForm]               = useState({ name: '', email: '', password: '', university: '', dept: '', year: '' });
+  const [creating, setCreating]       = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createSuccess, setCreateSuccess] = useState('');
 
-  // Derive admin chat threads from all accepted-offer projects
-  const adminThreads = projects
-    .filter(p => p.acceptedTalentId !== null)
-    .map(p => {
-      const talent = talents.find(t => t.id === p.acceptedTalentId);
-      const app    = p.applications.find(a => a.id === p.acceptedApplicationId);
-      return { projectId: p.id, projectTitle: p.title, talentName: app?.talentName || talent?.name || '?', clientName: p.clientName, talentInitials: talent?.initials || '?', talentColor: talent?.avatarColor || '#21326c', status: p.status };
-    });
-  const [activeConvo, setActiveConvo] = useState(adminThreads[0] || null);
+  useEffect(() => {
+    adminApi.listStudents()
+      .then(setStudents)
+      .catch(() => {})
+      .finally(() => setLoadingList(false));
+  }, []);
+
+  const handleCreate = async () => {
+    if (!form.name || !form.email || !form.password) { setCreateError('Name, email and password are required'); return; }
+    setCreating(true); setCreateError('');
+    try {
+      const student = await adminApi.createStudent({ ...form, year: form.year ? parseInt(form.year) : undefined });
+      setStudents(s => [student, ...s]);
+      setCreateSuccess(`Account created for ${student.name}. Share these credentials with them: ${form.email} / ${form.password}`);
+      setForm({ name: '', email: '', password: '', university: '', dept: '', year: '' });
+      setTimeout(() => { setCreateSuccess(''); setShowCreate(false); }, 6000);
+    } catch (e) {
+      setCreateError(e.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(`Remove ${name}'s account? This cannot be undone.`)) return;
+    await adminApi.deleteStudent(id).catch(() => {});
+    setStudents(s => s.filter(u => u.id !== id));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-[#21326c]">{students.length} student{students.length !== 1 ? 's' : ''} registered</p>
+        <button
+          onClick={() => { setShowCreate(true); setCreateError(''); setCreateSuccess(''); }}
+          className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all"
+          style={{ background: '#ff9044' }}
+        >
+          <Plus size={14} /> Create Student Account
+        </button>
+      </div>
+
+      {/* Create modal */}
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create Student Account" wide>
+        {createSuccess ? (
+          <div className="py-6 text-center space-y-3">
+            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto">
+              <CheckCircle size={28} className="text-green-500" />
+            </div>
+            <p className="font-semibold text-[#21326c]">Account created!</p>
+            <div className="text-xs text-left bg-[#21326c]/5 rounded-xl p-4 leading-relaxed text-[#21326c] break-all">
+              {createSuccess}
+            </div>
+            <p className="text-xs text-[#21326c]/50">This message will close automatically.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-xl p-3 text-xs text-[#21326c] leading-relaxed border border-[#21326c]/20" style={{ background: '#21326c08' }}>
+              Create an account for a student whose Google Form application you've accepted. Share the email and password with them directly — they'll be prompted to complete their profile on first login.
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Full Name *</label>
+                <input type="text" placeholder="e.g. Nour El-Sayed" value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Email *</label>
+                <input type="email" placeholder="student@university.edu.eg" value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Temporary Password *</label>
+                <input type="text" placeholder="They can change this after signing in" value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-[#21326c] mb-1.5">University</label>
+                <input type="text" placeholder="e.g. Helwan University" value={form.university}
+                  onChange={e => setForm(f => ({ ...f, university: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Department</label>
+                <input type="text" placeholder="e.g. Interior Architecture" value={form.dept}
+                  onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Graduation Year</label>
+                <input type="number" placeholder="e.g. 2026" value={form.year}
+                  onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+              </div>
+            </div>
+            {createError && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{createError}</p>}
+            <button onClick={handleCreate} disabled={creating || !form.name || !form.email || !form.password}
+              className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50"
+              style={{ background: '#ff9044' }}>
+              {creating ? 'Creating…' : 'Create Account & Copy Credentials'}
+            </button>
+          </div>
+        )}
+      </Modal>
+
+      {/* Student list */}
+      {loadingList ? (
+        <p className="text-sm text-[#21326c]/50 py-4 text-center">Loading students…</p>
+      ) : students.length === 0 ? (
+        <div className="text-center py-12 text-[#21326c]/40">
+          <GraduationCap size={32} className="mx-auto mb-3 opacity-40" />
+          <p className="text-sm">No student accounts yet. Create one above after accepting an application.</p>
+        </div>
+      ) : (
+        students.map(user => (
+          <div key={user.id} className="bg-white rounded-2xl border border-[#21326c]/10 p-4 flex items-center gap-4">
+            <Avatar initials={user.initials} color={user.avatarColor} imageUrl={user.profile?.avatar} size="md" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-[#21326c] text-sm">{user.name}</p>
+              <p className="text-xs text-[#21326c]/60 truncate">{user.email}</p>
+              {user.profile?.university && <p className="text-xs text-[#21326c]/40 truncate">{user.profile.university} · {user.profile.dept}</p>}
+            </div>
+            <span className="flex items-center gap-1 text-xs text-[#21326c]/50 flex-shrink-0">
+              <BadgeCheck size={13} className="text-[#21326c]" /> Verified Student
+            </span>
+            <button onClick={() => handleDelete(user.id, user.name)}
+              className="flex-shrink-0 text-[#21326c]/20 hover:text-red-400 transition-colors">
+              <Trash2 size={15} />
+            </button>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser }) {
+  const [adminTab, setAdminTab] = useState('content');
 
   const approveFeedPost = post => {
     setFeedPosts(ps => [post, ...ps]);
@@ -4318,119 +4839,11 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
 
       {/* ── CONVERSATIONS TAB ── */}
       {adminTab === 'conversations' && (
-        <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden" style={{ minHeight: '520px' }}>
-          {adminThreads.length === 0 ? (
-            <div className="p-12 text-center">
-              <MessageSquare size={36} className="mx-auto mb-3 text-[#21326c] opacity-20" />
-              <p className="font-semibold text-[#21326c] mb-1">No active conversations</p>
-              <p className="text-sm text-[#21326c]/50">Conversations appear here once offers are accepted on projects.</p>
-            </div>
-          ) : (
-          <div className="flex flex-col sm:flex-row" style={{ minHeight: '520px' }}>
-            {/* Thread list */}
-            <div className="w-full sm:w-64 sm:flex-shrink-0 border-b sm:border-b-0 sm:border-r border-[#21326c]/10 flex flex-col">
-              <div className="px-4 py-3 border-b border-[#21326c]/10 bg-[#21326c]/5">
-                <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wide">All Conversations ({adminThreads.length})</p>
-              </div>
-              <div className="flex-1 overflow-y-auto divide-y divide-[#21326c]/5">
-                {adminThreads.map(t => {
-                  const msgs = SEED_CHAT_MESSAGES[t.projectId] || [];
-                  const last = msgs[msgs.length - 1];
-                  const isActive = activeConvo?.projectId === t.projectId;
-                  return (
-                    <button
-                      key={t.projectId}
-                      onClick={() => setActiveConvo(t)}
-                      className="w-full flex items-center gap-3 p-3 hover:bg-[#21326c]/5 transition-colors text-left"
-                      style={isActive ? { background: '#21326c10', borderLeft: '3px solid #21326c' } : {}}
-                    >
-                      <Avatar initials={t.talentInitials} color={t.talentColor} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-[#21326c] truncate">{t.talentName} ↔ {t.clientName}</p>
-                        <p className="text-xs text-[#21326c]/50 truncate">{last?.text || t.projectTitle}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Message thread — read-only */}
-            {activeConvo && (
-            <div className="flex-1 flex flex-col min-w-0 min-h-0">
-              <div className="flex items-center gap-3 p-4 border-b border-[#21326c]/10">
-                <Avatar initials={activeConvo.talentInitials} color={activeConvo.talentColor} size="md" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-[#21326c] text-sm">{activeConvo.talentName} ↔ {activeConvo.clientName}</p>
-                  <p className="text-xs text-[#21326c]/50 truncate">re: {activeConvo.projectTitle}</p>
-                </div>
-                <span className="text-xs px-2 py-1 rounded-full font-medium flex-shrink-0" style={{ background: '#21326c10', color: '#21326c' }}>
-                  <Shield size={10} className="inline mr-1" />Admin Monitor
-                </span>
-              </div>
-              <div className="mx-4 mt-3 px-3 py-2 rounded-xl text-xs text-center" style={{ background: '#fff8e1', color: '#92400e' }}>
-                <Shield size={11} className="inline mr-1" />Read-only admin view — participants are not notified
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {(SEED_CHAT_MESSAGES[activeConvo.projectId] || []).map(msg => (
-                  <div key={msg.id} className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}>
-                    {msg.from === 'them' && (
-                      <Avatar initials={activeConvo.talentInitials} color={activeConvo.talentColor} size="sm" />
-                    )}
-                    <div className={`max-w-sm mx-2 px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                      msg.from === 'me'
-                        ? 'bg-[#21326c] text-white rounded-br-sm'
-                        : 'bg-[#21326c]/10 text-[#21326c] rounded-bl-sm'
-                    }`}>
-                      {msg.text}
-                      <p className={`text-xs mt-1 ${msg.from === 'me' ? 'text-white/50' : 'text-[#21326c]/50'}`}>{msg.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="p-3 border-t border-[#21326c]/10" style={{ background: '#21326c03' }}>
-                <p className="text-xs text-center text-[#21326c]/40">
-                  <Lock size={10} className="inline mr-1" />Admins can view but not send messages in monitored conversations
-                </p>
-              </div>
-            </div>
-            )}
-          </div>
-          )}
-        </div>
+        <ChatPage currentUser={currentUser} />
       )}
 
       {/* ── USERS TAB ── */}
-      {adminTab === 'users' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-[#21326c]">{MOCK_USERS.length} registered users</p>
-          </div>
-          {MOCK_USERS.map(user => (
-            <div key={user.id} className="bg-white rounded-2xl border border-[#21326c]/10 p-4 flex items-center gap-4">
-              <Avatar initials={user.initials} color={user.avatarColor} size="md" />
-              <div className="flex-1">
-                <p className="font-semibold text-[#21326c] text-sm">{user.name}</p>
-                <p className="text-xs text-[#21326c]/60">{user.email}</p>
-              </div>
-              <span
-                className="text-xs font-semibold px-3 py-1 rounded-full capitalize"
-                style={{
-                  background: user.role === 'admin' ? '#21326c15' : user.role === 'student' ? '#3c876215' : '#c4622d15',
-                  color:      user.role === 'admin' ? '#21326c'   : user.role === 'student' ? '#3c8762'   : '#c4622d',
-                }}
-              >
-                {user.role}
-              </span>
-              {user.role === 'student' && (
-                <span className="flex items-center gap-1 text-xs text-[#21326c]/50">
-                  <BadgeCheck size={13} className="text-[#21326c]" /> Verified
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {adminTab === 'users' && <AdminUsersTab />}
     </div>
   );
 }
@@ -5423,6 +5836,15 @@ export default function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
+  // Hydrate session from stored token on first load
+  useEffect(() => {
+    const token = localStorage.getItem('lawnn_token');
+    if (!token) return;
+    authApi.me()
+      .then(({ user }) => handleLogin(user))
+      .catch(() => clearToken()); // token expired or invalid — clear it silently
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Lifted mutable state so edits propagate across all views
   const [talents, setTalents]                   = useState(TALENTS);
   const [newsPosts, setNewsPosts]               = useState(NEWS_POSTS);
@@ -5447,6 +5869,9 @@ export default function App() {
 
   const handleLogin = user => {
     setCurrentUser(user);
+    // Connect socket with the stored JWT
+    const token = localStorage.getItem('lawnn_token');
+    if (token) connectSocket(token);
     // Seed role-specific demo notifications
     setNotifications(SEED_NOTIFICATIONS[user.role] || []);
     // Show onboarding for student and client (once per session)
@@ -5459,6 +5884,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    disconnectSocket();
+    clearToken();
     setCurrentUser(null);
     setView('home');
     setNotifications([]);
@@ -5495,7 +5922,7 @@ export default function App() {
       case 'feed':
         return <FeedPage feedPosts={feedPosts} setFeedPosts={setFeedPosts} pendingFeedPosts={pendingFeedPosts} setPendingFeedPosts={setPendingFeedPosts} currentUser={currentUser} />;
       case 'chat':
-        return <ChatPage currentUser={currentUser} projects={projects} talents={talents} />;
+        return <ChatPage currentUser={currentUser} />;
       case 'about':
         return (
           <AboutPage
@@ -5520,7 +5947,7 @@ export default function App() {
               pendingFeedPosts={pendingFeedPosts} setPendingFeedPosts={setPendingFeedPosts} setFeedPosts={setFeedPosts}
               pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} setJobs={setJobs}
               pendingListings={pendingListings} setPendingListings={setPendingListings} setListings={setListings}
-              projects={projects} talents={talents}
+              projects={projects} talents={talents} currentUser={currentUser}
             />
           : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       default:

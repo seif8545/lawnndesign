@@ -1,0 +1,384 @@
+// Lawnn – Prisma Schema
+// Database: PostgreSQL (hosted on Supabase)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  student
+  client
+  admin
+}
+
+enum Availability {
+  open
+  busy
+  away
+}
+
+enum JobStatus {
+  pending   // awaiting admin approval
+  live      // visible on job board
+  closed    // no longer accepting applications
+  filled    // talent hired
+}
+
+enum ApplicationStatus {
+  pending
+  accepted
+  rejected
+}
+
+enum ProjectStatus {
+  open
+  offer_accepted
+  deposit_paid
+  in_progress
+  delivered
+  completed
+  reviewed
+}
+
+enum ListingStatus {
+  pending
+  live
+  removed
+}
+
+enum FeedPostStatus {
+  pending
+  approved
+  rejected
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String   // bcrypt hash
+  role        Role     @default(student)
+  name        String
+  initials    String   @db.VarChar(4)
+  avatarColor String   @default("#21326c")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  profile          Profile?
+  postedJobs       Job[]           @relation("ClientJobs")
+  applications     Application[]
+  clientProjects   Project[]       @relation("ClientProjects")
+  talentProjects   Project[]       @relation("TalentProjects")
+  reviewsGiven          Review[]        @relation("ReviewsGiven")
+  reviewsReceived       Review[]        @relation("ReviewsReceived")
+  feedPosts             FeedPost[]
+  listings              MarketplaceListing[]
+  clientConversations   Conversation[]  @relation("ClientConversations")
+  talentConversations   Conversation[]  @relation("TalentConversations")
+  sentMessages          Message[]       @relation("SentMessages")
+
+  @@map("users")
+}
+
+// ─── Talent Profile (students only) ──────────────────────────────────────────
+
+model Profile {
+  id           String       @id @default(cuid())
+  userId       String       @unique
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  avatar       String?      // URL to uploaded photo
+  bio          String?      @db.Text
+  university   String?
+  dept         String?
+  year         Int?
+  isGrad       Boolean      @default(false)
+  availability Availability @default(open)
+  hourlyRate   Int          @default(0)   // EGP
+  walletBalance Int         @default(0)   // EGP, in piastres-free integer
+  rating       Float        @default(0)
+  reviewCount  Int          @default(0)
+  completedJobs Int         @default(0)
+
+  // Relations
+  skills        ProfileSkill[]
+  portfolio     PortfolioItem[]
+  education     Education[]
+  experience    Experience[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model ProfileSkill {
+  profileId String
+  skill     String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, skill])
+  @@map("profile_skills")
+}
+
+model PortfolioItem {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  label     String
+  color     String  @default("#21326c")
+  height    String  @default("medium") // short | medium | tall
+  imageUrl  String?
+  pdfUrl    String?
+  pdfName   String?
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@map("portfolio_items")
+}
+
+model Education {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  degree    String
+  school    String
+  years     String
+
+  @@map("education")
+}
+
+model Experience {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  role      String
+  company   String
+  years     String
+
+  @@map("experience")
+}
+
+// ─── Jobs ─────────────────────────────────────────────────────────────────────
+
+model Job {
+  id         String    @id @default(cuid())
+  clientId   String
+  client     User      @relation("ClientJobs", fields: [clientId], references: [id])
+
+  title      String
+  brief      String    @db.Text
+  budget     Int       // EGP
+  budgetType String    @default("Fixed") // Fixed | Hourly
+  category   String    @default("Visuals & Branding")
+  vip        Boolean   @default(false)
+  status     JobStatus @default(pending)
+
+  // Relations
+  skills      JobSkill[]
+  attachments JobAttachment[]
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("jobs")
+}
+
+model JobSkill {
+  jobId String
+  skill String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, skill])
+  @@map("job_skills")
+}
+
+model JobAttachment {
+  id       String @id @default(cuid())
+  jobId    String
+  job      Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  name     String
+  url      String
+  mimeType String
+
+  @@map("job_attachments")
+}
+
+// ─── Applications ─────────────────────────────────────────────────────────────
+
+model Application {
+  id       String            @id @default(cuid())
+  jobId    String
+  job      Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User              @relation(fields: [userId], references: [id])
+  status   ApplicationStatus @default(pending)
+  note     String            @db.Text
+
+  files    ApplicationFile[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([jobId, userId]) // one application per user per job
+  @@map("applications")
+}
+
+model ApplicationFile {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  name          String
+  url           String
+  mimeType      String
+
+  @@map("application_files")
+}
+
+// ─── Projects (Escrow) ────────────────────────────────────────────────────────
+
+model Project {
+  id        String        @id @default(cuid())
+  clientId  String
+  client    User          @relation("ClientProjects", fields: [clientId], references: [id])
+  talentId  String?
+  talent    User?         @relation("TalentProjects", fields: [talentId], references: [id])
+
+  title     String
+  brief     String        @db.Text
+  budget    Int           // EGP total
+  vip       Boolean       @default(false)
+  status    ProjectStatus @default(open)
+
+  // Escrow tracking
+  depositAmount   Int?
+  depositPaidAt   DateTime?
+  deliveryNote    String?   @db.Text
+  deliveredAt     DateTime?
+  clientApproved  Boolean   @default(false)
+  completedAt     DateTime?
+
+  // Relations
+  reviews       Review[]
+  conversations Conversation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("projects")
+}
+
+// ─── Reviews ──────────────────────────────────────────────────────────────────
+
+model Review {
+  id          String  @id @default(cuid())
+  projectId   String
+  project     Project @relation(fields: [projectId], references: [id])
+  authorId    String
+  author      User    @relation("ReviewsGiven", fields: [authorId], references: [id])
+  recipientId String
+  recipient   User    @relation("ReviewsReceived", fields: [recipientId], references: [id])
+
+  rating      Int     // 1–5
+  comment     String  @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, authorId]) // one review per person per project
+  @@map("reviews")
+}
+
+// ─── Feed ─────────────────────────────────────────────────────────────────────
+
+model FeedPost {
+  id       String        @id @default(cuid())
+  userId   String
+  user     User          @relation(fields: [userId], references: [id])
+  content  String        @db.Text
+  imageUrl String?
+  tags     String[]
+  likes    Int           @default(0)
+  status   FeedPostStatus @default(pending)
+
+  createdAt DateTime @default(now())
+
+  @@map("feed_posts")
+}
+
+// ─── Conversations & Messages ─────────────────────────────────────────────────
+
+model Conversation {
+  id        String   @id @default(cuid())
+
+  // The two participants
+  clientId  String
+  client    User     @relation("ClientConversations", fields: [clientId], references: [id])
+  talentId  String
+  talent    User     @relation("TalentConversations", fields: [talentId], references: [id])
+
+  // Optional project link
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+
+  messages  Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, talentId]) // one conversation per pair
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+
+  content        String       @db.Text
+  fileUrl        String?
+  fileName       String?
+  fileMime       String?
+
+  readAt         DateTime?    // null = unread by the other party
+
+  createdAt      DateTime     @default(now())
+
+  @@map("messages")
+}
+
+// ─── Marketplace ──────────────────────────────────────────────────────────────
+
+model MarketplaceListing {
+  id          String        @id @default(cuid())
+  sellerId    String
+  seller      User          @relation(fields: [sellerId], references: [id])
+  title       String
+  description String        @db.Text
+  price       Int           // EGP
+  category    String
+  fileUrl     String?
+  status      ListingStatus @default(pending)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("marketplace_listings")
+}
