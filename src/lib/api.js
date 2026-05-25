@@ -83,6 +83,16 @@ export const projects = {
   review:  (id, body)   => request(`/projects/${id}/reviews`, { method: 'POST', body }),
 }
 
+// ── Feed ──────────────────────────────────────────────────────────────────────
+
+export const feed = {
+  list:       ()             => request('/feed'),
+  create:     (body)         => request('/feed',                 { method: 'POST',   body }),
+  like:       (id)           => request(`/feed/${id}/like`,      { method: 'POST' }),
+  setStatus:  (id, status)   => request(`/feed/${id}/status`,    { method: 'PATCH',  body: { status } }),
+  delete:     (id)           => request(`/feed/${id}`,           { method: 'DELETE' }),
+}
+
 // ── Conversations ─────────────────────────────────────────────────────────────
 
 export const conversations = {

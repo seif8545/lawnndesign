@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, setToken, clearToken } from './lib/api.js';
+import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, projects as projectsApi, feed as feedApi, setToken, clearToken } from './lib/api.js';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket.js';
 import {
   Search, Bell, MessageSquare, Briefcase, Users, Home,
@@ -2755,47 +2755,48 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
 
 // ─── VIEW 5: SOCIAL FEED ─────────────────────────────────────────────────────
 
-function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPosts, currentUser }) {
+function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPosts, currentUser, refreshFeed }) {
   const [newPost, setNewPost]         = useState('');
   const [submitBanner, setSubmitBanner] = useState(false); // pending success banner
 
   const isStudent = currentUser?.role === 'student';
   const isAdmin   = currentUser?.role === 'admin';
 
-  const toggleLike = id => {
+  // Optimistic +1 with backend confirmation. We don't track per-user likes
+  // server-side yet, so toggling is also one-way (only an increment).
+  const toggleLike = async id => {
     setFeedPosts(ps => ps.map(p =>
-      p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p
+      p.id === id ? { ...p, liked: true, likes: p.likes + 1 } : p
     ));
+    try { await feedApi.like(id); }
+    catch (err) { console.warn('[feed] like failed:', err.message); }
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
     if (!newPost.trim()) return;
-    const draft = {
-      id: Date.now(),
-      author:      currentUser?.name || 'Anonymous',
-      authorColor: currentUser?.avatarColor || '#21326c',
-      initials:    currentUser?.initials || '??',
-      university:  currentUser?.profile?.university || '',
-      time:        'Just now',
-      content:     newPost.trim(),
-      tags:        (newPost.match(/#\w+/g) || []),
-      imageColor:  currentUser?.avatarColor || '#21326c',
-      imageLabel:  'Attached media',
-      likes: 0, comments: 0, shares: 0,
-      hasVideo: false, liked: false,
-    };
-    setPendingFeedPosts(ps => [...ps, draft]);
-    setNewPost('');
-    setSubmitBanner(true);
-    setTimeout(() => setSubmitBanner(false), 4000);
+    try {
+      await feedApi.create({
+        content: newPost.trim(),
+        tags:    newPost.match(/#\w+/g) || [],
+      });
+      await refreshFeed?.();   // admin posts appear instantly; others stay pending
+      setNewPost('');
+      setSubmitBanner(true);
+      setTimeout(() => setSubmitBanner(false), 4000);
+    } catch (e) {
+      alert(`Couldn't post: ${e.message}`);
+    }
   };
 
-  const approvePost = post => {
-    setFeedPosts(ps => [{ ...post }, ...ps]);
-    setPendingFeedPosts(ps => ps.filter(p => p.id !== post.id));
+  const approvePost = async post => {
+    try { await feedApi.setStatus(post.id, 'approved'); await refreshFeed?.(); }
+    catch (e) { alert(`Couldn't approve: ${e.message}`); }
   };
 
-  const rejectPost = id => setPendingFeedPosts(ps => ps.filter(p => p.id !== id));
+  const rejectPost = async id => {
+    try { await feedApi.delete(id); await refreshFeed?.(); }
+    catch (e) { alert(`Couldn't reject: ${e.message}`); }
+  };
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
@@ -4758,14 +4759,17 @@ function AdminUsersTab() {
   );
 }
 
-function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser, refreshJobs }) {
+function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser, refreshJobs, refreshFeed }) {
   const [adminTab, setAdminTab] = useState('content');
 
-  const approveFeedPost = post => {
-    setFeedPosts(ps => [post, ...ps]);
-    setPendingFeedPosts(ps => ps.filter(p => p.id !== post.id));
+  const approveFeedPost = async post => {
+    try { await feedApi.setStatus(post.id, 'approved'); await refreshFeed?.(); }
+    catch (e) { alert(`Couldn't approve: ${e.message}`); }
   };
-  const rejectFeedPost = id => setPendingFeedPosts(ps => ps.filter(p => p.id !== id));
+  const rejectFeedPost = async id => {
+    try { await feedApi.delete(id); await refreshFeed?.(); }
+    catch (e) { alert(`Couldn't reject: ${e.message}`); }
+  };
 
   const approveJob = async job => {
     try {
@@ -4993,7 +4997,7 @@ function EscrowStepper({ status }) {
   );
 }
 
-function ProjectsPage({ projects, setProjects, currentUser, setView, setSelectedTalent, talents, addNotification }) {
+function ProjectsPage({ projects, setProjects, currentUser, setView, setSelectedTalent, talents, addNotification, refreshProjects }) {
   const [selected, setSelected] = useState(null);
   const [showPostModal, setShowPostModal] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 0, text: '' });
@@ -5008,80 +5012,56 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
   // Refresh selected when projects update
   const proj = selected ? projects.find(p => p.id === selected.id) : null;
 
-  const updateProject = (id, patch) => {
-    setProjects(ps => ps.map(p => p.id === id ? { ...p, ...patch } : p));
-    setSelected(p => p ? { ...p, ...patch } : null);
-  };
-
-  // Accept an application
-  const acceptApp = (projId, appId) => {
-    const app = proj.applications.find(a => a.id === appId);
-    if (!app) return; // Guard against missing application
-    updateProject(projId, {
-      status: 'offer_accepted',
-      acceptedApplicationId: appId,
-      acceptedTalentId: app.talentId,
-    });
-    addNotification({
-      icon: 'bag', title: `Offer accepted — ${proj.title}`,
-      body: `You accepted ${app.talentName}'s application. Pay the 50% deposit to get started.`,
-      time: 'Just now',
-    });
-  };
-
-  // Pay deposit
-  const payDeposit = (projId) => {
-    const deposit = Math.round(proj.budget * 0.5);
-    updateProject(projId, { status: 'deposit_paid', depositAmount: deposit, depositPaidAt: 'Just now' });
-    addNotification({
-      icon: 'money', title: 'Deposit paid!',
-      body: `${deposit.toLocaleString()} EGP held in escrow. ${proj.acceptedApp?.talentName || 'The student'} can now start working.`,
-      time: 'Just now', iconBg: '#dcfce7',
-    });
-    // Notify talent (simulated — in real app this hits their notification feed)
-    const acceptedApp = proj.applications.find(a => a.id === proj.acceptedApplicationId);
-    if (acceptedApp) {
+  // Accept an offer — currently unreachable through real data because the
+  // applications array is empty (see mapApiProject). Job→Project bridge TODO.
+  const acceptApp = async (projId, appId) => {
+    const app = proj?.applications?.find(a => a.id === appId);
+    if (!app) return;
+    try {
+      await projectsApi.advance(projId, { talentId: app.talentId });
+      await refreshProjects?.();
       addNotification({
-        icon: 'money', title: `Deposit received for "${proj.title}"`,
-        body: `${deposit.toLocaleString()} EGP is now held in escrow. You can start working!`,
+        icon: 'bag', title: `Offer accepted — ${proj.title}`,
+        body: `You accepted ${app.talentName}'s application. Pay the 50% deposit to get started.`,
+        time: 'Just now',
+      });
+    } catch (e) { alert(`Couldn't accept: ${e.message}`); }
+  };
+
+  const payDeposit = async (projId) => {
+    const deposit = Math.round(proj.budget * 0.5);
+    try {
+      await projectsApi.advance(projId, {});
+      await refreshProjects?.();
+      addNotification({
+        icon: 'money', title: 'Deposit paid!',
+        body: `${deposit.toLocaleString()} EGP held in escrow.`,
         time: 'Just now', iconBg: '#dcfce7',
       });
-    }
+    } catch (e) { alert(`Couldn't pay deposit: ${e.message}`); }
   };
 
-  // Approve delivery & release full payment
-  const approveDelivery = (projId) => {
+  const approveDelivery = async (projId) => {
     const remaining = proj.budget - (proj.depositAmount || 0);
-    updateProject(projId, {
-      status: 'completed',
-      clientApproved: true,
-      remainingPaidAt: 'Just now',
-      completedAt: 'Just now',
-    });
-    // Add wallet balance to the talent
-    if (proj.acceptedTalentId) {
-      const talent = talents.find(t => t.id === proj.acceptedTalentId);
-      if (talent) {
-        // In a real app this calls an API. Here we update talents state.
-        // We call onUpdateTalent via addNotification pattern if we pass setTalents
-        addNotification({
-          icon: 'money', title: `${remaining.toLocaleString()} EGP released to talent`,
-          body: `Full payment for "${proj.title}" has been released. Total paid: ${proj.budget.toLocaleString()} EGP.`,
-          time: 'Just now', iconBg: '#dcfce7',
-        });
-      }
-    }
+    try {
+      await projectsApi.advance(projId, {});
+      await refreshProjects?.();
+      addNotification({
+        icon: 'money', title: `${remaining.toLocaleString()} EGP released to talent`,
+        body: `Full payment for "${proj.title}" has been released.`,
+        time: 'Just now', iconBg: '#dcfce7',
+      });
+    } catch (e) { alert(`Couldn't approve: ${e.message}`); }
   };
 
-  // Submit client review
-  const submitReview = (projId) => {
+  const submitReview = async (projId) => {
     if (!reviewForm.rating) return;
-    updateProject(projId, {
-      status: 'reviewed',
-      clientReview: { rating: reviewForm.rating, text: reviewForm.text },
-    });
-    setReviewSubmitted(true);
-    setReviewForm({ rating: 0, text: '' });
+    try {
+      await projectsApi.review(projId, { rating: reviewForm.rating, comment: reviewForm.text });
+      await refreshProjects?.();
+      setReviewSubmitted(true);
+      setReviewForm({ rating: 0, text: '' });
+    } catch (e) { alert(`Couldn't submit review: ${e.message}`); }
   };
 
   return (
@@ -5466,10 +5446,21 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
       <Modal open={showPostModal} onClose={() => setShowPostModal(false)} title="Post a New Project" wide>
         <NewProjectForm
           currentUser={currentUser}
-          onSubmit={(project) => {
-            setProjects(ps => [{ ...project, clientId: currentUser.id, clientName: currentUser.name, status: 'open', applications: [], acceptedApplicationId: null, acceptedTalentId: null, depositAmount: null, depositPaidAt: null, deliveryNote: null, clientApproved: false, clientReview: null, talentReview: null, completedAt: null, postedAt: 'Just now' }, ...ps]);
-            setShowPostModal(false);
-            addNotification({ icon: 'bag', title: 'Project posted!', body: 'Students can now apply to your project.', time: 'Just now' });
+          onSubmit={async (project) => {
+            try {
+              await projectsApi.create({
+                title:  project.title,
+                brief:  project.brief,
+                budget: project.budget,
+                vip:    project.vip,
+                // No talentId — project starts in 'open' until a talent is hired.
+              });
+              await refreshProjects?.();
+              setShowPostModal(false);
+              addNotification({ icon: 'bag', title: 'Project posted!', body: 'Project is now open. Hire a student to begin.', time: 'Just now' });
+            } catch (e) {
+              alert(`Couldn't post project: ${e.message}`);
+            }
           }}
         />
       </Modal>
@@ -5983,6 +5974,63 @@ function mapApiJob(j) {
   };
 }
 
+function mapApiFeedPost(p) {
+  return {
+    id:          p.id,
+    author:      p.author,
+    authorId:    p.authorId,
+    authorColor: p.avatarColor,
+    initials:    p.initials,
+    university:  p.university,
+    time:        formatRelativeTime(p.createdAt),
+    content:     p.content,
+    tags:        p.tags || [],
+    imageUrl:    p.imageUrl || null,
+    imageColor:  p.avatarColor,            // visual fallback for the image block
+    imageLabel:  p.imageUrl ? 'Attached media' : '',
+    likes:       p.likes || 0,
+    comments:    0,                        // not modelled yet
+    shares:      0,
+    hasVideo:    false,
+    liked:       false,                    // no per-user like tracking yet
+    status:      p.status,
+  };
+}
+
+function mapApiProject(p) {
+  // The project page expects an `applications` array for the 'open' status
+  // (where the client picks an offer). The Project model in the DB doesn't
+  // model applications — those live under Job — so we surface an empty array
+  // for now. A "job → project" bridge is a future task.
+  const clientReview = p.reviews?.find(r => r.authorId === p.clientId);
+  const talentReview = p.reviews?.find(r => r.authorId === p.talentId);
+  return {
+    id:                     p.id,
+    title:                  p.title,
+    brief:                  p.brief,
+    budget:                 p.budget,
+    vip:                    Boolean(p.vip),
+    status:                 p.status,
+    clientId:               p.clientId,
+    clientName:             p.client?.name || '',
+    acceptedTalentId:       p.talentId,
+    acceptedTalentName:     p.talent?.name,
+    acceptedTalentInitials: p.talent?.initials,
+    acceptedTalentColor:    p.talent?.avatarColor,
+    postedAt:               formatRelativeTime(p.createdAt),
+    depositAmount:          p.depositAmount,
+    depositPaidAt:          p.depositPaidAt ? formatRelativeTime(p.depositPaidAt) : null,
+    deliveryNote:           p.deliveryNote,
+    deliveredAt:            p.deliveredAt ? formatRelativeTime(p.deliveredAt) : null,
+    clientApproved:         Boolean(p.clientApproved),
+    completedAt:            p.completedAt ? formatRelativeTime(p.completedAt) : null,
+    clientReview: clientReview ? { rating: clientReview.rating, text: clientReview.comment } : null,
+    talentReview: talentReview ? { rating: talentReview.rating, text: talentReview.comment } : null,
+    applications: [],          // see comment above
+    acceptedApplicationId: p.talentId ? `t-${p.talentId}` : null,
+  };
+}
+
 function talentToApiBody(t) {
   return {
     bio:          t.bio,
@@ -6055,14 +6103,36 @@ export default function App() {
       .catch(err => console.warn('[jobs] failed to load:', err.message));
   }, []);
   useEffect(() => { refreshJobs(); }, [refreshJobs, currentUser]);
+
+  // Reusable projects refresher (auth-required endpoint — only runs when logged in).
+  const refreshProjects = useCallback(() => {
+    if (!currentUser) { setProjects([]); return Promise.resolve(); }
+    return projectsApi.list()
+      .then(list => setProjects(list.map(mapApiProject)))
+      .catch(err => console.warn('[projects] failed to load:', err.message));
+  }, [currentUser]);
+  useEffect(() => { refreshProjects(); }, [refreshProjects]);
+
+  // Reusable feed refresher. Admin (when logged in) also gets pending posts;
+  // split here so AdminPage's moderation queue picks them up.
+  const refreshFeed = useCallback(() => {
+    return feedApi.list()
+      .then(list => {
+        const mapped = list.map(mapApiFeedPost);
+        setFeedPosts(mapped.filter(p => p.status === 'approved'));
+        setPendingFeedPosts(mapped.filter(p => p.status === 'pending'));
+      })
+      .catch(err => console.warn('[feed] failed to load:', err.message));
+  }, []);
+  useEffect(() => { refreshFeed(); }, [refreshFeed, currentUser]);
   const [newsPosts, setNewsPosts]               = useState(NEWS_POSTS);
-  const [feedPosts, setFeedPosts]                       = useState(FEED_POSTS);
+  const [feedPosts, setFeedPosts]                       = useState([]);
   const [pendingFeedPosts, setPendingFeedPosts]         = useState([]);
   const [jobs, setJobs]                                 = useState([]);
   const [pendingJobs, setPendingJobs]                   = useState([]);
   const [listings, setListings]                         = useState(MARKETPLACE_LISTINGS);
   const [pendingListings, setPendingListings]           = useState([]);
-  const [projects, setProjects]                         = useState(MOCK_PROJECTS);
+  const [projects, setProjects]                         = useState([]);
   const [notifications, setNotifications]               = useState([]);
   const [aboutContent, setAboutContent] = useState({
     para1: "Lawnn was born from a simple observation: Egypt's art and design faculties produce world-class talent, but that talent rarely gets the visibility or opportunity it deserves.",
@@ -6135,7 +6205,7 @@ export default function App() {
           : <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       }
       case 'feed':
-        return <FeedPage feedPosts={feedPosts} setFeedPosts={setFeedPosts} pendingFeedPosts={pendingFeedPosts} setPendingFeedPosts={setPendingFeedPosts} currentUser={currentUser} />;
+        return <FeedPage feedPosts={feedPosts} setFeedPosts={setFeedPosts} pendingFeedPosts={pendingFeedPosts} setPendingFeedPosts={setPendingFeedPosts} currentUser={currentUser} refreshFeed={refreshFeed} />;
       case 'chat':
         return <ChatPage currentUser={currentUser} />;
       case 'about':
@@ -6154,7 +6224,7 @@ export default function App() {
         return <MarketplacePage listings={listings} setListings={setListings} pendingListings={pendingListings} setPendingListings={setPendingListings} currentUser={currentUser} />;
       case 'projects':
         return currentUser?.role === 'client'
-          ? <ProjectsPage projects={projects} setProjects={setProjects} currentUser={currentUser} setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} addNotification={addNotification} />
+          ? <ProjectsPage projects={projects} setProjects={setProjects} currentUser={currentUser} setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} addNotification={addNotification} refreshProjects={refreshProjects} />
           : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       case 'admin':
         return currentUser?.role === 'admin'
@@ -6163,7 +6233,7 @@ export default function App() {
               pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} setJobs={setJobs}
               pendingListings={pendingListings} setPendingListings={setPendingListings} setListings={setListings}
               projects={projects} talents={talents} currentUser={currentUser}
-              refreshJobs={refreshJobs}
+              refreshJobs={refreshJobs} refreshFeed={refreshFeed}
             />
           : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       default:
