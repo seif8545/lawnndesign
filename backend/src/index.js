@@ -12,6 +12,7 @@ import projectRoutes       from './routes/projects.js'
 import adminRoutes         from './routes/admin.js'
 import conversationRoutes  from './routes/conversations.js'
 import feedRoutes          from './routes/feed.js'
+import marketplaceRoutes   from './routes/marketplace.js'
 import { initSocket }      from './socket.js'
 
 const app    = express()
@@ -61,6 +62,7 @@ app.use('/projects',      projectRoutes)
 app.use('/admin',         adminRoutes)
 app.use('/conversations', conversationRoutes)
 app.use('/feed',          feedRoutes)
+app.use('/marketplace',   marketplaceRoutes)
 
 // ── Health check ───────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }))

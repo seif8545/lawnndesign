@@ -149,6 +149,54 @@ router.post('/:id/applications', requireAuth, requireRole('student'), async (req
   return res.status(201).json(application)
 })
 
+// ── POST /jobs/:jobId/applications/:appId/accept ─────────────────────────────
+// Hire a talent: create a Project from the accepted application, mark the
+// job as filled, and update application statuses. Wrapped in a transaction.
+router.post('/:jobId/applications/:appId/accept', requireAuth, async (req, res) => {
+  const { jobId, appId } = req.params
+
+  const [job, application] = await Promise.all([
+    prisma.job.findUnique({ where: { id: jobId } }),
+    prisma.application.findUnique({ where: { id: appId } }),
+  ])
+  if (!job) return res.status(404).json({ error: 'Job not found' })
+  if (!application || application.jobId !== jobId) {
+    return res.status(404).json({ error: 'Application not found for this job' })
+  }
+  if (req.user.role !== 'admin' && job.clientId !== req.user.id) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+
+  const project = await prisma.$transaction(async tx => {
+    // 1. Create project linked to the talent
+    const newProject = await tx.project.create({
+      data: {
+        clientId: job.clientId,
+        talentId: application.userId,
+        title:    job.title,
+        brief:    job.brief,
+        budget:   job.budget,
+        vip:      job.vip,
+        status:   'offer_accepted',
+      },
+    })
+    // 2. Mark this application accepted; reject the rest
+    await tx.application.update({
+      where: { id: application.id },
+      data:  { status: 'accepted' },
+    })
+    await tx.application.updateMany({
+      where: { jobId, id: { not: application.id }, status: 'pending' },
+      data:  { status: 'rejected' },
+    })
+    // 3. Mark the job filled
+    await tx.job.update({ where: { id: jobId }, data: { status: 'filled' } })
+    return newProject
+  })
+
+  res.status(201).json(project)
+})
+
 // ── GET /jobs/:id/applications ────────────────────────────────────────────────
 // Job owner (client) or admin can see all applications
 router.get('/:id/applications', requireAuth, async (req, res) => {

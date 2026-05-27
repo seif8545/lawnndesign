@@ -61,6 +61,7 @@ export const jobs = {
   delete:        (id)             => request(`/jobs/${id}`,                 { method: 'DELETE' }),
   apply:         (id, body)       => request(`/jobs/${id}/applications`,    { method: 'POST',   body }),
   applications:  (id)             => request(`/jobs/${id}/applications`),
+  acceptApplication: (jobId, appId) => request(`/jobs/${jobId}/applications/${appId}/accept`, { method: 'POST' }),
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -91,6 +92,16 @@ export const feed = {
   like:       (id)           => request(`/feed/${id}/like`,      { method: 'POST' }),
   setStatus:  (id, status)   => request(`/feed/${id}/status`,    { method: 'PATCH',  body: { status } }),
   delete:     (id)           => request(`/feed/${id}`,           { method: 'DELETE' }),
+}
+
+// ── Marketplace ───────────────────────────────────────────────────────────────
+
+export const marketplace = {
+  list:       ()             => request('/marketplace'),
+  create:     (body)         => request('/marketplace',                   { method: 'POST',   body }),
+  update:     (id, body)     => request(`/marketplace/${id}`,             { method: 'PATCH',  body }),
+  setStatus:  (id, status)   => request(`/marketplace/${id}/status`,      { method: 'PATCH',  body: { status } }),
+  delete:     (id)           => request(`/marketplace/${id}`,             { method: 'DELETE' }),
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────
