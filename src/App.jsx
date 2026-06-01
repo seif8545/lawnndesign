@@ -1,5 +1,27 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, projects as projectsApi, feed as feedApi, marketplace as marketplaceApi, uploadFile, setToken, clearToken } from './lib/api.js';
+
+// ─── useBusy ────────────────────────────────────────────────────────────────
+// Submit-button guard against spam-clicks. Two-layer:
+//   - `lock` (useRef) blocks re-entry synchronously, even before React commits.
+//     Critical on Render's free tier where a cold-start POST can hang ~30s
+//     and the user fires 5 clicks during the wait.
+//   - `busy` (useState) re-renders the button for "Posting…" / disabled UI.
+// Usage:
+//   const [busy, run] = useBusy()
+//   <button disabled={busy} onClick={() => run(async () => { await api.create(...) })}>
+function useBusy() {
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  const run = useCallback(async fn => {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    try { return await fn(); }
+    finally { lock.current = false; setBusy(false); }
+  }, []);
+  return [busy, run];
+}
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket.js';
 import {
   Search, Bell, MessageSquare, Briefcase, Users, Home,
@@ -1659,6 +1681,9 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
   const [applyForm, setApplyForm] = useState({ note: '', samples: [], uploadedFiles: [] });
   const [filterCat, setFilterCat] = useState('all');
   const [postSuccess, setPostSuccess] = useState(false);
+  const [posting,  runPost]   = useBusy();  // guards duplicate job-post submits
+  const [applying, runApply]  = useBusy();  // guards duplicate apply-to-job submits
+  const [hiring,   runHire]   = useBusy();  // guards duplicate accept-application clicks
   const [newSkill, setNewSkill] = useState('');
 
   // Job-applications review (job owner / admin)
@@ -1753,7 +1778,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
   };
   const removeJobAttachment = id => setPostForm(f => ({ ...f, attachments: f.attachments.filter(a => a.id !== id) }));
 
-  const handlePost = async () => {
+  const handlePost = () => runPost(async () => {
     try {
       await jobsApi.create({
         title:      postForm.title,
@@ -1781,7 +1806,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
     } catch (e) {
       alert(`Couldn't post job: ${e.message}`);
     }
-  };
+  });
 
   const filteredJobs = filterCat === 'all' ? jobs : jobs.filter(j => j.category.toLowerCase().includes(filterCat));
 
@@ -2010,11 +2035,15 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
 
             <button
               onClick={handlePost}
-              disabled={!postForm.title || !postForm.brief || !postForm.budget}
+              disabled={posting || !postForm.title || !postForm.brief || !postForm.budget}
               className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: '#ff9044' }}
             >
-              {postForm.vip ? `Post Job — ${(parseInt(postForm.budget || 0) + 200).toLocaleString()} EGP total` : 'Post Job'}
+              {posting
+                ? 'Posting…'
+                : postForm.vip
+                  ? `Post Job — ${(parseInt(postForm.budget || 0) + 200).toLocaleString()} EGP total`
+                  : 'Post Job'}
             </button>
           </div>
         )}
