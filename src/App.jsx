@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, projects as projectsApi, feed as feedApi, marketplace as marketplaceApi, setToken, clearToken } from './lib/api.js';
+import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, projects as projectsApi, feed as feedApi, marketplace as marketplaceApi, uploadFile, setToken, clearToken } from './lib/api.js';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket.js';
 import {
   Search, Bell, MessageSquare, Briefcase, Users, Home,
@@ -1683,16 +1683,26 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
     }));
   };
 
-  const handleApplyFileAdd = files => {
+  const handleApplyFileAdd = async files => {
     const remaining = 3 - applyForm.uploadedFiles.length;
     if (remaining <= 0) return;
-    const newFiles = Array.from(files).slice(0, remaining).map(file => ({
-      id: `uf-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      name: file.name,
-      url: URL.createObjectURL(file),
-      type: file.type,
-    }));
-    setApplyForm(f => ({ ...f, uploadedFiles: [...f.uploadedFiles, ...newFiles] }));
+    const picked = Array.from(files).slice(0, remaining);
+    try {
+      const uploaded = await Promise.all(
+        picked.map(async file => {
+          const r = await uploadFile(file, 'application');
+          return {
+            id:   `uf-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            name: r.name,
+            url:  r.url,         // storage path (private bucket); backend signs at read time
+            type: r.mimeType,
+          };
+        })
+      );
+      setApplyForm(f => ({ ...f, uploadedFiles: [...f.uploadedFiles, ...uploaded] }));
+    } catch (e) {
+      alert(`Upload failed: ${e.message}`);
+    }
   };
   const removeApplyFile = id => setApplyForm(f => ({ ...f, uploadedFiles: f.uploadedFiles.filter(uf => uf.id !== id) }));
 
@@ -1703,14 +1713,23 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
   };
   const removeSkill = s => setPostForm(f => ({ ...f, skills: f.skills.filter(sk => sk !== s) }));
 
-  const handleJobAttachmentAdd = files => {
-    const newFiles = Array.from(files).map(file => ({
-      id: `att-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      name: file.name,
-      url: URL.createObjectURL(file),
-      type: file.type,
-    }));
-    setPostForm(f => ({ ...f, attachments: [...f.attachments, ...newFiles] }));
+  const handleJobAttachmentAdd = async files => {
+    try {
+      const uploaded = await Promise.all(
+        Array.from(files).map(async file => {
+          const r = await uploadFile(file, 'job-attachment');
+          return {
+            id:   `att-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            name: r.name,
+            url:  r.url,         // public bucket URL — usable directly in <img>/<a>
+            type: r.mimeType,
+          };
+        })
+      );
+      setPostForm(f => ({ ...f, attachments: [...f.attachments, ...uploaded] }));
+    } catch (e) {
+      alert(`Upload failed: ${e.message}`);
+    }
   };
   const removeJobAttachment = id => setPostForm(f => ({ ...f, attachments: f.attachments.filter(a => a.id !== id) }));
 
@@ -1724,9 +1743,8 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
         category:   'Visuals & Branding',
         vip:        Boolean(postForm.vip),
         skills:     postForm.skills,
-        // NOTE: attachments use local blob: URLs from the file picker. Until
-        // file uploads to Supabase Storage are wired up, we send name+type
-        // only and the URL will be unusable to other users.
+        // Attachments are uploaded to Supabase Storage by handleJobAttachmentAdd
+        // before reaching here, so `url` is the persistent public URL.
         attachments: postForm.attachments.map(a => ({
           name: a.name, url: a.url, mimeType: a.type,
         })),
@@ -2346,22 +2364,27 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
     setShowEditModal(true);
   };
 
-  // Image / PDF upload for portfolio items
-  const handlePortfolioImageUpload = (itemId, file) => {
+  // Image / PDF upload for portfolio items — uploads to Supabase Storage so the
+  // URL survives reloads and is visible to other users.
+  const handlePortfolioImageUpload = async (itemId, file) => {
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    const isPdf = file.type === 'application/pdf';
-    setEditDraft(d => ({
-      ...d,
-      portfolio: d.portfolio.map(p =>
-        p.id === itemId
-          ? { ...p,
-              imageUrl: isPdf ? null : url,
-              pdfUrl:   isPdf ? url  : null,
-              pdfName:  isPdf ? file.name : null }
-          : p
-      ),
-    }));
+    try {
+      const r = await uploadFile(file, 'portfolio');
+      const isPdf = file.type === 'application/pdf';
+      setEditDraft(d => ({
+        ...d,
+        portfolio: d.portfolio.map(p =>
+          p.id === itemId
+            ? { ...p,
+                imageUrl: isPdf ? null  : r.url,
+                pdfUrl:   isPdf ? r.url : null,
+                pdfName:  isPdf ? r.name : null }
+            : p
+        ),
+      }));
+    } catch (e) {
+      alert(`Upload failed: ${e.message}`);
+    }
   };
 
   const saveEdit = () => {
@@ -2608,9 +2631,15 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={e => {
+                  onChange={async e => {
                     const file = e.target.files[0];
-                    if (file) setEditDraft(d => ({ ...d, avatar: URL.createObjectURL(file) }));
+                    if (!file) return;
+                    try {
+                      const r = await uploadFile(file, 'avatar');
+                      setEditDraft(d => ({ ...d, avatar: r.url }));
+                    } catch (err) {
+                      alert(`Avatar upload failed: ${err.message}`);
+                    }
                   }}
                 />
               </label>

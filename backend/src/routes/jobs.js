@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
+import { signPrivateRead } from './uploads.js'
 
 const router = Router()
 
@@ -216,7 +217,26 @@ router.get('/:id/applications', requireAuth, async (req, res) => {
     orderBy: { createdAt: 'desc' },
   })
 
-  return res.json(applications)
+  // Application files live in a private bucket — `file.url` stores the storage
+  // path. Swap each one for a short-lived signed URL so the (authorised) caller
+  // can render it. If signing fails the entry is returned with url=null and the
+  // client renders a "file unavailable" state.
+  const signed = await Promise.all(
+    applications.map(async a => ({
+      ...a,
+      files: await Promise.all(
+        a.files.map(async f => {
+          // Heuristic: a stored path looks like "application/<userId>/<uuid>.ext"
+          // (no scheme). Anything starting with http(s):// is a legacy/public URL
+          // and we pass it through untouched.
+          if (!f.url || /^https?:\/\//i.test(f.url)) return f
+          return { ...f, url: await signPrivateRead(f.url) }
+        })
+      ),
+    }))
+  )
+
+  return res.json(signed)
 })
 
 export default router

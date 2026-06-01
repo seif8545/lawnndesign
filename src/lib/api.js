@@ -104,6 +104,46 @@ export const marketplace = {
   delete:     (id)           => request(`/marketplace/${id}`,             { method: 'DELETE' }),
 }
 
+// ── Uploads ───────────────────────────────────────────────────────────────────
+// Two-step upload: ask backend for a signed PUT URL, then PUT the file directly
+// to Supabase Storage. Returns the URL/path to persist via the normal create/
+// update endpoints (e.g. profile PATCH, jobs POST).
+//
+// Returns: { url, path, isPrivate, mimeType, name, size }
+//   - `url`: for public files, a CDN-cached publicUrl; for private files, the
+//     storage path (backend swaps for a signed read URL when serving the parent
+//     resource, e.g. job applications).
+//   - `path`: always the storage path. Keep around if you ever need re-signing.
+export async function uploadFile(file, kind) {
+  if (!file) throw new Error('No file provided')
+
+  // 1. Ask backend for a signed upload URL.
+  const sign = await request('/uploads/sign', {
+    method: 'POST',
+    body: { kind, contentType: file.type, size: file.size },
+  })
+
+  // 2. PUT the bytes straight to Supabase Storage.
+  const put = await fetch(sign.signedUrl, {
+    method:  'PUT',
+    headers: { 'Content-Type': file.type, 'x-upsert': 'false' },
+    body:    file,
+  })
+  if (!put.ok) {
+    const text = await put.text().catch(() => '')
+    throw new Error(`Upload failed (${put.status}): ${text || put.statusText}`)
+  }
+
+  return {
+    url:       sign.isPrivate ? sign.path : sign.publicUrl,
+    path:      sign.path,
+    isPrivate: sign.isPrivate,
+    mimeType:  file.type,
+    name:      file.name,
+    size:      file.size,
+  }
+}
+
 // ── Conversations ─────────────────────────────────────────────────────────────
 
 export const conversations = {
