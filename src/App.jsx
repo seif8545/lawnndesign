@@ -6357,8 +6357,11 @@ export default function App() {
     if (token) connectSocket(token);
     // Seed role-specific demo notifications
     setNotifications(SEED_NOTIFICATIONS[user.role] || []);
-    // Show onboarding for student and client (once per session)
-    if (user.role === 'student' || user.role === 'client') {
+    // Show onboarding only if this user hasn't dismissed it on this device.
+    // Keyed per-user so multi-account browsers don't share state. Set on first
+    // dismissal in the onDone handler below.
+    const dismissed = localStorage.getItem(`lawnn_onboarding_done_${user.id}`);
+    if (!dismissed && (user.role === 'student' || user.role === 'client')) {
       setShowOnboarding(true);
     }
     if (user.role === 'student') setView('feed');
@@ -6479,7 +6482,10 @@ export default function App() {
           currentUser={currentUser}
           talents={talents}
           onUpdateTalent={handleUpdateTalent}
-          onDone={() => setShowOnboarding(false)}
+          onDone={() => {
+            localStorage.setItem(`lawnn_onboarding_done_${currentUser.id}`, '1');
+            setShowOnboarding(false);
+          }}
         />
       )}
 
