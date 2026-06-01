@@ -1040,11 +1040,31 @@ function CategoryPill({ label, icon: Icon, active, onClick }) {
 
 function Modal({ open, onClose, title, children, wide = false }) {
   if (!open) return null;
+  // Close only when BOTH mousedown and mouseup land on the backdrop. Using
+  // onClick fires whenever press + release share a common ancestor — so a
+  // drag-select that starts in an input and ends over the dimmed area would
+  // close the modal. Tracking mousedown origin avoids that.
+  const handleMouseDown = e => {
+    if (e.target === e.currentTarget) e.currentTarget.dataset.pressed = '1';
+    else delete e.currentTarget.dataset.pressed;
+  };
+  const handleMouseUp = e => {
+    if (e.target === e.currentTarget && e.currentTarget.dataset.pressed === '1') {
+      delete e.currentTarget.dataset.pressed;
+      onClose();
+    } else {
+      delete e.currentTarget.dataset.pressed;
+    }
+  };
   return (
-    <div className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:px-4 sm:pb-4 sm:pt-20 modal-backdrop" style={{ zIndex: 1000 }} onClick={onClose}>
+    <div
+      className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:px-4 sm:pb-4 sm:pt-20 modal-backdrop"
+      style={{ zIndex: 1000 }}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+    >
       <div
         className={`bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'} max-h-[92dvh] sm:max-h-[85vh] overflow-y-auto animate-fade-in`}
-        onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#21326c]/20">
           <h2 className="text-base font-bold text-[#21326c]">{title}</h2>
