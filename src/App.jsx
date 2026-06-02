@@ -1681,9 +1681,10 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
   const [applyForm, setApplyForm] = useState({ note: '', samples: [], uploadedFiles: [] });
   const [filterCat, setFilterCat] = useState('all');
   const [postSuccess, setPostSuccess] = useState(false);
-  const [posting,  runPost]   = useBusy();  // guards duplicate job-post submits
-  const [applying, runApply]  = useBusy();  // guards duplicate apply-to-job submits
-  const [hiring,   runHire]   = useBusy();  // guards duplicate accept-application clicks
+  const [posting,   runPost]    = useBusy();  // guards duplicate job-post submits
+  const [applying,  runApply]   = useBusy();  // guards duplicate apply-to-job submits
+  const [hiring,    runHire]    = useBusy();  // guards duplicate accept-application clicks
+  const [rejecting, runReject]  = useBusy();  // guards duplicate reject-application clicks
   const [newSkill, setNewSkill] = useState('');
 
   // Job-applications review (job owner / admin)
@@ -1709,6 +1710,19 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
       setReviewingJob(null);
       alert('Hired! The project is now in your Projects tab.');
     } catch (e) { alert(`Couldn't hire: ${e.message}`); }
+  });
+
+  // Reject a single pending application. Required before the client can delete
+  // the job if there are pending applications outstanding.
+  const rejectApplication = (job, app) => runReject(async () => {
+    if (!confirm(`Reject ${app.user.name}'s application?`)) return;
+    try {
+      await jobsApi.rejectApplication(job.id, app.id);
+      // Reflect locally so the modal updates without a full refetch.
+      setReviewApps(apps => apps.map(a => a.id === app.id ? { ...a, status: 'rejected' } : a));
+      // Refresh job list so applicant counts stay accurate.
+      await refreshJobs?.();
+    } catch (e) { alert(`Couldn't reject: ${e.message}`); }
   });
 
   const PORTFOLIO_SAMPLES = [
@@ -1886,7 +1900,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                     <Users size={12} /> Review Applications ({job.applicants || 0})
                   </button>
                 )}
-                {currentUser?.role === 'admin' && (
+                {(job.clientId === currentUser?.id || currentUser?.role === 'admin') && (
                   <button
                     onClick={async e => {
                       e.stopPropagation();
@@ -1895,7 +1909,9 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                         await jobsApi.delete(job.id);
                         setJobs(js => js.filter(j => j.id !== job.id));
                       } catch (err) {
-                        alert(`Couldn't delete: ${err.message}`);
+                        // Backend returns a clear message for owner-side guardrails
+                        // (pending apps, filled job). Surface it verbatim.
+                        alert(err.message);
                       }
                     }}
                     className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
@@ -2199,14 +2215,26 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
               </div>
               <p className="text-sm text-[#21326c] italic mb-3">"{app.note}"</p>
               {app.status === 'pending' && (
-                <button
-                  onClick={() => acceptApplication(reviewingJob, app)}
-                  disabled={hiring}
-                  className="px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: '#21326c' }}
-                >
-                  <CheckCircle size={14} className="inline mr-1" /> {hiring ? 'Hiring…' : `Hire ${app.user.name.split(' ')[0]}`}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => acceptApplication(reviewingJob, app)}
+                    disabled={hiring || rejecting}
+                    className="px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: '#21326c' }}
+                  >
+                    <CheckCircle size={14} className="inline mr-1" /> {hiring ? 'Hiring…' : `Hire ${app.user.name.split(' ')[0]}`}
+                  </button>
+                  <button
+                    onClick={() => rejectApplication(reviewingJob, app)}
+                    disabled={hiring || rejecting}
+                    className="px-4 py-2 rounded-full text-sm font-semibold border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {rejecting ? 'Rejecting…' : 'Reject'}
+                  </button>
+                </div>
+              )}
+              {app.status === 'rejected' && (
+                <span className="text-xs font-semibold text-red-500">Rejected</span>
               )}
             </div>
           ))}

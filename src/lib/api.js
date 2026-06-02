@@ -62,6 +62,7 @@ export const jobs = {
   apply:         (id, body)       => request(`/jobs/${id}/applications`,    { method: 'POST',   body }),
   applications:  (id)             => request(`/jobs/${id}/applications`),
   acceptApplication: (jobId, appId) => request(`/jobs/${jobId}/applications/${appId}/accept`, { method: 'POST' }),
+  rejectApplication: (jobId, appId) => request(`/jobs/${jobId}/applications/${appId}/reject`, { method: 'POST' }),
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

@@ -98,17 +98,64 @@ router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) 
 })
 
 // ── DELETE /jobs/:id ──────────────────────────────────────────────────────────
-// Admin or the job's own client
+// Admin: unrestricted.
+// Client (job owner): blocked if the job already has someone hired (status =
+// 'filled'; a Project exists) or any application is still pending. Rejected
+// applications don't block — they're terminal records. The client must reject
+// pending apps first (see POST /:jobId/applications/:appId/reject below).
 router.delete('/:id', requireAuth, async (req, res) => {
-  const job = await prisma.job.findUnique({ where: { id: req.params.id } })
+  const job = await prisma.job.findUnique({
+    where:   { id: req.params.id },
+    include: { applications: { select: { status: true } } },
+  })
   if (!job) return res.status(404).json({ error: 'Job not found' })
 
   if (req.user.role !== 'admin' && job.clientId !== req.user.id) {
     return res.status(403).json({ error: 'Forbidden' })
   }
 
+  // Owner-side guardrails. Admins can bulldoze through these.
+  if (req.user.role !== 'admin') {
+    if (job.status === 'filled') {
+      return res.status(409).json({ error: 'This job is already filled — open the project instead.' })
+    }
+    const pending = job.applications.filter(a => a.status === 'pending').length
+    if (pending > 0) {
+      return res.status(409).json({
+        error: `Reject the ${pending} pending application${pending === 1 ? '' : 's'} before deleting this job.`,
+      })
+    }
+  }
+
   await prisma.job.delete({ where: { id: req.params.id } })
   return res.status(204).send()
+})
+
+// ── POST /jobs/:jobId/applications/:appId/reject ─────────────────────────────
+// Job owner (client) or admin can reject a pending application.
+router.post('/:jobId/applications/:appId/reject', requireAuth, async (req, res) => {
+  const { jobId, appId } = req.params
+
+  const [job, application] = await Promise.all([
+    prisma.job.findUnique({ where: { id: jobId } }),
+    prisma.application.findUnique({ where: { id: appId } }),
+  ])
+  if (!job) return res.status(404).json({ error: 'Job not found' })
+  if (!application || application.jobId !== jobId) {
+    return res.status(404).json({ error: 'Application not found for this job' })
+  }
+  if (req.user.role !== 'admin' && job.clientId !== req.user.id) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  if (application.status !== 'pending') {
+    return res.status(409).json({ error: `Application is already ${application.status}` })
+  }
+
+  const updated = await prisma.application.update({
+    where: { id: appId },
+    data:  { status: 'rejected' },
+  })
+  return res.json(updated)
 })
 
 // ── POST /jobs/:id/applications ───────────────────────────────────────────────
