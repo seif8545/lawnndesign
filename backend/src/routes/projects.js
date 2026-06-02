@@ -210,4 +210,27 @@ router.post('/:id/reviews', requireAuth, async (req, res) => {
   return res.status(201).json(review)
 })
 
+// ── DELETE /projects/:id ──────────────────────────────────────────────────────
+// Admin: unrestricted.
+// Client owner: only when status is still `open` — i.e. no talent has been
+// hired yet and nothing's been paid into escrow. Once a talent is on board,
+// cancellation needs a refund/notification flow and that's a separate
+// endpoint (TODO).
+router.delete('/:id', requireAuth, async (req, res) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } })
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+
+  if (req.user.role !== 'admin' && project.clientId !== req.user.id) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  if (req.user.role !== 'admin' && project.status !== 'open') {
+    return res.status(409).json({
+      error: 'This project is already underway — cancellation needs the talent to be released and the deposit refunded.',
+    })
+  }
+
+  await prisma.project.delete({ where: { id: req.params.id } })
+  return res.status(204).send()
+})
+
 export default router

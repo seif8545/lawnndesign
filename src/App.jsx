@@ -5195,6 +5195,7 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
   const [reviewing,     runReview]   = useBusy();
   const [delivering,    runDeliver]  = useBusy();
   const [creatingProj,  runCreate]   = useBusy();
+  const [deletingProj,  runDelete]   = useBusy();
 
   // Role-aware filter: clients see projects they own; talents see projects
   // they've been hired for; admins see all.
@@ -5264,6 +5265,21 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
       setReviewSubmitted(true);
       setReviewForm({ rating: 0, text: '' });
     } catch (e) { alert(`Couldn't submit review: ${e.message}`); }
+  });
+
+  // Client deletes their own project. Backend allows it only when status='open'
+  // (no talent yet, no deposit). Admins can delete anytime. Closes the modal
+  // on success and refreshes the list.
+  const deleteProject = (projId, title) => runDelete(async () => {
+    if (!confirm(`Delete "${title}"? This can't be undone.`)) return;
+    try {
+      await projectsApi.delete(projId);
+      setSelected(null);
+      await refreshProjects?.();
+    } catch (e) {
+      // 409 from backend means project is past 'open'; surface verbatim.
+      alert(e.message);
+    }
   });
 
   // Talent: submit delivery (in_progress → delivered)
@@ -5377,9 +5393,23 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
                 </div>
                 <p className="text-xs text-[#21326c]/50">{proj.postedAt} · {proj.budget.toLocaleString()} EGP budget</p>
               </div>
-              <button onClick={() => setSelected(null)} className="w-8 h-8 rounded-full bg-[#21326c]/5 flex items-center justify-center hover:bg-[#21326c]/10 transition-colors flex-shrink-0">
-                <X size={16} className="text-[#21326c]" />
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Delete: visible to project owner (and admins) when nothing's
+                    committed yet. Backend enforces the same rule. */}
+                {(proj.clientId === currentUser?.id || currentUser?.role === 'admin') && proj.status === 'open' && (
+                  <button
+                    onClick={() => deleteProject(proj.id, proj.title)}
+                    disabled={deletingProj}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Delete project"
+                  >
+                    <Trash2 size={12} /> {deletingProj ? 'Deleting…' : 'Delete'}
+                  </button>
+                )}
+                <button onClick={() => setSelected(null)} className="w-8 h-8 rounded-full bg-[#21326c]/5 flex items-center justify-center hover:bg-[#21326c]/10 transition-colors flex-shrink-0">
+                  <X size={16} className="text-[#21326c]" />
+                </button>
+              </div>
             </div>
 
             <div className="px-6 py-5 space-y-6 flex-1 overflow-y-auto">

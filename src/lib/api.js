@@ -83,6 +83,7 @@ export const projects = {
   create:  (body)       => request('/projects',              { method: 'POST', body }),
   advance: (id, body)   => request(`/projects/${id}/advance`, { method: 'POST', body }),
   review:  (id, body)   => request(`/projects/${id}/reviews`, { method: 'POST', body }),
+  delete:  (id)         => request(`/projects/${id}`,         { method: 'DELETE' }),
 }
 
 // ── Feed ──────────────────────────────────────────────────────────────────────
