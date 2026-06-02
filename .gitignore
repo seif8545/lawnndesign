@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 
+# Vite temp files (dropped while loading vite.config.js)
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
 # Local env files
 .env
 .env.local

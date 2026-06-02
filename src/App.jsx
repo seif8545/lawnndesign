@@ -1701,7 +1701,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
       setReviewingJob(null);
     } finally { setReviewBusy(false); }
   };
-  const acceptApplication = async (job, app) => {
+  const acceptApplication = (job, app) => runHire(async () => {
     if (!confirm(`Hire ${app.user.name} for "${job.title}"? This creates a project and rejects other applicants.`)) return;
     try {
       await jobsApi.acceptApplication(job.id, app.id);
@@ -1709,7 +1709,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
       setReviewingJob(null);
       alert('Hired! The project is now in your Projects tab.');
     } catch (e) { alert(`Couldn't hire: ${e.message}`); }
-  };
+  });
 
   const PORTFOLIO_SAMPLES = [
     { id: 'a', label: 'Villa Interior — New Cairo', color: '#c4622d' },
@@ -2139,14 +2139,13 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
             </div>
           ) : (
             <button
-              onClick={async () => {
+              onClick={() => runApply(async () => {
                 if (!selectedJobForApply) return;
                 try {
                   await jobsApi.apply(selectedJobForApply.id, {
                     note: applyForm.note,
-                    // Uploaded files only — sample-portfolio refs are local IDs
-                    // that don't mean anything to the backend yet. File-upload
-                    // wiring (Supabase Storage) is a separate task.
+                    // Uploaded files (Supabase Storage paths/URLs). Sample-portfolio
+                    // refs are local IDs; backend ignores them for now.
                     files: applyForm.uploadedFiles.map(uf => ({
                       name: uf.name, url: uf.url, mimeType: uf.type,
                     })),
@@ -2161,12 +2160,12 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                 } catch (err) {
                   alert(`Couldn't submit: ${err.message}`);
                 }
-              }}
-              disabled={!applyForm.note || (applyForm.samples.length + applyForm.uploadedFiles.length) === 0}
+              })}
+              disabled={applying || !applyForm.note || (applyForm.samples.length + applyForm.uploadedFiles.length) === 0}
               className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: '#ff9044' }}
             >
-              Submit Application
+              {applying ? 'Submitting…' : 'Submit Application'}
             </button>
           )}
         </div>
@@ -2202,10 +2201,11 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
               {app.status === 'pending' && (
                 <button
                   onClick={() => acceptApplication(reviewingJob, app)}
-                  className="px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all"
+                  disabled={hiring}
+                  className="px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: '#21326c' }}
                 >
-                  <CheckCircle size={14} className="inline mr-1" /> Hire {app.user.name.split(' ')[0]}
+                  <CheckCircle size={14} className="inline mr-1" /> {hiring ? 'Hiring…' : `Hire ${app.user.name.split(' ')[0]}`}
                 </button>
               )}
             </div>
@@ -2910,6 +2910,7 @@ function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
 function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPosts, currentUser, refreshFeed }) {
   const [newPost, setNewPost]         = useState('');
   const [submitBanner, setSubmitBanner] = useState(false); // pending success banner
+  const [sharing, runShare]           = useBusy();         // guards spam-clicks on Submit
 
   const isStudent = currentUser?.role === 'student';
   const isAdmin   = currentUser?.role === 'admin';
@@ -2924,7 +2925,7 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
     catch (err) { console.warn('[feed] like failed:', err.message); }
   };
 
-  const handleShare = async () => {
+  const handleShare = () => runShare(async () => {
     if (!newPost.trim()) return;
     try {
       await feedApi.create({
@@ -2938,7 +2939,7 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
     } catch (e) {
       alert(`Couldn't post: ${e.message}`);
     }
-  };
+  });
 
   const approvePost = async post => {
     try { await feedApi.setStatus(post.id, 'approved'); await refreshFeed?.(); }
@@ -3026,11 +3027,11 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
                   </div>
                   <button
                     onClick={handleShare}
-                    disabled={!newPost.trim()}
+                    disabled={sharing || !newPost.trim()}
                     className="px-4 py-1.5 rounded-full text-sm font-semibold text-white disabled:opacity-40 transition-all hover:opacity-90"
                     style={{ background: '#ff9044' }}
                   >
-                    Submit for Review
+                    {sharing ? 'Submitting…' : 'Submit for Review'}
                   </button>
                 </div>
               </div>
@@ -4213,6 +4214,7 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
   const [offerSent, setOfferSent]           = useState(null);
 
   const [listingForm, setListingForm] = useState(EMPTY_LISTING_FORM);
+  const [savingListing, runSaveListing] = useBusy();   // guards spam-clicks on Save/Submit
 
   // Student's own listings (pending + active/sold). Match by real user id.
   const myListings = isStudent
@@ -4239,7 +4241,7 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
     setShowListingModal(true);
   };
 
-  const saveListing = async () => {
+  const saveListing = () => runSaveListing(async () => {
     if (!listingForm.title.trim()) return;
     try {
       if (editingListing) {
@@ -4261,7 +4263,7 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
     } catch (e) {
       alert(`Couldn't save listing: ${e.message}`);
     }
-  };
+  });
 
   const deleteListing = async listing => {
     try {
@@ -4648,11 +4650,13 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
           </div>
           <button
             onClick={saveListing}
-            disabled={!listingForm.title.trim() || (!editingListing && !listingForm.price)}
+            disabled={savingListing || !listingForm.title.trim() || (!editingListing && !listingForm.price)}
             className="w-full py-2.5 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             style={{ background: '#ff9044' }}
           >
-            {editingListing ? 'Save Changes' : 'Submit for Review'}
+            {savingListing
+              ? (editingListing ? 'Saving…' : 'Submitting…')
+              : (editingListing ? 'Save Changes' : 'Submit for Review')}
           </button>
           {!editingListing && (
             <p className="text-xs text-center text-[#21326c]/50">Goes live once approved by Lawnn admin.</p>
@@ -5156,6 +5160,13 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
   const [reviewForm, setReviewForm] = useState({ rating: 0, text: '' });
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [tab, setTab] = useState('active'); // active | completed
+  // Per-action busy guards. Each state machine transition is independent so we
+  // keep them separate — paying a deposit doesn't disable the review button.
+  const [paying,        runPay]      = useBusy();
+  const [approving,     runApprove]  = useBusy();
+  const [reviewing,     runReview]   = useBusy();
+  const [delivering,    runDeliver]  = useBusy();
+  const [creatingProj,  runCreate]   = useBusy();
 
   // Role-aware filter: clients see projects they own; talents see projects
   // they've been hired for; admins see all.
@@ -5188,7 +5199,7 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
     } catch (e) { alert(`Couldn't accept: ${e.message}`); }
   };
 
-  const payDeposit = async (projId) => {
+  const payDeposit = (projId) => runPay(async () => {
     const deposit = Math.round(proj.budget * 0.5);
     try {
       // Backend state machine: offer_accepted → deposit_paid → in_progress.
@@ -5202,9 +5213,9 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
         time: 'Just now', iconBg: '#dcfce7',
       });
     } catch (e) { alert(`Couldn't pay deposit: ${e.message}`); }
-  };
+  });
 
-  const approveDelivery = async (projId) => {
+  const approveDelivery = (projId) => runApprove(async () => {
     const remaining = proj.budget - (proj.depositAmount || 0);
     try {
       await projectsApi.advance(projId, {});
@@ -5215,9 +5226,9 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
         time: 'Just now', iconBg: '#dcfce7',
       });
     } catch (e) { alert(`Couldn't approve: ${e.message}`); }
-  };
+  });
 
-  const submitReview = async (projId) => {
+  const submitReview = (projId) => runReview(async () => {
     if (!reviewForm.rating) return;
     try {
       await projectsApi.review(projId, { rating: reviewForm.rating, comment: reviewForm.text });
@@ -5225,11 +5236,11 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
       setReviewSubmitted(true);
       setReviewForm({ rating: 0, text: '' });
     } catch (e) { alert(`Couldn't submit review: ${e.message}`); }
-  };
+  });
 
   // Talent: submit delivery (in_progress → delivered)
   const [deliveryNote, setDeliveryNote] = useState('');
-  const submitDelivery = async (projId) => {
+  const submitDelivery = (projId) => runDeliver(async () => {
     if (!deliveryNote.trim()) return;
     try {
       await projectsApi.advance(projId, { deliveryNote: deliveryNote.trim() });
@@ -5241,7 +5252,7 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
         time: 'Just now', iconBg: '#dcfce7',
       });
     } catch (e) { alert(`Couldn't submit: ${e.message}`); }
-  };
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
@@ -5455,10 +5466,11 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
                       </p>
                       <button
                         onClick={() => payDeposit(proj.id)}
-                        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all"
+                        disabled={paying}
+                        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{ background: '#ff9044' }}
                       >
-                        Pay {deposit.toLocaleString()} EGP Deposit
+                        {paying ? 'Processing…' : `Pay ${deposit.toLocaleString()} EGP Deposit`}
                       </button>
                     </div>
                   </div>
@@ -5496,7 +5508,7 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
                         />
                         <button
                           onClick={() => submitDelivery(proj.id)}
-                          disabled={!deliveryNote.trim()}
+                          disabled={delivering || !deliveryNote.trim()}
                           className="mt-3 w-full py-2.5 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                           style={{ background: '#21326c' }}
                         >
@@ -5562,10 +5574,11 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
                       </div>
                       <button
                         onClick={() => approveDelivery(proj.id)}
-                        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all"
+                        disabled={approving}
+                        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{ background: '#16a34a' }}
                       >
-                        Approve & Release {remaining.toLocaleString()} EGP
+                        {approving ? 'Releasing…' : `Approve & Release ${remaining.toLocaleString()} EGP`}
                       </button>
                       <p className="text-xs text-[#21326c]/40">If you need revisions, message {app?.talentName?.split(' ')[0]} directly.</p>
                     </div>
@@ -5602,11 +5615,11 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
                       </div>
                       <button
                         onClick={() => submitReview(proj.id)}
-                        disabled={!reviewForm.rating}
+                        disabled={reviewing || !reviewForm.rating}
                         className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                         style={{ background: '#ff9044' }}
                       >
-                        Submit Review
+                        {reviewing ? 'Submitting…' : 'Submit Review'}
                       </button>
                     </div>
                   ) : (
@@ -5653,7 +5666,8 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
       <Modal open={showPostModal} onClose={() => setShowPostModal(false)} title="Post a New Project" wide>
         <NewProjectForm
           currentUser={currentUser}
-          onSubmit={async (project) => {
+          busy={creatingProj}
+          onSubmit={(project) => runCreate(async () => {
             try {
               await projectsApi.create({
                 title:  project.title,
@@ -5668,14 +5682,14 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
             } catch (e) {
               alert(`Couldn't post project: ${e.message}`);
             }
-          }}
+          })}
         />
       </Modal>
     </div>
   );
 }
 
-function NewProjectForm({ currentUser, onSubmit }) {
+function NewProjectForm({ currentUser, onSubmit, busy = false }) {
   const [form, setForm] = useState({ title: '', brief: '', budget: '', skills: [], vip: false });
   const [newSkill, setNewSkill] = useState('');
   const addSkill = () => { const s = newSkill.trim(); if (s && !form.skills.includes(s)) setForm(f => ({ ...f, skills: [...f.skills, s] })); setNewSkill(''); };
@@ -5715,11 +5729,11 @@ function NewProjectForm({ currentUser, onSubmit }) {
       </div>
       <button
         onClick={() => onSubmit({ id: `proj-${Date.now()}`, title: form.title, brief: form.brief, budget: parseInt(form.budget) || 0, tags: form.skills, vip: form.vip })}
-        disabled={!form.title || !form.brief || !form.budget}
+        disabled={busy || !form.title || !form.brief || !form.budget}
         className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         style={{ background: '#ff9044' }}
       >
-        Post Project
+        {busy ? 'Posting…' : 'Post Project'}
       </button>
     </div>
   );
