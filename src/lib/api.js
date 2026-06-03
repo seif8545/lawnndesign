@@ -106,6 +106,15 @@ export const marketplace = {
   delete:     (id)           => request(`/marketplace/${id}`,             { method: 'DELETE' }),
 }
 
+// ── News ──────────────────────────────────────────────────────────────────────
+
+export const news = {
+  list:    ()         => request('/news'),
+  create:  (body)     => request('/news',        { method: 'POST',   body }),
+  update:  (id, body) => request(`/news/${id}`,   { method: 'PATCH',  body }),
+  delete:  (id)       => request(`/news/${id}`,   { method: 'DELETE' }),
+}
+
 // ── Uploads ───────────────────────────────────────────────────────────────────
 // Two-step upload: ask backend for a signed PUT URL, then PUT the file directly
 // to Supabase Storage. Returns the URL/path to persist via the normal create/

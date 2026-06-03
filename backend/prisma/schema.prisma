@@ -399,3 +399,21 @@ model MarketplaceListing {
 
   @@map("marketplace_listings")
 }
+
+// ─── News / Insights (admin-authored articles) ───────────────────────────────
+
+model News {
+  id        String   @id @default(cuid())
+  title     String
+  excerpt   String   @db.Text
+  author    String   @default("Lawnn Team")
+  category  String   @default("Career Advice")
+  readTime  String   @default("5 min read")
+  color     String   @default("#21326c")
+  body      Json     @default("[]")  // array of blocks: { type, text|items }
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("news")
+}

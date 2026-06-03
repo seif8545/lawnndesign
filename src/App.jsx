@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, projects as projectsApi, feed as feedApi, marketplace as marketplaceApi, uploadFile, setToken, clearToken } from './lib/api.js';
+import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, projects as projectsApi, feed as feedApi, marketplace as marketplaceApi, news as newsApi, uploadFile, setToken, clearToken } from './lib/api.js';
 
 // ─── useBusy ────────────────────────────────────────────────────────────────
 // Submit-button guard against spam-clicks. Two-layer:
@@ -72,141 +72,6 @@ const MOCK_USERS = [
   { id: 2, email: 'client@safwa.com',        password: 'safwa2024', role: 'client',  name: 'Al-Safwa Dev.',   initials: 'AS', avatarColor: '#c4622d' },
   { id: 3, email: 'admin@lawnn.com',         password: 'admin2024', role: 'admin',   name: 'Lawnn Admin',     initials: 'LA', avatarColor: '#21326c' },
   { id: 4, email: 'yomna@lawnndesign.com',   password: 'youmie272', role: 'student', name: 'Yomna Maghraby',  initials: 'YM', avatarColor: '#db9630', talentId: 7 },
-];
-
-// ─── NEWS DATA ────────────────────────────────────────────────────────────────
-
-const NEWS_POSTS = [
-  {
-    id: 1,
-    title: 'How to Build a Standout Portfolio as an Art Student',
-    excerpt: 'Your portfolio is your first impression. Here\'s how top Egyptian creative students structure their work to attract serious clients and opportunities.',
-    author: 'Lawnn Team',
-    date: 'April 8, 2026',
-    category: 'Career Advice',
-    readTime: '5 min read',
-    color: '#21326c',
-    body: [
-      { type: 'paragraph', text: 'Your portfolio is the first thing any serious client will look at — and for most of them, it will be the last thing they look at before deciding whether to contact you or move on. This is not a school assignment. This is your business card, your pitch deck, and your professional reputation on one page.' },
-      { type: 'heading', text: 'Quality over quantity — always' },
-      { type: 'paragraph', text: 'A portfolio with six exceptional pieces will outperform one with twenty mediocre ones every single time. Clients are not scrolling through your archive for fun. They are trying to answer one question as fast as possible: can this person do what I need? If your weakest piece creates any doubt, cut it.' },
-      { type: 'paragraph', text: 'Be ruthless. Show only the work you would be proud to present in a face-to-face meeting. If a project was a learning exercise and the result looks like one, leave it out. Your portfolio is a curated argument for your capabilities — not a complete record of everything you have ever made.' },
-      { type: 'heading', text: 'Lead with your strongest piece' },
-      { type: 'paragraph', text: 'The first project a visitor sees sets their expectation for everything that follows. Put your most impressive, most commercially relevant piece at the very top. Do not build up to it — open with it. Attention is scarce and first impressions are disproportionately powerful.' },
-      { type: 'heading', text: 'Context is everything' },
-      { type: 'paragraph', text: 'Do not just show images. Explain the brief, the thinking, and the decisions you made. Clients and studios do not just want to see what you produced — they want to understand how you work. A short paragraph per project explaining the client problem, your approach, and the outcome transforms a gallery into a case study.' },
-      { type: 'list', items: [
-        'What was the brief or problem you were solving?',
-        'What constraints did you work within — budget, timeline, brand guidelines?',
-        'What was the reasoning behind your key creative decisions?',
-        'What was the result or client outcome?',
-      ]},
-      { type: 'heading', text: 'Tailor it for your audience' },
-      { type: 'paragraph', text: 'If you are applying to a branding studio, lead with your brand identity and typography work. Approaching an interior design firm? Your space planning and 3D visualisation projects go first. Do not send the same portfolio to everyone. Spend ten minutes reordering and re-framing your projects for each opportunity — it makes a material difference to your response rate.' },
-      { type: 'heading', text: 'Keep it current' },
-      { type: 'paragraph', text: 'A portfolio showing only work from two years ago signals that you have stopped growing. Set a reminder every three months to review it. Add new work, remove pieces that no longer represent your best, and update any case studies with outcomes that emerged after the project ended. Your portfolio should be a living document.' },
-      { type: 'paragraph', text: 'On Lawnn, your portfolio is visible to every client and studio on the platform. The students getting consistent, well-paid briefs are the ones who invest time in presentation — not just production.' },
-    ],
-  },
-  {
-    id: 2,
-    title: 'Understanding Freelance Rates: A Guide for Egyptian Creatives',
-    excerpt: 'Pricing your work is one of the hardest skills to learn. We break down how to set competitive, fair rates that respect your time and skill.',
-    author: 'Lawnn Team',
-    date: 'March 29, 2026',
-    category: 'Business',
-    readTime: '7 min read',
-    color: '#c4622d',
-    body: [
-      { type: 'paragraph', text: 'Pricing is one of the most consequential skills a freelancer develops. Undercharge and you train clients to expect cheap work, exhaust yourself, and build a business that cannot sustain you. Overcharge without the portfolio to justify it and you lose opportunities you could have won. The goal is to find a rate that reflects your real value and attracts the right clients.' },
-      { type: 'heading', text: 'Why most students undercharge' },
-      { type: 'paragraph', text: 'The most common mistake is using personal financial pressure as a pricing anchor. You calculate what you need for rent and expenses and reverse-engineer a rate from there. This is not pricing — it is survival. Pricing should be based on the value you deliver to the client, not on what you personally need to get by.' },
-      { type: 'paragraph', text: 'The second mistake is discounting your rate because you are a student. Your output is what the client is paying for. If your brand identity is as strong as a junior designer at an agency, it is worth as much — regardless of your year of study.' },
-      { type: 'heading', text: 'The three components of a real rate' },
-      { type: 'list', items: [
-        'Your time: Estimate hours honestly. Include revisions, briefing calls, file preparation, and client communication — not just execution time.',
-        'Your overhead: Software subscriptions, equipment depreciation, internet, and the time spent on admin and business development that does not directly bill.',
-        'Your profit margin: This is not a bonus. Profit funds your growth — better equipment, courses, a studio space. Without it you are running a charity.',
-      ]},
-      { type: 'heading', text: 'Market benchmarks in Egypt (2026)' },
-      { type: 'paragraph', text: 'These are approximate ranges based on current market conditions. Rates vary significantly based on portfolio strength, client type, and project complexity.' },
-      { type: 'list', items: [
-        'Logo design (single concept, 2 rounds of revisions): 1,500 – 4,000 EGP',
-        'Full brand identity system (logo, typography, colour, mockups): 5,000 – 18,000 EGP',
-        'Interior 3D visualisation per scene: 800 – 3,500 EGP',
-        'UI/UX design per screen (wireframe to final): 200 – 600 EGP',
-        'Motion graphics (15–30 second reel): 2,500 – 8,000 EGP',
-        'Editorial illustration (A4 format, one revision): 500 – 2,000 EGP',
-      ]},
-      { type: 'heading', text: 'Fixed price vs. hourly rate' },
-      { type: 'paragraph', text: 'For most projects, fixed-price quoting protects both parties. It forces you to scope clearly upfront and rewards efficiency. Hourly billing makes sense for open-ended consulting, ongoing retainers, or projects where the scope is genuinely impossible to define in advance. Never bill hourly on a project with a clear, defined deliverable — it creates friction and signals a lack of confidence in your estimation.' },
-      { type: 'heading', text: 'How to handle negotiation' },
-      { type: 'paragraph', text: 'When a client asks you to reduce your rate, do not simply agree. Instead, reduce the scope. "I can do the logo and primary colour palette at that budget, but the full brand system would need the original fee." This protects your rate structure, gives the client a real choice, and often results in them finding the budget they claimed not to have.' },
-      { type: 'paragraph', text: 'Never apologise for your prices. State them clearly and let the silence sit. A client who respects your work will engage professionally. One who responds with pressure or dismissal is usually not the client you want.' },
-    ],
-  },
-  {
-    id: 3,
-    title: 'Cairo\'s Creative Scene: Top Studios to Follow in 2026',
-    excerpt: 'From Zamalek to New Cairo — meet the Egyptian studios and agencies doing the work that matters, and learn how to get your foot in the door.',
-    author: 'Lawnn Editorial',
-    date: 'March 15, 2026',
-    category: 'Industry',
-    readTime: '4 min read',
-    color: '#db9630',
-    body: [
-      { type: 'paragraph', text: 'Egypt\'s creative industry has changed significantly in the last five years. A new generation of studios — smaller, more focused, and more internationally connected — has emerged alongside the established agencies. For students and recent graduates, knowing who is doing meaningful work, and understanding how they operate, is essential market research.' },
-      { type: 'heading', text: 'What makes a studio worth following' },
-      { type: 'paragraph', text: 'The studios worth your attention are not necessarily the biggest or the most awarded. Look for consistency of vision, calibre of clients, and the way they communicate about their own work. Studios that write thoughtfully about their process, share work in progress, and engage publicly with design culture are usually the ones maintaining a genuine creative standard internally.' },
-      { type: 'heading', text: 'Areas of the city to know' },
-      { type: 'paragraph', text: 'Creative output in Cairo is geographically concentrated. Zamalek and Downtown remain the original centres — older advertising agencies and established architecture firms are largely still based here. The last decade has seen significant movement to New Cairo, particularly Fifth Settlement, where larger studios have relocated for space and proximity to the corporate client base concentrated there. Maadi remains strong for boutique studios with international clientele.' },
-      { type: 'heading', text: 'Disciplines with the most momentum in 2026' },
-      { type: 'list', items: [
-        'Brand identity for the F&B sector: Cairo\'s restaurant and café scene is expanding rapidly, generating consistent demand for identity, packaging, and environmental design.',
-        'Real estate visual marketing: Egypt\'s development boom — New Administrative Capital, New Alamein, North Coast — is driving sustained demand for architectural visualisation and property marketing design.',
-        'Digital product design: Egyptian fintech, edtech, and logistics companies have matured to the point of investing seriously in UX. It remains an underserved discipline with strong growth.',
-        'Motion and content: The normalisation of short-form video across Egyptian brands has created steady demand for motion designers who understand both Arabic and international visual language.',
-      ]},
-      { type: 'heading', text: 'How to approach studios as a student' },
-      { type: 'paragraph', text: 'Cold applications rarely work. The studios worth working at receive more CVs than they can read. What does work is building a presence — in person at events, online through consistent published work, and through people already inside those studios. Egypt\'s creative community is smaller than it appears. One warm introduction from a mutual contact is worth fifty cold emails.' },
-      { type: 'paragraph', text: 'When you do reach out directly, make it specific. Reference a project of theirs you genuinely admire, explain what you would bring, and keep it short. Attach a portfolio link, not a PDF attachment. If you do not hear back within two weeks, one follow-up is appropriate. Beyond that, move on.' },
-      { type: 'heading', text: 'Internships as market research' },
-      { type: 'paragraph', text: 'Even a short internship inside a serious studio teaches you more about how the industry actually operates than a semester of coursework. You see how briefs are handled, how client relationships are managed, how revisions are negotiated, and what professional standards look like in practice. Approach internships not just as resume-building but as education you cannot get anywhere else.' },
-    ],
-  },
-  {
-    id: 4,
-    title: 'Protecting Your Work: Watermarks, Contracts & IP Rights',
-    excerpt: 'As a freelancer, protecting your intellectual property is non-negotiable. Here\'s a practical guide tailored for Egyptian law and creative practice.',
-    author: 'Lawnn Legal',
-    date: 'February 28, 2026',
-    category: 'Legal',
-    readTime: '6 min read',
-    color: '#21326c',
-    body: [
-      { type: 'paragraph', text: 'Intellectual property theft is not an abstract risk for Egyptian creatives — it is routine. Work shared in pitches gets used without payment. Designs submitted to competitions appear on products months later. Portfolio images are lifted and used in client presentations by agencies who never hired the original designer. Understanding how to protect yourself is not paranoia — it is professional practice.' },
-      { type: 'heading', text: 'Watermarks: when and how' },
-      { type: 'paragraph', text: 'Watermarks should be applied to any work shared digitally during the pitch or review phase — before a contract is signed and a deposit has been received. Once a project is contracted and the deposit is cleared, you can share clean files for that stage only. Final deliverables are released upon receipt of full payment, no exceptions.' },
-      { type: 'paragraph', text: 'An effective watermark is semi-transparent, positioned across the key visual area (not a corner where it can be cropped), and includes your name and the year. Lawnn\'s platform provides built-in watermarking through the Secure File Sharing feature, which also logs when files are opened and by whom — creating a timestamped record of every access.' },
-      { type: 'heading', text: 'Contracts: what you actually need' },
-      { type: 'paragraph', text: 'A contract does not need to be a formal legal document prepared by a lawyer. For most freelance engagements, a clear written agreement covering the following points is sufficient and enforceable under Egyptian law:' },
-      { type: 'list', items: [
-        'Scope of work: exactly what you are delivering, in what format, and by when.',
-        'Revision policy: how many rounds are included and what the rate is for additional rounds.',
-        'Payment terms: total fee, deposit amount (typically 30–50% upfront), and when the balance is due.',
-        'Ownership transfer: intellectual property rights pass to the client only upon receipt of full payment.',
-        'Usage rights: if the client receives a limited licence rather than full ownership, specify the medium, territory, and duration.',
-        'Kill fee: what the client owes if they cancel mid-project — typically 50% of the remaining unpaid balance.',
-      ]},
-      { type: 'paragraph', text: 'A clear email exchange confirming these terms is legally meaningful in Egypt. A signed PDF is better. A contract template built specifically for Egyptian freelancers is available in the Lawnn resources section.' },
-      { type: 'heading', text: 'Egyptian intellectual property law: the essentials' },
-      { type: 'paragraph', text: 'Under Egyptian Law No. 82 of 2002 on the Protection of Intellectual Property Rights, creative works are protected from the moment of creation — registration is not required to establish copyright. The creator holds moral rights (the right to attribution) permanently, and economic rights (the right to profit from the work) for the creator\'s lifetime plus 50 years.' },
-      { type: 'paragraph', text: 'In practice, enforcement is the challenge. Registration with the Egyptian Intellectual Property Office (EGYPO) creates a dated, official record of your ownership and significantly strengthens your position in any dispute. For work of substantial commercial value — a complete brand identity system, an architectural design, a major illustration series — registration is worth the cost and time.' },
-      { type: 'heading', text: 'The simplest protection: documentation' },
-      { type: 'paragraph', text: 'Before you share anything with a client, document it. Keep date-stamped copies of everything you send. Use email rather than phone calls for all significant decisions so there is a written record. When a client gives you a verbal approval and later claims they did not, your email thread is your evidence.' },
-      { type: 'paragraph', text: 'None of this replaces good judgment about who you work with. The clients most likely to cause problems are the ones who are evasive about contracts, vague about deliverables, and slow to respond on payment terms. Trust your instincts. The deposit requirement filters most of them out before work even begins.' },
-    ],
-  },
 ];
 
 // ─── SHARED COLOR PALETTE ───────────────────────────────────────────────────────
@@ -3410,13 +3275,14 @@ function ArticleBodyBlock({ block }) {
   );
 }
 
-function NewsPage({ newsPosts, setNewsPosts, currentUser }) {
+function NewsPage({ newsPosts, currentUser, refreshNews }) {
   const isAdmin = currentUser?.role === 'admin';
 
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [showModal, setShowModal]             = useState(false);
   const [editingPost, setEditingPost]         = useState(null);
   const [deleteConfirm, setDeleteConfirm]     = useState(null);
+  const [saving, setSaving]                   = useState(false);
 
   // body is stored as plain text in the form, split on blank lines into paragraphs on save
   const [form, setForm] = useState(EMPTY_NEWS_FORM);
@@ -3447,25 +3313,36 @@ function NewsPage({ newsPosts, setNewsPosts, currentUser }) {
   };
   const closeModal = () => { setShowModal(false); setEditingPost(null); };
 
-  const handleSave = () => {
-    if (!form.title.trim() || !form.excerpt.trim()) return;
+  const handleSave = async () => {
+    if (!form.title.trim() || !form.excerpt.trim() || saving) return;
     const body = textToBody(form.bodyText);
-    if (editingPost) {
-      setNewsPosts(ps => ps.map(p => p.id === editingPost.id ? { ...p, title: form.title, excerpt: form.excerpt, body, category: form.category, readTime: form.readTime, color: form.color } : p));
-      if (selectedArticle?.id === editingPost.id) {
-        setSelectedArticle(a => ({ ...a, title: form.title, excerpt: form.excerpt, body, category: form.category, readTime: form.readTime, color: form.color }));
+    const payload = { title: form.title, excerpt: form.excerpt, body, category: form.category, readTime: form.readTime, color: form.color };
+    setSaving(true);
+    try {
+      if (editingPost) {
+        await newsApi.update(editingPost.id, payload);
+        if (selectedArticle?.id === editingPost.id) {
+          setSelectedArticle(a => ({ ...a, ...payload }));
+        }
+      } else {
+        await newsApi.create(payload);
       }
-    } else {
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('en-US', DATE_FORMAT_OPTIONS);
-      const newPost = { id: Date.now(), author: 'Lawnn Admin', date: dateStr, title: form.title, excerpt: form.excerpt, body, category: form.category, readTime: form.readTime, color: form.color };
-      setNewsPosts(ps => [newPost, ...ps]);
+      await refreshNews?.();
+      closeModal();
+    } catch (err) {
+      console.warn('[news] save failed:', err.message);
+    } finally {
+      setSaving(false);
     }
-    closeModal();
   };
 
-  const handleDelete = id => {
-    setNewsPosts(ps => ps.filter(p => p.id !== id));
+  const handleDelete = async id => {
+    try {
+      await newsApi.delete(id);
+      await refreshNews?.();
+    } catch (err) {
+      console.warn('[news] delete failed:', err.message);
+    }
     setDeleteConfirm(null);
     if (selectedArticle?.id === id) setSelectedArticle(null);
   };
@@ -3564,7 +3441,7 @@ function NewsPage({ newsPosts, setNewsPosts, currentUser }) {
 
         {/* Modal (edit in reader) */}
         <Modal open={showModal} onClose={closeModal} title="Edit Article" wide>
-          <NewsArticleForm form={form} setForm={setForm} onSave={handleSave} editingPost={editingPost} />
+          <NewsArticleForm form={form} setForm={setForm} onSave={handleSave} editingPost={editingPost} saving={saving} />
         </Modal>
       </div>
     );
@@ -3661,13 +3538,13 @@ function NewsPage({ newsPosts, setNewsPosts, currentUser }) {
 
       {/* Create / Edit Modal */}
       <Modal open={showModal} onClose={closeModal} title={editingPost ? 'Edit Article' : 'Write New Article'} wide>
-        <NewsArticleForm form={form} setForm={setForm} onSave={handleSave} editingPost={editingPost} />
+        <NewsArticleForm form={form} setForm={setForm} onSave={handleSave} editingPost={editingPost} saving={saving} />
       </Modal>
     </div>
   );
 }
 
-function NewsArticleForm({ form, setForm, onSave, editingPost }) {
+function NewsArticleForm({ form, setForm, onSave, editingPost, saving }) {
   return (
     <div className="space-y-4">
       <div>
@@ -3740,11 +3617,11 @@ function NewsArticleForm({ form, setForm, onSave, editingPost }) {
       </div>
       <button
         onClick={onSave}
-        disabled={!form.title.trim() || !form.excerpt.trim() || !form.bodyText.trim()}
+        disabled={saving || !form.title.trim() || !form.excerpt.trim() || !form.bodyText.trim()}
         className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ background: '#ff9044' }}
       >
-        {editingPost ? 'Save Changes' : 'Publish Article'}
+        {saving ? 'Saving…' : editingPost ? 'Save Changes' : 'Publish Article'}
       </button>
     </div>
   );
@@ -5818,6 +5695,22 @@ function mapApiListing(l) {
   };
 }
 
+function mapApiNews(n) {
+  return {
+    id:       n.id,
+    title:    n.title,
+    excerpt:  n.excerpt,
+    author:   n.author,
+    category: n.category,
+    readTime: n.readTime,
+    color:    n.color,
+    body:     Array.isArray(n.body) ? n.body : [],
+    date:     n.createdAt
+      ? new Date(n.createdAt).toLocaleDateString('en-US', DATE_FORMAT_OPTIONS)
+      : '',
+  };
+}
+
 function mapApiProject(p) {
   // The project page expects an `applications` array for the 'open' status
   // (where the client picks an offer). The Project model in the DB doesn't
@@ -5957,7 +5850,14 @@ export default function App() {
       .catch(err => console.warn('[marketplace] failed to load:', err.message));
   }, []);
   useEffect(() => { refreshMarketplace(); }, [refreshMarketplace, currentUser]);
-  const [newsPosts, setNewsPosts]               = useState(NEWS_POSTS);
+  // Reusable news refresher — public endpoint, articles authored by admins.
+  const refreshNews = useCallback(() => {
+    return newsApi.list()
+      .then(list => setNewsPosts(list.map(mapApiNews)))
+      .catch(err => console.warn('[news] failed to load:', err.message));
+  }, []);
+  useEffect(() => { refreshNews(); }, [refreshNews]);
+  const [newsPosts, setNewsPosts]               = useState([]);
   const [feedPosts, setFeedPosts]                       = useState([]);
   const [pendingFeedPosts, setPendingFeedPosts]         = useState([]);
   const [jobs, setJobs]                                 = useState([]);
@@ -6054,7 +5954,7 @@ export default function App() {
           />
         );
       case 'news':
-        return <NewsPage newsPosts={newsPosts} setNewsPosts={setNewsPosts} currentUser={currentUser} />;
+        return <NewsPage newsPosts={newsPosts} currentUser={currentUser} refreshNews={refreshNews} />;
       case 'marketplace':
         return <MarketplacePage listings={listings} setListings={setListings} pendingListings={pendingListings} setPendingListings={setPendingListings} currentUser={currentUser} refreshMarketplace={refreshMarketplace} />;
       case 'projects':
