@@ -29,7 +29,7 @@ export function initSocket(httpServer) {
 
     // Join all conversation rooms this user is a participant in
     const myConvos = await prisma.conversation.findMany({
-      where: { OR: [{ clientId: userId }, { talentId: userId }] },
+      where: { OR: [{ clientId: userId }, { talentId: userId }, { adminId: userId }] },
       select: { id: true },
     })
     myConvos.forEach(c => socket.join(`conv:${c.id}`))
@@ -44,10 +44,11 @@ export function initSocket(httpServer) {
     socket.on('send_message', async ({ conversationId, content, fileUrl, fileName, fileMime }) => {
       if (!conversationId || !content?.trim()) return
 
-      // Verify sender is a participant (admins cannot send)
+      // Verify sender is a participant (client, student, or the admin on an
+      // admin-initiated thread). Admins observing others' threads can't send.
       const conv = await prisma.conversation.findUnique({ where: { id: conversationId } })
       if (!conv) return
-      if (conv.clientId !== userId && conv.talentId !== userId) return
+      if (conv.clientId !== userId && conv.talentId !== userId && conv.adminId !== userId) return
 
       const message = await prisma.message.create({
         data: {
@@ -100,7 +101,7 @@ export function initSocket(httpServer) {
     socket.on('join_conversation', ({ conversationId }) => {
       const conv_check = prisma.conversation.findUnique({ where: { id: conversationId } }).then(conv => {
         if (!conv) return
-        const isParticipant = conv.clientId === userId || conv.talentId === userId
+        const isParticipant = conv.clientId === userId || conv.talentId === userId || conv.adminId === userId
         if (isParticipant || role === 'admin') {
           socket.join(`conv:${conversationId}`)
         }

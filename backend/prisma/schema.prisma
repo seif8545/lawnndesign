@@ -86,6 +86,7 @@ model User {
   listings              MarketplaceListing[]
   clientConversations   Conversation[]  @relation("ClientConversations")
   talentConversations   Conversation[]  @relation("TalentConversations")
+  adminConversations    Conversation[]  @relation("AdminConversations")
   sentMessages          Message[]       @relation("SentMessages")
   invite                StudentInvite?
 
@@ -343,11 +344,15 @@ model FeedPost {
 model Conversation {
   id        String   @id @default(cuid())
 
-  // The two participants
-  clientId  String
-  client    User     @relation("ClientConversations", fields: [clientId], references: [id])
-  talentId  String
-  talent    User     @relation("TalentConversations", fields: [talentId], references: [id])
+  // Participants. Client↔student threads use clientId + talentId. Admin↔user
+  // threads use adminId + whichever of clientId/talentId matches the target's
+  // role. All nullable so a thread can be admin↔client or admin↔student.
+  clientId  String?
+  client    User?    @relation("ClientConversations", fields: [clientId], references: [id])
+  talentId  String?
+  talent    User?    @relation("TalentConversations", fields: [talentId], references: [id])
+  adminId   String?
+  admin     User?    @relation("AdminConversations", fields: [adminId], references: [id])
 
   // Optional project link
   projectId String?
@@ -358,7 +363,7 @@ model Conversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([clientId, talentId]) // one conversation per pair
+  @@unique([clientId, talentId]) // one client↔student conversation per pair
   @@map("conversations")
 }
 

@@ -121,6 +121,17 @@ router.get('/students', async (req, res) => {
   return res.json(students.map(({ password, ...u }) => u))
 })
 
+// ── GET /admin/clients ────────────────────────────────────────────────────────
+// List all client accounts so an admin can start a direct conversation.
+router.get('/clients', async (_req, res) => {
+  const clients = await prisma.user.findMany({
+    where: { role: 'client' },
+    select: { id: true, name: true, initials: true, avatarColor: true },
+    orderBy: { createdAt: 'desc' },
+  })
+  return res.json(clients)
+})
+
 // ── DELETE /admin/students/:id ────────────────────────────────────────────────
 router.delete('/students/:id', async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } })

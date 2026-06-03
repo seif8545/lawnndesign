@@ -5,6 +5,18 @@ import { requireAuth, requireRole } from '../middleware/requireAuth.js'
 const router = Router()
 router.use(requireAuth)
 
+// Shared participant selects for conversation includes.
+const userSelect = { select: { id: true, name: true, initials: true, avatarColor: true, profile: { select: { avatar: true } } } }
+const convInclude = {
+  client:  userSelect,
+  talent:  userSelect,
+  admin:   userSelect,
+  project: { select: { id: true, title: true } },
+}
+
+const isParticipant = (conv, userId) =>
+  conv.clientId === userId || conv.talentId === userId || conv.adminId === userId
+
 // ── List conversations for the current user (admin sees all) ──────────────────
 router.get('/', async (req, res) => {
   const { id: userId, role } = req.user
@@ -17,9 +29,7 @@ router.get('/', async (req, res) => {
     where,
     orderBy: { updatedAt: 'desc' },
     include: {
-      client: { select: { id: true, name: true, initials: true, avatarColor: true, profile: { select: { avatar: true } } } },
-      talent: { select: { id: true, name: true, initials: true, avatarColor: true, profile: { select: { avatar: true } } } },
-      project: { select: { id: true, title: true } },
+      ...convInclude,
       messages: {
         orderBy: { createdAt: 'desc' },
         take: 1,
@@ -30,16 +40,19 @@ router.get('/', async (req, res) => {
     },
   })
 
-  // Attach unread count for each conversation
+  // Unread count only for conversations the user actually participates in.
+  // (Admins observe every thread but only see unread badges on their own DMs.)
   const withUnread = await Promise.all(
     conversations.map(async conv => {
-      const unreadCount = role === 'admin' ? 0 : await prisma.message.count({
-        where: {
-          conversationId: conv.id,
-          senderId: { not: userId },
-          readAt: null,
-        },
-      })
+      const unreadCount = isParticipant(conv, userId)
+        ? await prisma.message.count({
+            where: {
+              conversationId: conv.id,
+              senderId: { not: userId },
+              readAt: null,
+            },
+          })
+        : 0
       return { ...conv, unreadCount }
     })
   )
@@ -58,7 +71,6 @@ router.post('/', async (req, res) => {
 
   if (!otherUserId) return res.status(400).json({ error: 'otherUserId required' })
   if (otherUserId === userId) return res.status(400).json({ error: 'Cannot start a conversation with yourself' })
-  if (role === 'admin') return res.status(403).json({ error: 'Admins cannot create conversations' })
 
   // Verify the counterparty exists and is the right role.
   const other = await prisma.user.findUnique({
@@ -66,6 +78,21 @@ router.post('/', async (req, res) => {
     select: { id: true, role: true },
   })
   if (!other) return res.status(404).json({ error: 'User not found' })
+
+  // Admin ↔ user thread. The target sits in the slot matching its role; the
+  // admin sits in adminId. Deduped by hand since the unique index only covers
+  // client↔student pairs.
+  if (role === 'admin') {
+    if (other.role !== 'client' && other.role !== 'student') {
+      return res.status(400).json({ error: 'Admins can only message clients or students' })
+    }
+    const slot = other.role === 'client' ? { clientId: other.id } : { talentId: other.id }
+    const existing = await prisma.conversation.findFirst({ where: { adminId: userId, ...slot } })
+    const conversation = existing
+      ? await prisma.conversation.findUnique({ where: { id: existing.id }, include: convInclude })
+      : await prisma.conversation.create({ data: { adminId: userId, ...slot }, include: convInclude })
+    return res.json(conversation)
+  }
 
   // Conversations are strictly client ↔ student. Decide which is which from
   // the actual DB roles, not anything the client sent.
@@ -85,11 +112,7 @@ router.post('/', async (req, res) => {
     where: { clientId_talentId: { clientId, talentId: actualTalentId } },
     update: projectId ? { projectId } : {},
     create: { clientId, talentId: actualTalentId, projectId: projectId || null },
-    include: {
-      client: { select: { id: true, name: true, initials: true, avatarColor: true, profile: { select: { avatar: true } } } },
-      talent: { select: { id: true, name: true, initials: true, avatarColor: true, profile: { select: { avatar: true } } } },
-      project: { select: { id: true, title: true } },
-    },
+    include: convInclude,
   })
 
   res.json(conversation)
@@ -104,8 +127,7 @@ router.get('/:id/messages', async (req, res) => {
   const conv = await prisma.conversation.findUnique({ where: { id: conversationId } })
   if (!conv) return res.status(404).json({ error: 'Conversation not found' })
 
-  const isParticipant = conv.clientId === userId || conv.talentId === userId
-  if (!isParticipant && role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
+  if (!isParticipant(conv, userId) && role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
 
   const messages = await prisma.message.findMany({
     where: {

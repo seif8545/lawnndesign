@@ -72,6 +72,7 @@ export const admin = {
   createStudent:  (body) => request('/admin/students',                  { method: 'POST', body }),
   reinviteStudent:(id)   => request(`/admin/students/${id}/reinvite`,   { method: 'POST' }),
   listStudents:   ()     => request('/admin/students'),
+  listClients:    ()     => request('/admin/clients'),
   deleteStudent:  (id)   => request(`/admin/students/${id}`,            { method: 'DELETE' }),
 }
 

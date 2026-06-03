@@ -65,15 +65,6 @@ const SEED_CHAT_MESSAGES = {
   ],
 };
 
-// ─── AUTH / USER DATA ─────────────────────────────────────────────────────────
-
-const MOCK_USERS = [
-  { id: 1, email: 'nour@lawnn.com',          password: 'lawnn123',  role: 'student', name: 'Nour El-Sayed',   initials: 'NE', avatarColor: '#21326c', talentId: 1 },
-  { id: 2, email: 'client@safwa.com',        password: 'safwa2024', role: 'client',  name: 'Al-Safwa Dev.',   initials: 'AS', avatarColor: '#c4622d' },
-  { id: 3, email: 'admin@lawnn.com',         password: 'admin2024', role: 'admin',   name: 'Lawnn Admin',     initials: 'LA', avatarColor: '#21326c' },
-  { id: 4, email: 'yomna@lawnndesign.com',   password: 'youmie272', role: 'student', name: 'Yomna Maghraby',  initials: 'YM', avatarColor: '#db9630', talentId: 7 },
-];
-
 // ─── SHARED COLOR PALETTE ───────────────────────────────────────────────────────
 const PRIMARY_COLOR = '#21326c';
 const PALETTE_COLORS = [PRIMARY_COLOR, '#c4622d', '#db9630', '#3c8762', '#a84f22', '#5ea580'];
@@ -919,16 +910,22 @@ function HomePage({ setView, setSelectedTalent, talents }) {
             'AUC Architecture & Fine Arts', 
             'MSA Arts and Design', 
             'AASTMT Arts and Design', 
-            'Newgiza Fine Arts', 
-            'Ain Shams Architecture'
+            'NGU Architecture & Fine arts',
+            'Ain Shams Architecture',
+            'Helwan Applied Arts', 
+            'BUC Applied Arts', 
+            'Cairo University Architectural Engineering'
         ].concat([
             'Helwan Fine Arts', 
             'GUC Applied Arts', 
             'AUC Architecture & Fine Arts', 
             'MSA Arts and Design', 
             'AASTMT Arts and Design', 
-            'Newgiza Fine Arts', 
-            'Ain Shams Architecture'
+            'NGU Architecture & Fine Arts',
+            'Ain Shams Architecture',
+            'Helwan Applied Arts', 
+            'BUC Applied Arts', 
+            'Cairo University Architectural Engineering'
         ]).map((u, i) => (
             <span key={i} className="flex items-center gap-2 flex-shrink-0">
                 <GraduationCap size={14} />
@@ -2650,7 +2647,7 @@ function ChatPage({ currentUser }) {
       setMessages(msgs);
       // Mark as read
       const socket = getSocket();
-      if (socket && !isAdmin) socket.emit('mark_read', { conversationId: activeConvo.id });
+      if (socket && amParticipant(activeConvo)) socket.emit('mark_read', { conversationId: activeConvo.id });
       // Clear unread badge
       setConvos(prev => prev.map(c => c.id === activeConvo.id ? { ...c, unreadCount: 0 } : c));
     }).catch(console.error).finally(() => setLoadingMsgs(false));
@@ -2671,7 +2668,7 @@ function ChatPage({ currentUser }) {
       if (msg.conversationId === activeConvo?.id) {
         setMessages(prev => [...prev, msg]);
         // Mark it read immediately if we're looking at it
-        if (!isAdmin) socket.emit('mark_read', { conversationId: msg.conversationId });
+        if (amParticipant(activeConvo)) socket.emit('mark_read', { conversationId: msg.conversationId });
       } else {
         // Bump unread count for the other conversation
         setConvos(prev => prev.map(c =>
@@ -2720,7 +2717,7 @@ function ChatPage({ currentUser }) {
   // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = useCallback(() => {
     const socket = getSocket();
-    if (!message.trim() || !activeConvo || !socket || isAdmin) return;
+    if (!message.trim() || !activeConvo || !socket || !amParticipant(activeConvo)) return;
     socket.emit('send_message', { conversationId: activeConvo.id, content: message.trim() });
     setMessage('');
     textareaRef.current?.focus();
@@ -2729,7 +2726,7 @@ function ChatPage({ currentUser }) {
   // ── Typing indicator ──────────────────────────────────────────────────────
   const handleTyping = () => {
     const socket = getSocket();
-    if (!socket || !activeConvo || isAdmin) return;
+    if (!socket || !activeConvo || !amParticipant(activeConvo)) return;
     socket.emit('typing', { conversationId: activeConvo.id, isTyping: true });
     clearTimeout(typingTimerRef.current);
     typingTimerRef.current = setTimeout(() => {
@@ -2738,12 +2735,18 @@ function ChatPage({ currentUser }) {
   };
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+  // True when the current user is an actual participant (client, student, or the
+  // admin on an admin-initiated thread) — vs. an admin merely observing.
+  const amParticipant = (conv) =>
+    !!conv && !!currentUser && [conv.clientId, conv.talentId, conv.adminId].includes(currentUser.id);
+
   const getContact = (conv) => {
     if (!conv) return null;
-    if (!currentUser) return conv.client;
-    if (currentUser.id === conv.clientId) return conv.talent;
-    if (currentUser.id === conv.talentId) return conv.client;
-    return conv.client; // admin sees client
+    if (!currentUser) return conv.client || conv.talent || conv.admin;
+    if (currentUser.id === conv.adminId)  return conv.talent || conv.client;
+    if (currentUser.id === conv.clientId) return conv.talent || conv.admin;
+    if (currentUser.id === conv.talentId) return conv.client || conv.admin;
+    return conv.client || conv.talent || conv.admin; // admin observing others
   };
 
   const formatTime = (iso) => {
@@ -2888,7 +2891,7 @@ function ChatPage({ currentUser }) {
                 <div className="mx-4 mt-3 px-3 py-2 rounded-xl text-xs text-center" style={{ background: '#f0f4ff', color: '#21326c' }}>
                   <Lock size={11} className="inline mr-1" />
                   End-to-end encrypted · Admin-monitored for safety
-                  {isAdmin && <span className="ml-2 font-semibold">(Read-only)</span>}
+                  {!amParticipant(activeConvo) && <span className="ml-2 font-semibold">(Read-only)</span>}
                 </div>
 
                 {/* Messages */}
@@ -2923,8 +2926,9 @@ function ChatPage({ currentUser }) {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input — hidden for admin */}
-                {!isAdmin && (
+                {/* Input — shown only to actual participants (admins can send in
+                    their own DMs, but stay read-only when observing others) */}
+                {amParticipant(activeConvo) && (
                   <div className="p-4 border-t border-[#21326c]/10">
                     <div className="flex items-end gap-2">
                       <div className="flex-1">
@@ -4344,8 +4348,100 @@ function AdminUsersTab() {
   );
 }
 
+// Admin-only panel to start a direct conversation with any student or client.
+function AdminStartConversation({ talents, onStarted }) {
+  const [clients, setClients] = useState([]);
+  const [recipientType, setRecipientType] = useState('students');
+  const [query, setQuery]     = useState('');
+  const [open, setOpen]       = useState(false);
+  const [busyId, setBusyId]   = useState(null);
+
+  useEffect(() => { adminApi.listClients().then(setClients).catch(() => {}); }, []);
+
+  const students = talents
+    .filter(t => t.userId)
+    .map(t => ({ id: t.userId, name: t.name, initials: t.initials, avatarColor: t.avatarColor }));
+
+  const source = recipientType === 'students' ? students : clients;
+  const list = source.filter(u => (u.name || '').toLowerCase().includes(query.toLowerCase()));
+
+  const start = async (u) => {
+    setBusyId(u.id);
+    try {
+      await convApi.create({ otherUserId: u.id });
+      setOpen(false);
+      setQuery('');
+      onStarted?.();
+    } catch (e) {
+      alert(`Couldn't start chat: ${e.message}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#21326c]/10 p-4 mb-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageSquareText size={16} className="text-[#21326c]" />
+          <span className="text-sm font-semibold text-[#21326c]">Start a conversation</span>
+        </div>
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
+          style={{ background: '#ff9044' }}
+        >
+          {open ? 'Close' : 'New message'}
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-4">
+          <div className="flex gap-1 mb-3 bg-[#21326c]/5 rounded-xl p-1 w-fit">
+            {['students', 'clients'].map(rt => (
+              <button
+                key={rt}
+                onClick={() => setRecipientType(rt)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all"
+                style={recipientType === rt ? { background: '#21326c', color: '#fff' } : { color: '#21326c' }}
+              >
+                {rt}
+              </button>
+            ))}
+          </div>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder={`Search ${recipientType}…`}
+            className="w-full px-3 py-2 mb-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:outline-none focus:ring-2 focus:ring-[#21326c] placeholder:text-[#21326c]/40"
+          />
+          <div className="max-h-60 overflow-y-auto space-y-1">
+            {list.length === 0 && (
+              <p className="text-xs text-[#21326c]/40 text-center py-4">No {recipientType} found.</p>
+            )}
+            {list.map(u => (
+              <div key={u.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#21326c]/5">
+                <Avatar initials={u.initials || '?'} color={u.avatarColor || '#21326c'} size="sm" />
+                <span className="text-sm text-[#21326c] flex-1 truncate">{u.name}</span>
+                <button
+                  onClick={() => start(u)}
+                  disabled={busyId === u.id}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors disabled:opacity-50"
+                >
+                  <Send size={11} /> {busyId === u.id ? 'Opening…' : 'Message'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser, refreshJobs, refreshFeed, refreshMarketplace }) {
   const [adminTab, setAdminTab] = useState('content');
+  const [convoReloadKey, setConvoReloadKey] = useState(0);
 
   const approveFeedPost = async post => {
     try { await feedApi.setStatus(post.id, 'approved'); await refreshFeed?.(); }
@@ -4510,7 +4606,10 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
 
       {/* ── CONVERSATIONS TAB ── */}
       {adminTab === 'conversations' && (
-        <ChatPage currentUser={currentUser} />
+        <>
+          <AdminStartConversation talents={talents} onStarted={() => setConvoReloadKey(k => k + 1)} />
+          <ChatPage key={convoReloadKey} currentUser={currentUser} />
+        </>
       )}
 
       {/* ── USERS TAB ── */}
@@ -5775,6 +5874,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // Tracks if the student closed onboarding this session, so the completeness
+  // effect doesn't immediately reopen it after they dismiss without finishing.
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [inviteToken, setInviteToken] = useState(null);
 
   // First-load: detect an invite token in the URL, otherwise hydrate from stored JWT.
@@ -5884,11 +5986,12 @@ export default function App() {
     if (token) connectSocket(token);
     // Seed role-specific demo notifications
     setNotifications(SEED_NOTIFICATIONS[user.role] || []);
-    // Show onboarding only if this user hasn't dismissed it on this device.
-    // Keyed per-user so multi-account browsers don't share state. Set on first
-    // dismissal in the onDone handler below.
+    // Students are prompted whenever their profile is incomplete — driven by the
+    // completeness effect once talent profiles load (reset the session flag here).
+    // Clients keep one-time, per-device dismissal.
+    setOnboardingDismissed(false);
     const dismissed = localStorage.getItem(`lawnn_onboarding_done_${user.id}`);
-    if (!dismissed && (user.role === 'student' || user.role === 'client')) {
+    if (!dismissed && user.role === 'client') {
       setShowOnboarding(true);
     }
     if (user.role === 'student') setView('feed');
@@ -5902,7 +6005,20 @@ export default function App() {
     setCurrentUser(null);
     setView('home');
     setNotifications([]);
+    setShowOnboarding(false);
+    setOnboardingDismissed(false);
   };
+
+  // Prompt students to finish their profile whenever it's incomplete (no bio or
+  // no skills). Runs once talent profiles have loaded; the session-dismissed flag
+  // stops it from reopening immediately after the student closes it.
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'student' || onboardingDismissed) return;
+    const talent = talents.find(t => t.userId === currentUser.id);
+    if (!talent) return; // profile not loaded yet
+    const incomplete = !talent.bio?.trim() || !(talent.tags?.length > 0);
+    if (incomplete) setShowOnboarding(true);
+  }, [currentUser, talents, onboardingDismissed]);
 
   const handleUpdateTalent = updated => {
     // Optimistic local update — UI reflects the change immediately.
@@ -6012,6 +6128,7 @@ export default function App() {
           onDone={() => {
             localStorage.setItem(`lawnn_onboarding_done_${currentUser.id}`, '1');
             setShowOnboarding(false);
+            setOnboardingDismissed(true);
           }}
         />
       )}
