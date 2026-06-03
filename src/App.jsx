@@ -674,38 +674,42 @@ function TopNav({ view, setView, currentUser, onLoginClick, onLogout, notificati
   const [menuOpen, setMenuOpen] = useState(false);
 
   const getNavItems = () => {
+    // Students: find work, network, manage their own profile.
     if (currentUser?.role === 'student') return [
       { id: 'feed',        label: 'Feed',        icon: Grid },
-      { id: 'about',       label: 'About Me',    icon: BookOpen },
-      { id: 'news',        label: 'News',        icon: Layers },
-      { id: 'profile',     label: 'My Profile',  icon: Users },
       { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
+      { id: 'profile',     label: 'My Profile',  icon: UserCheck },
+      { id: 'news',        label: 'News',        icon: BookOpen },
     ];
+    // Clients: hire talent, post jobs, manage their projects.
     if (currentUser?.role === 'client') return [
       { id: 'home',        label: 'Home',        icon: Home },
       { id: 'directory',   label: 'Talent',      icon: Users },
-      { id: 'projects',    label: 'My Projects', icon: Briefcase },
-      { id: 'news',        label: 'News',        icon: Layers },
+      { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
+      { id: 'projects',    label: 'My Projects', icon: Package },
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
+      { id: 'news',        label: 'News',        icon: BookOpen },
     ];
+    // Admins: moderation first, then the surfaces they oversee.
     if (currentUser?.role === 'admin') return [
+      { id: 'admin',       label: 'Admin',       icon: Shield },
       { id: 'home',        label: 'Home',        icon: Home },
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'directory',   label: 'Talent',      icon: Users },
       { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
-      { id: 'news',        label: 'News',         icon: Layers },
-      { id: 'admin',       label: 'Admin',       icon: Shield },
+      { id: 'news',        label: 'News',        icon: BookOpen },
     ];
-    // Logged-out / guest
+    // Logged-out / guest: public browsing surfaces.
     return [
       { id: 'home',        label: 'Home',        icon: Home },
-      { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
       { id: 'directory',   label: 'Talent',      icon: Users },
+      { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
+      { id: 'news',        label: 'News',        icon: BookOpen },
     ];
   };
 
@@ -766,7 +770,7 @@ function TopNav({ view, setView, currentUser, onLoginClick, onLogout, notificati
               <div className="flex items-center gap-2">
                 {currentUser.role === 'client' && (
                   <button
-                    onClick={() => setView('projects')}
+                    onClick={() => setView('jobs')}
                     className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90"
                     style={{ background: '#ff9044' }}
                   >
