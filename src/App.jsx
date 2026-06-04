@@ -2636,12 +2636,26 @@ function ChatPage({ currentUser }) {
   const isAdmin = currentUser?.role === 'admin';
 
   // ── Load conversation list ────────────────────────────────────────────────
-  useEffect(() => {
-    convApi.list().then(data => {
+  const loadConvos = useCallback((selectId) => {
+    return convApi.list().then(data => {
       setConvos(data);
-      if (data.length > 0) setActiveConvo(data[0]);
+      if (selectId) {
+        const found = data.find(c => c.id === selectId);
+        if (found) setActiveConvo(found);
+      } else {
+        setActiveConvo(prev => prev || (data.length > 0 ? data[0] : null));
+      }
     }).catch(console.error).finally(() => setLoadingConvos(false));
   }, []);
+  useEffect(() => { loadConvos(); }, [loadConvos]);
+
+  // Admin starts a new DM: join its socket room, reload the list, open it.
+  const handleStartConversation = useCallback(async (conv) => {
+    if (!conv) return;
+    getSocket()?.emit('join_conversation', { conversationId: conv.id });
+    await loadConvos(conv.id);
+    setShowSidebar(true);
+  }, [loadConvos]);
 
   // ── Load messages when active convo changes ───────────────────────────────
   useEffect(() => {
@@ -2775,6 +2789,8 @@ function ChatPage({ currentUser }) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 animate-fade-in">
+
+      {isAdmin && <AdminStartConversation onStarted={handleStartConversation} />}
 
       {!loadingConvos && convos.length === 0 && (
         <div className="bg-white rounded-2xl border border-[#21326c]/10 p-14 text-center">
@@ -4352,30 +4368,33 @@ function AdminUsersTab() {
   );
 }
 
-// Admin-only panel to start a direct conversation with any student or client.
-function AdminStartConversation({ talents, onStarted }) {
-  const [clients, setClients] = useState([]);
-  const [recipientType, setRecipientType] = useState('students');
+// Admin-only panel to start a direct conversation with ANY user — student,
+// client, or another admin. Self-contained: fetches the full user list itself.
+function AdminStartConversation({ onStarted }) {
+  const [users, setUsers]     = useState([]);
+  const [roleTab, setRoleTab] = useState('student');
   const [query, setQuery]     = useState('');
   const [open, setOpen]       = useState(false);
   const [busyId, setBusyId]   = useState(null);
 
-  useEffect(() => { adminApi.listClients().then(setClients).catch(() => {}); }, []);
+  useEffect(() => { adminApi.listUsers().then(setUsers).catch(() => {}); }, []);
 
-  const students = talents
-    .filter(t => t.userId)
-    .map(t => ({ id: t.userId, name: t.name, initials: t.initials, avatarColor: t.avatarColor }));
-
-  const source = recipientType === 'students' ? students : clients;
-  const list = source.filter(u => (u.name || '').toLowerCase().includes(query.toLowerCase()));
+  const ROLE_TABS = [
+    { id: 'student', label: 'Students' },
+    { id: 'client',  label: 'Clients'  },
+    { id: 'admin',   label: 'Admins'   },
+  ];
+  const list = users
+    .filter(u => u.role === roleTab)
+    .filter(u => (u.name || '').toLowerCase().includes(query.toLowerCase()));
 
   const start = async (u) => {
     setBusyId(u.id);
     try {
-      await convApi.create({ otherUserId: u.id });
+      const conv = await convApi.create({ otherUserId: u.id });
       setOpen(false);
       setQuery('');
-      onStarted?.();
+      onStarted?.(conv);
     } catch (e) {
       alert(`Couldn't start chat: ${e.message}`);
     } finally {
@@ -4402,26 +4421,26 @@ function AdminStartConversation({ talents, onStarted }) {
       {open && (
         <div className="mt-4">
           <div className="flex gap-1 mb-3 bg-[#21326c]/5 rounded-xl p-1 w-fit">
-            {['students', 'clients'].map(rt => (
+            {ROLE_TABS.map(rt => (
               <button
-                key={rt}
-                onClick={() => setRecipientType(rt)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all"
-                style={recipientType === rt ? { background: '#21326c', color: '#fff' } : { color: '#21326c' }}
+                key={rt.id}
+                onClick={() => setRoleTab(rt.id)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={roleTab === rt.id ? { background: '#21326c', color: '#fff' } : { color: '#21326c' }}
               >
-                {rt}
+                {rt.label}
               </button>
             ))}
           </div>
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder={`Search ${recipientType}…`}
+            placeholder="Search by name…"
             className="w-full px-3 py-2 mb-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:outline-none focus:ring-2 focus:ring-[#21326c] placeholder:text-[#21326c]/40"
           />
           <div className="max-h-60 overflow-y-auto space-y-1">
             {list.length === 0 && (
-              <p className="text-xs text-[#21326c]/40 text-center py-4">No {recipientType} found.</p>
+              <p className="text-xs text-[#21326c]/40 text-center py-4">No users found.</p>
             )}
             {list.map(u => (
               <div key={u.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#21326c]/5">
@@ -4445,7 +4464,6 @@ function AdminStartConversation({ talents, onStarted }) {
 
 function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser, refreshJobs, refreshFeed, refreshMarketplace }) {
   const [adminTab, setAdminTab] = useState('content');
-  const [convoReloadKey, setConvoReloadKey] = useState(0);
 
   const approveFeedPost = async post => {
     try { await feedApi.setStatus(post.id, 'approved'); await refreshFeed?.(); }
@@ -4608,12 +4626,9 @@ function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendin
         </>
       )}
 
-      {/* ── CONVERSATIONS TAB ── */}
+      {/* ── CONVERSATIONS TAB ── (ChatPage hosts the New-message starter for admins) */}
       {adminTab === 'conversations' && (
-        <>
-          <AdminStartConversation talents={talents} onStarted={() => setConvoReloadKey(k => k + 1)} />
-          <ChatPage key={convoReloadKey} currentUser={currentUser} />
-        </>
+        <ChatPage currentUser={currentUser} />
       )}
 
       {/* ── USERS TAB ── */}

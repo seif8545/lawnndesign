@@ -121,15 +121,15 @@ router.get('/students', async (req, res) => {
   return res.json(students.map(({ password, ...u }) => u))
 })
 
-// ── GET /admin/clients ────────────────────────────────────────────────────────
-// List all client accounts so an admin can start a direct conversation.
-router.get('/clients', async (_req, res) => {
-  const clients = await prisma.user.findMany({
-    where: { role: 'client' },
-    select: { id: true, name: true, initials: true, avatarColor: true },
+// ── GET /admin/users ──────────────────────────────────────────────────────────
+// Every user except the requesting admin — so an admin can DM anyone at any time.
+router.get('/users', async (req, res) => {
+  const users = await prisma.user.findMany({
+    where: { id: { not: req.user.id } },
+    select: { id: true, name: true, initials: true, avatarColor: true, role: true },
     orderBy: { createdAt: 'desc' },
   })
-  return res.json(clients)
+  return res.json(users)
 })
 
 // ── DELETE /admin/students/:id ────────────────────────────────────────────────

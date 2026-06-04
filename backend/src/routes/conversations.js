@@ -79,18 +79,14 @@ router.post('/', async (req, res) => {
   })
   if (!other) return res.status(404).json({ error: 'User not found' })
 
-  // Admin ↔ user thread. The target sits in the slot matching its role; the
-  // admin sits in adminId. Deduped by hand since the unique index only covers
-  // client↔student pairs.
+  // Admin ↔ anyone. The admin sits in adminId; the target sits in the talentId
+  // participant slot regardless of its role (student, client, or another admin).
+  // Deduped by hand since the unique index only covers client↔student pairs.
   if (role === 'admin') {
-    if (other.role !== 'client' && other.role !== 'student') {
-      return res.status(400).json({ error: 'Admins can only message clients or students' })
-    }
-    const slot = other.role === 'client' ? { clientId: other.id } : { talentId: other.id }
-    const existing = await prisma.conversation.findFirst({ where: { adminId: userId, ...slot } })
+    const existing = await prisma.conversation.findFirst({ where: { adminId: userId, talentId: other.id } })
     const conversation = existing
       ? await prisma.conversation.findUnique({ where: { id: existing.id }, include: convInclude })
-      : await prisma.conversation.create({ data: { adminId: userId, ...slot }, include: convInclude })
+      : await prisma.conversation.create({ data: { adminId: userId, talentId: other.id }, include: convInclude })
     return res.json(conversation)
   }
 
