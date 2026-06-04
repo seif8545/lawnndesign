@@ -9,11 +9,20 @@ const router = Router()
 // Public — list live jobs. Admins (when authenticated) also see pending ones.
 router.get('/', optionalAuth, async (req, res) => {
   const { category, skill } = req.query
+  const userId  = req.user?.id
   const isAdmin = req.user?.role === 'admin'
+
+  // Admins see everything. A signed-in client/student also sees their OWN jobs
+  // (e.g. still 'pending' admin review) alongside the public 'live' board.
+  const visibility = isAdmin
+    ? {}
+    : userId
+      ? { OR: [{ status: 'live' }, { clientId: userId }] }
+      : { status: 'live' }
 
   const jobs = await prisma.job.findMany({
     where: {
-      status: isAdmin ? undefined : 'live',
+      ...visibility,
       ...(category && { category: { contains: category, mode: 'insensitive' } }),
       ...(skill && { skills: { some: { skill: { contains: skill, mode: 'insensitive' } } } }),
     },

@@ -90,6 +90,17 @@ router.post('/', async (req, res) => {
     return res.json(conversation)
   }
 
+  // Student or client contacting an admin (support). Stored the same way as an
+  // admin-initiated thread — admin in adminId, the other user in talentId — so
+  // the two directions dedupe to a single conversation.
+  if (other.role === 'admin') {
+    const existing = await prisma.conversation.findFirst({ where: { adminId: other.id, talentId: userId } })
+    const conversation = existing
+      ? await prisma.conversation.findUnique({ where: { id: existing.id }, include: convInclude })
+      : await prisma.conversation.create({ data: { adminId: other.id, talentId: userId }, include: convInclude })
+    return res.json(conversation)
+  }
+
   // Conversations are strictly client ↔ student. Decide which is which from
   // the actual DB roles, not anything the client sent.
   let clientId, actualTalentId
@@ -111,6 +122,27 @@ router.post('/', async (req, res) => {
     include: convInclude,
   })
 
+  res.json(conversation)
+})
+
+// ── POST /conversations/support ───────────────────────────────────────────────
+// One-tap "contact an admin" for students and clients. Opens (or reuses) a
+// direct thread with an admin so users can reach support at any time.
+router.post('/support', async (req, res) => {
+  const { id: userId, role } = req.user
+  if (role === 'admin') return res.status(400).json({ error: 'Use the New message picker to start a chat.' })
+
+  const admin = await prisma.user.findFirst({
+    where: { role: 'admin' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  })
+  if (!admin) return res.status(503).json({ error: 'No admin is available right now.' })
+
+  const existing = await prisma.conversation.findFirst({ where: { adminId: admin.id, talentId: userId } })
+  const conversation = existing
+    ? await prisma.conversation.findUnique({ where: { id: existing.id }, include: convInclude })
+    : await prisma.conversation.create({ data: { adminId: admin.id, talentId: userId }, include: convInclude })
   res.json(conversation)
 })
 

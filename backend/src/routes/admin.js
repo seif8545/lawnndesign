@@ -132,6 +132,57 @@ router.get('/users', async (req, res) => {
   return res.json(users)
 })
 
+// ── POST /admin/clients ───────────────────────────────────────────────────────
+// Create a client account directly. Unlike students (invite flow), the admin
+// sets the password and shares the credentials with the client.
+router.post('/clients', async (req, res) => {
+  const { name, email, password } = req.body
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'name, email and password are required' })
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' })
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } })
+  if (existing) {
+    return res.status(409).json({ error: 'An account with this email already exists' })
+  }
+
+  const initials = name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()
+  const hash     = await bcrypt.hash(password, 12)
+  const user = await prisma.user.create({
+    data: { email, password: hash, name, role: 'client', initials },
+  })
+
+  const { password: _pw, ...safeUser } = user
+  return res.status(201).json(safeUser)
+})
+
+// ── DELETE /admin/users/:id ───────────────────────────────────────────────────
+// Remove any user (student or client). Admins can't delete themselves. Users
+// with active jobs/projects/etc. are protected by DB foreign keys — surface a
+// friendly conflict rather than a 500.
+router.delete('/users/:id', async (req, res) => {
+  if (req.params.id === req.user.id) {
+    return res.status(400).json({ error: 'You cannot delete your own account.' })
+  }
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } })
+  if (!user) return res.status(404).json({ error: 'User not found' })
+
+  try {
+    await prisma.user.delete({ where: { id: req.params.id } })
+    return res.status(204).send()
+  } catch (err) {
+    if (err.code === 'P2003') {
+      return res.status(409).json({
+        error: 'This user still has active jobs, projects, or other records and cannot be removed yet.',
+      })
+    }
+    throw err
+  }
+})
+
 // ── DELETE /admin/students/:id ────────────────────────────────────────────────
 router.delete('/students/:id', async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } })

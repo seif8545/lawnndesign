@@ -73,7 +73,9 @@ export const admin = {
   reinviteStudent:(id)   => request(`/admin/students/${id}/reinvite`,   { method: 'POST' }),
   listStudents:   ()     => request('/admin/students'),
   listUsers:      ()     => request('/admin/users'),
+  createClient:   (body) => request('/admin/clients',                  { method: 'POST', body }),
   deleteStudent:  (id)   => request(`/admin/students/${id}`,            { method: 'DELETE' }),
+  deleteUser:     (id)   => request(`/admin/users/${id}`,              { method: 'DELETE' }),
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────────
@@ -161,5 +163,6 @@ export async function uploadFile(file, kind) {
 export const conversations = {
   list:     ()                  => request('/conversations'),
   create:   (body)              => request('/conversations',             { method: 'POST', body }),
+  support:  ()                  => request('/conversations/support',     { method: 'POST' }),
   messages: (id, params = {})   => request(`/conversations/${id}/messages?` + new URLSearchParams(params)),
 }

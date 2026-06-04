@@ -688,6 +688,7 @@ function TopNav({ view, setView, currentUser, onLoginClick, onLogout, notificati
       { id: 'directory',   label: 'Talent',      icon: Users },
       { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
       { id: 'projects',    label: 'My Projects', icon: Package },
+      { id: 'profile',     label: 'My Profile',  icon: UserCheck },
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
       { id: 'news',        label: 'News',        icon: BookOpen },
@@ -1216,20 +1217,36 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
 
   const filteredJobs = filterCat === 'all' ? jobs : jobs.filter(j => j.category.toLowerCase().includes(filterCat));
 
+  // A client's own jobs awaiting admin approval aren't on the public 'live'
+  // list yet — surface them (badged) so the poster can see their submission.
+  const myPendingJobs = currentUser?.role === 'client'
+    ? pendingJobs.filter(j => j.clientId === currentUser.id && (filterCat === 'all' || j.category.toLowerCase().includes(filterCat)))
+    : [];
+  const displayJobs = [...myPendingJobs, ...filteredJobs];
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c]">Job Board</h1>
-          <p className="text-sm text-[#21326c] mt-1">Live creative briefs from Egypt's top brands and agencies</p>
+          <p className="text-sm text-[#21326c] mt-1">
+            {currentUser?.role === 'client'
+              ? 'Post a brief and review applicants. When you hire someone, it becomes a managed project with escrow.'
+              : currentUser?.role === 'student'
+              ? 'Browse live briefs and apply. Once a client hires you, the work is managed as a project with secure payments.'
+              : "Live creative briefs from Egypt's top brands and agencies"}
+          </p>
         </div>
-        <button
-          onClick={() => setShowPostModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-white shadow-md hover:opacity-90 transition-all text-sm flex-shrink-0"
-          style={{ background: '#ff9044' }}
-        >
-          <Plus size={16} /> Post a Job
-        </button>
+        {/* Only clients and admins post jobs — students apply, they don't post. */}
+        {(currentUser?.role === 'client' || currentUser?.role === 'admin') && (
+          <button
+            onClick={() => setShowPostModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-white shadow-md hover:opacity-90 transition-all text-sm flex-shrink-0"
+            style={{ background: '#ff9044' }}
+          >
+            <Plus size={16} /> Post a Job
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -1246,7 +1263,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
 
       {/* Job List */}
       <div className="grid gap-4">
-        {filteredJobs.map(job => (
+        {displayJobs.map(job => (
           <div
             key={job.id}
             className="job-card bg-white rounded-2xl border border-[#21326c]/10 p-6 cursor-pointer"
@@ -1259,6 +1276,11 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                   {job.vip && (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fdf0d3', color: '#21326c', borderColor: '#e4ae50', border: '1px solid' }}>
                       <Sparkles size={10} /> VIP Concierge
+                    </span>
+                  )}
+                  {job.status && job.status !== 'live' && (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#db963015', color: '#db9630' }}>
+                      <Clock size={10} /> {job.status === 'pending' ? 'Pending admin review' : job.status === 'filled' ? 'Filled' : job.status}
                     </span>
                   )}
                 </div>
@@ -1275,7 +1297,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                   <div className="text-xl sm:text-2xl font-bold text-[#21326c]">{job.budget} EGP</div>
                   <div className="text-xs text-[#21326c]">{job.budgetType === 'Fixed' ? 'Fixed price' : 'Hourly rate'} · {job.applicants} applicants</div>
                 </div>
-                {currentUser?.role !== 'admin' && (
+                {currentUser?.role === 'student' && job.status === 'live' && (
                   <button
                     className="mt-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90"
                     style={{ background: '#ff9044' }}
@@ -2333,6 +2355,7 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
   const [sharing, runShare]           = useBusy();         // guards spam-clicks on Submit
 
   const isStudent = currentUser?.role === 'student';
+  const isClient  = currentUser?.role === 'client';
   const isAdmin   = currentUser?.role === 'admin';
 
   // Optimistic +1 with backend confirmation. We don't track per-user likes
@@ -2417,8 +2440,8 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
         </div>
       )}
 
-      {/* Compose — students only */}
-      {isStudent && (
+      {/* Compose — students and clients */}
+      {(isStudent || isClient) && (
         <>
           {submitBanner && (
             <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-xl text-sm text-[#21326c] animate-fade-in" style={{ background: '#fdf0d3', border: '1px solid #e4ae50' }}>
@@ -2649,13 +2672,27 @@ function ChatPage({ currentUser }) {
   }, []);
   useEffect(() => { loadConvos(); }, [loadConvos]);
 
-  // Admin starts a new DM: join its socket room, reload the list, open it.
+  // Admin starts a new DM (or a user opens support): join its socket room,
+  // reload the list, open it.
   const handleStartConversation = useCallback(async (conv) => {
     if (!conv) return;
     getSocket()?.emit('join_conversation', { conversationId: conv.id });
     await loadConvos(conv.id);
     setShowSidebar(true);
   }, [loadConvos]);
+
+  const [supportBusy, setSupportBusy] = useState(false);
+  const handleContactSupport = useCallback(async () => {
+    setSupportBusy(true);
+    try {
+      const conv = await convApi.support();
+      await handleStartConversation(conv);
+    } catch (e) {
+      alert(`Couldn't reach support: ${e.message}`);
+    } finally {
+      setSupportBusy(false);
+    }
+  }, [handleStartConversation]);
 
   // ── Load messages when active convo changes ───────────────────────────────
   useEffect(() => {
@@ -2790,19 +2827,41 @@ function ChatPage({ currentUser }) {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 animate-fade-in">
 
-      {isAdmin && <AdminStartConversation onStarted={handleStartConversation} />}
+      {isAdmin
+        ? <AdminStartConversation onStarted={handleStartConversation} />
+        : (
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={handleContactSupport}
+              disabled={supportBusy}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors disabled:opacity-50"
+            >
+              <MessageSquareText size={14} /> {supportBusy ? 'Opening…' : 'Contact support'}
+            </button>
+          </div>
+        )}
 
       {!loadingConvos && convos.length === 0 && (
         <div className="bg-white rounded-2xl border border-[#21326c]/10 p-14 text-center">
           <MessageSquare size={40} className="mx-auto mb-4 text-[#21326c] opacity-20" />
           <p className="font-semibold text-[#21326c] mb-1">No conversations yet</p>
-          <p className="text-sm text-[#21326c]/50 max-w-xs mx-auto">
+          <p className="text-sm text-[#21326c]/50 max-w-xs mx-auto mb-4">
             {currentUser?.role === 'student'
-              ? 'Once a client contacts you, conversations will appear here.'
+              ? 'Once a client contacts you, conversations will appear here. Need help? Contact an admin anytime.'
               : isAdmin
-              ? 'All client–talent conversations will appear here.'
-              : 'Start a conversation by messaging a talent from their profile.'}
+              ? 'All conversations will appear here.'
+              : 'Message a talent from their profile, or reach an admin with Contact support.'}
           </p>
+          {!isAdmin && (
+            <button
+              onClick={handleContactSupport}
+              disabled={supportBusy}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
+              style={{ background: '#ff9044' }}
+            >
+              <MessageSquareText size={14} /> {supportBusy ? 'Opening…' : 'Contact support'}
+            </button>
+          )}
         </div>
       )}
 
@@ -3671,8 +3730,10 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
   const [listingForm, setListingForm] = useState(EMPTY_LISTING_FORM);
   const [savingListing, runSaveListing] = useBusy();   // guards spam-clicks on Save/Submit
 
-  // Student's own listings (pending + active/sold). Match by real user id.
-  const myListings = isStudent
+  // The current user's own listings (pending + active/sold). Sellers are
+  // students or admins. Match by real user id.
+  const canSell = isStudent || isAdmin;
+  const myListings = canSell
     ? [
         ...pendingListings.filter(l => l.seller?.userId === currentUser?.id).map(l => ({ ...l, isPending: true })),
         ...listings.filter(l => l.seller?.userId === currentUser?.id),
@@ -3687,7 +3748,7 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
     setListingForm(EMPTY_LISTING_FORM);
     setEditingListing(null);
     setShowListingModal(true);
-    if (isStudent) setTab('mine');
+    if (canSell) setTab('mine');
   };
 
   const openEdit = listing => {
@@ -3808,7 +3869,7 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
           <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c] mb-1">Marketplace</h1>
           <p className="text-sm text-[#21326c]">Student-made work, prints, and creative assets for sale</p>
         </div>
-        {isStudent && (
+        {canSell && (
           <button
             onClick={openCreate}
             className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all flex-shrink-0"
@@ -3819,8 +3880,8 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
         )}
       </div>
 
-      {/* Tabs (students only) */}
-      {isStudent && (
+      {/* Tabs (sellers only) */}
+      {canSell && (
         <div className="flex gap-1 mb-6 bg-[#21326c]/5 rounded-xl p-1 w-fit">
           {[{ id: 'browse', label: 'Browse' }, { id: 'mine', label: `My Listings${myListings.length ? ` (${myListings.length})` : ''}` }].map(t => (
             <button
@@ -3908,8 +3969,8 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
         </>
       )}
 
-      {/* ── MY LISTINGS TAB (student) ── */}
-      {tab === 'mine' && isStudent && (
+      {/* ── MY LISTINGS TAB (sellers) ── */}
+      {tab === 'mine' && canSell && (
         <>
           {myListings.length === 0 && (
             <div className="text-center py-20 text-[#21326c]">
@@ -4221,7 +4282,9 @@ function PendingSection({ title, icon: Icon, color, items, onApprove, onReject, 
 }
 
 function AdminUsersTab() {
+  const [section, setSection]         = useState('students');
   const [students, setStudents]       = useState([]);
+  const [clients, setClients]         = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [showCreate, setShowCreate]   = useState(false);
   const [form, setForm]               = useState({ name: '', email: '', password: '', university: '', dept: '', year: '' });
@@ -4229,11 +4292,18 @@ function AdminUsersTab() {
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
 
+  // Client create flow
+  const [showCreateClient, setShowCreateClient] = useState(false);
+  const [clientForm, setClientForm]   = useState({ name: '', email: '', password: '' });
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [clientError, setClientError] = useState('');
+  const [clientSuccess, setClientSuccess] = useState('');
+
   useEffect(() => {
-    adminApi.listStudents()
-      .then(setStudents)
-      .catch(() => {})
-      .finally(() => setLoadingList(false));
+    Promise.all([
+      adminApi.listStudents().then(setStudents).catch(() => {}),
+      adminApi.listUsers().then(all => setClients(all.filter(u => u.role === 'client'))).catch(() => {}),
+    ]).finally(() => setLoadingList(false));
   }, []);
 
   const handleCreate = async () => {
@@ -4252,14 +4322,55 @@ function AdminUsersTab() {
     }
   };
 
+  const handleCreateClient = async () => {
+    if (!clientForm.name || !clientForm.email || !clientForm.password) { setClientError('Name, email and password are required'); return; }
+    setCreatingClient(true); setClientError('');
+    try {
+      const client = await adminApi.createClient(clientForm);
+      setClients(c => [client, ...c]);
+      setClientSuccess(`Client account created. Share these credentials: ${clientForm.email} / ${clientForm.password}`);
+      setClientForm({ name: '', email: '', password: '' });
+      setTimeout(() => { setClientSuccess(''); setShowCreateClient(false); }, 6000);
+    } catch (e) {
+      setClientError(e.message);
+    } finally {
+      setCreatingClient(false);
+    }
+  };
+
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Remove ${name}'s account? This cannot be undone.`)) return;
     await adminApi.deleteStudent(id).catch(() => {});
     setStudents(s => s.filter(u => u.id !== id));
   };
 
+  const handleDeleteClient = async (id, name) => {
+    if (!window.confirm(`Remove ${name}'s account? This cannot be undone.`)) return;
+    try {
+      await adminApi.deleteUser(id);
+      setClients(c => c.filter(u => u.id !== id));
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Section toggle */}
+      <div className="flex gap-1 bg-[#21326c]/5 rounded-xl p-1 w-fit">
+        {[{ id: 'students', label: 'Students' }, { id: 'clients', label: 'Clients' }].map(s => (
+          <button
+            key={s.id}
+            onClick={() => setSection(s.id)}
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+            style={section === s.id ? { background: '#21326c', color: '#fff' } : { color: '#21326c' }}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'students' && (<>
       <div className="flex items-center justify-between">
         <p className="text-sm text-[#21326c]">{students.length} student{students.length !== 1 ? 's' : ''} registered</p>
         <button
@@ -4364,6 +4475,90 @@ function AdminUsersTab() {
           </div>
         ))
       )}
+      </>)}
+
+      {section === 'clients' && (<>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-[#21326c]">{clients.length} client{clients.length !== 1 ? 's' : ''}</p>
+        <button
+          onClick={() => { setShowCreateClient(true); setClientError(''); setClientSuccess(''); }}
+          className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all"
+          style={{ background: '#ff9044' }}
+        >
+          <Plus size={14} /> Create Client Account
+        </button>
+      </div>
+
+      {/* Create client modal */}
+      <Modal open={showCreateClient} onClose={() => setShowCreateClient(false)} title="Create Client Account">
+        {clientSuccess ? (
+          <div className="py-6 text-center space-y-3">
+            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto">
+              <CheckCircle size={28} className="text-green-500" />
+            </div>
+            <p className="font-semibold text-[#21326c]">Account created!</p>
+            <div className="text-xs text-left bg-[#21326c]/5 rounded-xl p-4 leading-relaxed text-[#21326c] break-all">
+              {clientSuccess}
+            </div>
+            <p className="text-xs text-[#21326c]/50">This message will close automatically.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-xl p-3 text-xs text-[#21326c] leading-relaxed border border-[#21326c]/20" style={{ background: '#21326c08' }}>
+              Create an account for a client. Share the email and password with them directly — they can change it after signing in.
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Full Name / Company *</label>
+              <input type="text" placeholder="e.g. Al-Safwa Developments" value={clientForm.name}
+                onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Email *</label>
+              <input type="email" placeholder="client@company.com" value={clientForm.email}
+                onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))}
+                className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Temporary Password *</label>
+              <input type="text" placeholder="At least 6 characters" value={clientForm.password}
+                onChange={e => setClientForm(f => ({ ...f, password: e.target.value }))}
+                className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+            </div>
+            {clientError && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{clientError}</p>}
+            <button onClick={handleCreateClient} disabled={creatingClient || !clientForm.name || !clientForm.email || !clientForm.password}
+              className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50"
+              style={{ background: '#ff9044' }}>
+              {creatingClient ? 'Creating…' : 'Create Account & Copy Credentials'}
+            </button>
+          </div>
+        )}
+      </Modal>
+
+      {/* Client list */}
+      {loadingList ? (
+        <p className="text-sm text-[#21326c]/50 py-4 text-center">Loading clients…</p>
+      ) : clients.length === 0 ? (
+        <div className="text-center py-12 text-[#21326c]/40">
+          <Users size={32} className="mx-auto mb-3 opacity-40" />
+          <p className="text-sm">No client accounts yet.</p>
+        </div>
+      ) : (
+        clients.map(user => (
+          <div key={user.id} className="bg-white rounded-2xl border border-[#21326c]/10 p-4 flex items-center gap-4">
+            <Avatar initials={user.initials} color={user.avatarColor} size="md" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-[#21326c] text-sm">{user.name}</p>
+              <p className="text-xs text-[#21326c]/50">Client</p>
+            </div>
+            <button onClick={() => handleDeleteClient(user.id, user.name)}
+              className="flex-shrink-0 text-[#21326c]/20 hover:text-red-400 transition-colors">
+              <Trash2 size={15} />
+            </button>
+          </div>
+        ))
+      )}
+      </>)}
     </div>
   );
 }
@@ -5887,6 +6082,183 @@ function talentToApiBody(t) {
   };
 }
 
+// ─── VIEW: CLIENT PROFILE ────────────────────────────────────────────────────
+// A client's own profile: their account details, the jobs they've posted, and
+// the projects those jobs became after hiring.
+function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, setView }) {
+  const myJobs = [
+    ...pendingJobs.filter(j => j.clientId === currentUser?.id),
+    ...jobs.filter(j => j.clientId === currentUser?.id),
+  ];
+  // projectsApi.list already returns only the caller's projects.
+  const myProjects = projects || [];
+
+  const statusLabel = s => s === 'pending' ? 'Pending admin review' : s === 'filled' ? 'Filled' : s === 'live' ? 'Live' : s;
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
+      {/* Header */}
+      <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden mb-6">
+        <div className="h-24" style={{ background: `linear-gradient(135deg, ${currentUser?.avatarColor || '#21326c'}33, ${currentUser?.avatarColor || '#21326c'}88)` }} />
+        <div className="px-6 pb-6">
+          <div className="-mt-10 mb-3">
+            <Avatar initials={currentUser?.initials || '?'} color={currentUser?.avatarColor || '#21326c'} size="xl" />
+          </div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="font-display text-2xl font-bold text-[#21326c]">{currentUser?.name}</h1>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#21326c12', color: '#21326c' }}>Client</span>
+                {currentUser?.email && <span className="text-sm text-[#21326c]/50">{currentUser.email}</span>}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setView('jobs')} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all" style={{ background: '#ff9044' }}>
+                <Plus size={14} /> Post a Job
+              </button>
+              <button onClick={() => setView('projects')} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors">
+                <Package size={14} /> My Projects
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-6 mt-5">
+            <div>
+              <p className="font-display text-2xl font-bold text-[#21326c]">{myJobs.length}</p>
+              <p className="text-xs text-[#21326c]/60">Job postings</p>
+            </div>
+            <div>
+              <p className="font-display text-2xl font-bold text-[#21326c]">{myProjects.length}</p>
+              <p className="text-xs text-[#21326c]/60">Projects</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Job postings */}
+      <h2 className="font-display text-lg font-bold text-[#21326c] mb-3">My Job Postings</h2>
+      {myJobs.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-[#21326c]/10 p-8 text-center text-[#21326c]/50 mb-8">
+          <Briefcase size={28} className="mx-auto mb-2 opacity-30" />
+          <p className="text-sm">You haven't posted any jobs yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3 mb-8">
+          {myJobs.map(job => (
+            <div key={job.id} onClick={() => setView('jobs')} className="bg-white rounded-2xl border border-[#21326c]/10 p-4 flex items-center gap-3 cursor-pointer hover:border-[#21326c]/25 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[#21326c] text-sm truncate">{job.title}</p>
+                <p className="text-xs text-[#21326c]/50">{job.budget?.toLocaleString()} EGP · {job.applicants || 0} applicant{job.applicants === 1 ? '' : 's'}</p>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: job.status === 'live' ? '#21326c12' : '#db963015', color: job.status === 'live' ? '#21326c' : '#db9630' }}>
+                {statusLabel(job.status)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Projects */}
+      <h2 className="font-display text-lg font-bold text-[#21326c] mb-3">My Projects</h2>
+      {myProjects.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-[#21326c]/10 p-8 text-center text-[#21326c]/50">
+          <Package size={28} className="mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No projects yet. Hire a student from one of your job postings to start one.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {myProjects.map(p => (
+            <div key={p.id} onClick={() => setView('projects')} className="bg-white rounded-2xl border border-[#21326c]/10 p-4 flex items-center gap-3 cursor-pointer hover:border-[#21326c]/25 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[#21326c] text-sm truncate">{p.title}</p>
+                <p className="text-xs text-[#21326c]/50">{p.budget?.toLocaleString()} EGP</p>
+              </div>
+              <ProjectStatusBadge status={p.status} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── STATIC / INFORMATIONAL PAGES ────────────────────────────────────────────
+// Data-driven so all four (About, Privacy, Terms, Contact) share one layout.
+const INFO_PAGES = {
+  'about-lawnn': {
+    title: 'About Lawnn',
+    subtitle: "Egypt's home for creative student talent.",
+    sections: [
+      { heading: 'Our mission', body: ["Lawnn (لون) connects Egypt's most talented art and design students with the clients, studios, and brands who need their work. We believe the country's creative faculties produce world-class talent that too often goes unseen — and we're building the platform that changes that."] },
+      { heading: 'What we do', body: ["We verify students from Egypt's top creative institutions, surface them to real clients through a curated job board and talent directory, and protect both sides with secure, escrow-backed projects. From a first brief to final payment, the whole engagement lives in one place."] },
+      { heading: 'How it works', body: ["Clients post briefs and discover talent. Students build verified portfolios, apply to briefs, and grow a sustainable creative career while they study. When a client hires, the work becomes a managed project with milestones, messaging, and escrowed payments — so everyone can focus on the creative work."] },
+      { heading: 'Why it matters', body: ["Freelancing as a student is hard: getting discovered, pricing fairly, and getting paid on time. Lawnn removes that friction so emerging Egyptian creatives can do their best work and be paid what it's worth."] },
+    ],
+  },
+  privacy: {
+    title: 'Privacy Policy',
+    subtitle: 'How we collect, use, and protect your information.',
+    sections: [
+      { heading: 'Information we collect', body: ["We collect the information you provide when you create an account or profile — such as your name, email, university, portfolio, and the content you post — along with basic technical data needed to operate the service (e.g. authentication tokens and uploaded files)."] },
+      { heading: 'How we use it', body: ["We use your information to operate the platform: to authenticate you, show your profile and work to relevant clients, enable messaging and projects, and process the escrow lifecycle. We do not sell your personal data, and we do not show third-party advertising."] },
+      { heading: 'File storage', body: ["Uploaded files are stored in secured cloud storage. Public assets (portfolio images, feed media) are served via a public bucket; sensitive files such as job-application attachments are kept in a private bucket and only shared through short-lived signed links with authorised parties."] },
+      { heading: 'Your choices', body: ["You can edit or remove most of your information from your profile at any time. To delete your account or request a copy of your data, contact us through the Contact page."] },
+      { heading: 'Changes', body: ["We may update this policy as the product evolves. Material changes will be reflected here with an updated date."] },
+    ],
+  },
+  terms: {
+    title: 'Terms of Service',
+    subtitle: 'The rules for using Lawnn.',
+    sections: [
+      { heading: 'Accounts', body: ["You're responsible for the activity on your account and for keeping your credentials secure. Student accounts are created via admin invitation; you agree to provide accurate information about yourself and your work."] },
+      { heading: 'Conduct', body: ["Don't post content that is unlawful, infringing, misleading, or harmful. Don't misrepresent your skills or impersonate others. Clients must post genuine briefs; students must only submit work they have the right to share. Lawnn admins moderate posted content and may remove anything that breaks these rules."] },
+      { heading: 'Projects and payments', body: ["Hiring a student creates a project governed by Lawnn's escrow flow. Deposits and final payments move through the defined project stages. Both parties agree to engage in good faith — delivering work as briefed and releasing payment for accepted work."] },
+      { heading: 'Intellectual property', body: ["Creators retain rights to their work until ownership transfers under the agreed terms of a project, typically on full payment. Posting work to Lawnn grants us a limited licence to display it on the platform for the purpose of operating the service."] },
+      { heading: 'Liability', body: ["Lawnn is provided on an ‘as is’ basis during this research preview. We work hard to keep the service reliable but can't guarantee uninterrupted availability."] },
+    ],
+  },
+  contact: {
+    title: 'Contact & FAQ',
+    subtitle: 'Questions? We’re here to help.',
+    sections: [
+      { heading: 'Get in touch', body: ["The fastest way to reach us is from inside the app: open Messages and tap ‘Contact support’ to start a direct conversation with a Lawnn admin. You can also email us at hello@lawnndesign.com."] },
+      { heading: 'How do I join as a student?', body: ["Student accounts are created by invitation once your application is accepted. If you're a student from an Egyptian creative faculty and want to join, reach out and tell us about your work."] },
+      { heading: 'How do I hire someone?', body: ["Create a client account, post a brief on the Job Board (it goes live after a quick admin review), and review applications. When you hire, the engagement becomes a managed, escrow-backed project."] },
+      { heading: 'How do payments work?', body: ["Payments are handled through Lawnn's escrow flow: a deposit is collected when a project starts and the balance is released when the delivered work is approved."] },
+      { heading: 'Is my work protected?', body: ["Yes — application files are kept private and shared only via secure signed links, and you keep the rights to your work until ownership transfers under your project's agreed terms."] },
+    ],
+  },
+};
+
+function InfoPage({ slug, setView }) {
+  const page = INFO_PAGES[slug];
+  if (!page) return null;
+  return (
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 animate-fade-in">
+      <div className="h-2 rounded-full mb-8" style={{ background: 'linear-gradient(90deg, #21326c, #21326c66)' }} />
+      <h1 className="font-display text-3xl sm:text-4xl font-bold text-[#21326c] mb-2">{page.title}</h1>
+      <p className="text-base text-[#21326c]/70 mb-8">{page.subtitle}</p>
+      <div className="space-y-8">
+        {page.sections.map((s, i) => (
+          <section key={i}>
+            <h2 className="font-display text-lg font-bold text-[#21326c] mb-2">{s.heading}</h2>
+            {s.body.map((p, j) => (
+              <p key={j} className="text-sm text-[#21326c]/80 leading-relaxed mb-3">{p}</p>
+            ))}
+          </section>
+        ))}
+      </div>
+      <div className="mt-12 pt-8 border-t border-[#21326c]/10">
+        <button
+          onClick={() => setView('home')}
+          className="text-sm font-semibold text-[#21326c] flex items-center gap-1 hover:opacity-70 transition-opacity"
+        >
+          <ChevronLeft size={14} /> Back to home
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [view, setView] = useState('home');
   const [selectedTalent, setSelectedTalent] = useState(null);
@@ -6055,6 +6427,9 @@ export default function App() {
       // Real students: their profile is the one whose userId matches.
       const talent = talents.find(t => t.userId === currentUser.id);
       if (talent) setSelectedTalent(talent);
+    } else if (v === 'profile' && currentUser?.role === 'client') {
+      // Clients have their own profile view — clear any talent we were viewing.
+      setSelectedTalent(null);
     }
     setView(v);
   };
@@ -6068,8 +6443,16 @@ export default function App() {
       case 'directory':
         return <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       case 'profile': {
-        const profileTalent = selectedTalent
-          || (currentUser?.role === 'student' ? talents.find(t => t.userId === currentUser.id) : null);
+        // Viewing a specific talent (e.g. clicked from the directory) always
+        // shows that talent's profile, whoever is logged in.
+        if (selectedTalent) {
+          return <ProfilePage talent={selectedTalent} setView={handleNavChange} currentUser={currentUser} onUpdateTalent={handleUpdateTalent} />;
+        }
+        // A client's own profile.
+        if (currentUser?.role === 'client') {
+          return <ClientProfilePage currentUser={currentUser} jobs={jobs} pendingJobs={pendingJobs} projects={projects} setView={handleNavChange} />;
+        }
+        const profileTalent = currentUser?.role === 'student' ? talents.find(t => t.userId === currentUser.id) : null;
         return profileTalent
           ? <ProfilePage talent={profileTalent} setView={handleNavChange} currentUser={currentUser} onUpdateTalent={handleUpdateTalent} />
           : <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
@@ -6090,6 +6473,14 @@ export default function App() {
         );
       case 'news':
         return <NewsPage newsPosts={newsPosts} currentUser={currentUser} refreshNews={refreshNews} />;
+      case 'about-lawnn':
+        return <InfoPage slug="about-lawnn" setView={handleNavChange} />;
+      case 'privacy':
+        return <InfoPage slug="privacy" setView={handleNavChange} />;
+      case 'terms':
+        return <InfoPage slug="terms" setView={handleNavChange} />;
+      case 'contact':
+        return <InfoPage slug="contact" setView={handleNavChange} />;
       case 'marketplace':
         return <MarketplacePage listings={listings} setListings={setListings} pendingListings={pendingListings} setPendingListings={setPendingListings} currentUser={currentUser} refreshMarketplace={refreshMarketplace} />;
       case 'projects':
@@ -6163,11 +6554,13 @@ export default function App() {
             <span style={{ fontFamily: 'Noto Naskh Arabic' }}>لون</span>
             <span>— Egyptian Creative Talent Platform</span>
           </div>
-          <div className="flex gap-4">
-            <button onClick={() => handleNavChange('about')} className="hover:opacity-80 transition-colors">About</button>
-            <button onClick={() => handleNavChange('news')}  className="hover:opacity-80 transition-colors">News</button>
-            <button onClick={() => handleNavChange('jobs')}  className="hover:opacity-80 transition-colors">For Clients</button>
-            <a href="#" className="hover:opacity-80 transition-colors">Privacy</a>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 justify-center">
+            <button onClick={() => handleNavChange('about-lawnn')} className="hover:opacity-80 transition-colors">About Lawnn</button>
+            <button onClick={() => handleNavChange('news')}        className="hover:opacity-80 transition-colors">News</button>
+            <button onClick={() => handleNavChange('jobs')}        className="hover:opacity-80 transition-colors">For Clients</button>
+            <button onClick={() => handleNavChange('contact')}     className="hover:opacity-80 transition-colors">Contact &amp; FAQ</button>
+            <button onClick={() => handleNavChange('privacy')}     className="hover:opacity-80 transition-colors">Privacy</button>
+            <button onClick={() => handleNavChange('terms')}       className="hover:opacity-80 transition-colors">Terms</button>
           </div>
         </div>
       </footer>
