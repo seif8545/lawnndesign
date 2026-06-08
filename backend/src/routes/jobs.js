@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { signPrivateRead } from './uploads.js'
+import { notify } from '../lib/notify.js'
 
 const router = Router()
 
@@ -103,6 +104,15 @@ router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) 
     where: { id: req.params.id },
     data: { status },
   })
+
+  if (status === 'live') {
+    await notify(job.clientId, {
+      type: 'check',
+      title: `Your job "${job.title}" is now live`,
+      body: 'Students can now see it and apply.',
+      link: 'jobs',
+    })
+  }
   return res.json(job)
 })
 
@@ -203,6 +213,13 @@ router.post('/:id/applications', requireAuth, requireRole('student'), async (req
     include: { files: true },
   })
 
+  await notify(job.clientId, {
+    type: 'check',
+    title: `New application on "${job.title}"`,
+    body: 'A student applied — review the applications.',
+    link: 'jobs',
+  })
+
   return res.status(201).json(application)
 })
 
@@ -249,6 +266,13 @@ router.post('/:jobId/applications/:appId/accept', requireAuth, async (req, res) 
     // 3. Mark the job filled
     await tx.job.update({ where: { id: jobId }, data: { status: 'filled' } })
     return newProject
+  })
+
+  await notify(application.userId, {
+    type: 'bag',
+    title: `You were hired for "${job.title}"`,
+    body: 'A project has been created — head to My Projects to get started.',
+    link: 'projects',
   })
 
   res.status(201).json(project)

@@ -76,6 +76,7 @@ model User {
 
   // Relations
   profile          Profile?
+  clientProfile    ClientProfile?
   postedJobs       Job[]           @relation("ClientJobs")
   applications     Application[]
   clientProjects   Project[]       @relation("ClientProjects")
@@ -83,7 +84,10 @@ model User {
   reviewsGiven          Review[]        @relation("ReviewsGiven")
   reviewsReceived       Review[]        @relation("ReviewsReceived")
   feedPosts             FeedPost[]
+  feedLikes             FeedLike[]
+  notifications         Notification[]
   listings              MarketplaceListing[]
+  offersMade            Offer[]         @relation("OffersMade")
   clientConversations   Conversation[]  @relation("ClientConversations")
   talentConversations   Conversation[]  @relation("TalentConversations")
   adminConversations    Conversation[]  @relation("AdminConversations")
@@ -138,6 +142,23 @@ model Profile {
   updatedAt DateTime @updatedAt
 
   @@map("profiles")
+}
+
+// ── Client Profile (clients only) ────────────────────────────────────────────
+model ClientProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  company   String?
+  bio       String?  @db.Text
+  website   String?
+  logo      String?  // URL to uploaded logo
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("client_profiles")
 }
 
 model ProfileSkill {
@@ -331,12 +352,42 @@ model FeedPost {
   content  String        @db.Text
   imageUrl String?
   tags     String[]
-  likes    Int           @default(0)
+  likes    Int           @default(0)   // denormalised count of likedBy
   status   FeedPostStatus @default(pending)
+
+  likedBy  FeedLike[]
 
   createdAt DateTime @default(now())
 
   @@map("feed_posts")
+}
+
+// In-app notifications surfaced in the bell menu.
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   @default("info") // money | star | bag | check | message | info
+  title     String
+  body      String?  @db.Text
+  link      String?  // a frontend view id to open on click (e.g. 'jobs')
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+// One row per (user, post) like — enables true per-user like/unlike.
+model FeedLike {
+  userId     String
+  feedPostId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post       FeedPost @relation(fields: [feedPostId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([userId, feedPostId])
+  @@map("feed_likes")
 }
 
 // ─── Conversations & Messages ─────────────────────────────────────────────────
@@ -399,10 +450,30 @@ model MarketplaceListing {
   fileUrl     String?
   status      ListingStatus @default(pending)
 
+  offers      Offer[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("marketplace_listings")
+}
+
+// A buyer's offer on a marketplace listing, with an optional seller reply.
+model Offer {
+  id        String   @id @default(cuid())
+  listingId String
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId   String
+  buyer     User     @relation("OffersMade", fields: [buyerId], references: [id], onDelete: Cascade)
+
+  amount    Int
+  message   String?  @db.Text
+  reply     String?  @db.Text
+  status    String   @default("pending") // pending | accepted | rejected
+
+  createdAt DateTime @default(now())
+
+  @@map("offers")
 }
 
 // ─── News / Insights (admin-authored articles) ───────────────────────────────

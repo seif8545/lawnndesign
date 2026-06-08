@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
+import { notify } from '../lib/notify.js'
 
 const router = Router()
 
@@ -162,6 +163,16 @@ router.post('/:id/advance', requireAuth, async (req, res) => {
     })
   })
 
+  // Notify the relevant counterparty about the transition.
+  const t = updated.talentId
+  const c = updated.clientId
+  const title = updated.title
+  if (nextStatus === 'offer_accepted')   await notify(t, { type: 'check', title: `Your offer was accepted for "${title}"`, body: 'The client will pay the deposit next.', link: 'projects' })
+  else if (nextStatus === 'deposit_paid') await notify(t, { type: 'money', title: `Deposit received for "${title}"`, body: 'Funds are in escrow — you can start the work.', link: 'projects' })
+  else if (nextStatus === 'in_progress')  await notify(t, { type: 'bag',   title: `"${title}" is now in progress`, body: 'Submit your delivery when it\'s ready.', link: 'projects' })
+  else if (nextStatus === 'delivered')    await notify(c, { type: 'bag',   title: `Delivery submitted for "${title}"`, body: 'Review it and approve to release payment.', link: 'projects' })
+  else if (nextStatus === 'completed')    await notify(t, { type: 'money', title: `Payment released for "${title}"`, body: 'The client approved your delivery.', link: 'projects' })
+
   return res.json(updated)
 })
 
@@ -206,6 +217,13 @@ router.post('/:id/reviews', requireAuth, async (req, res) => {
   if (reviewCount >= 2) {
     await prisma.project.update({ where: { id: project.id }, data: { status: 'reviewed' } })
   }
+
+  await notify(recipientId, {
+    type: 'star',
+    title: 'You received a review',
+    body: `${rating}★ on "${project.title}"`,
+    link: 'projects',
+  })
 
   return res.status(201).json(review)
 })

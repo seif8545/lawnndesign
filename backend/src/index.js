@@ -14,6 +14,7 @@ import conversationRoutes  from './routes/conversations.js'
 import feedRoutes          from './routes/feed.js'
 import marketplaceRoutes   from './routes/marketplace.js'
 import newsRoutes          from './routes/news.js'
+import notificationRoutes  from './routes/notifications.js'
 import uploadRoutes        from './routes/uploads.js'
 import { initSocket }      from './socket.js'
 
@@ -66,6 +67,7 @@ app.use('/conversations', conversationRoutes)
 app.use('/feed',          feedRoutes)
 app.use('/marketplace',   marketplaceRoutes)
 app.use('/news',          newsRoutes)
+app.use('/notifications', notificationRoutes)
 app.use('/uploads',       uploadRoutes)
 
 // ── Health check ───────────────────────────────────────────────────────────────

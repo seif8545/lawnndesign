@@ -30,6 +30,31 @@ router.get('/', async (req, res) => {
   return res.json(profiles)
 })
 
+// ── GET /profiles/client/me ───────────────────────────────────────────────────
+// The current client's editable profile (company, bio, website, logo).
+router.get('/client/me', requireAuth, async (req, res) => {
+  const profile = await prisma.clientProfile.findUnique({ where: { userId: req.user.id } })
+  res.json(profile || { company: '', bio: '', website: '', logo: null })
+})
+
+// ── PATCH /profiles/client/me ─────────────────────────────────────────────────
+// Upsert the current client's profile.
+router.patch('/client/me', requireAuth, requireRole('client', 'admin'), async (req, res) => {
+  const { company, bio, website, logo } = req.body
+  const data = {
+    ...(company  !== undefined && { company }),
+    ...(bio      !== undefined && { bio }),
+    ...(website  !== undefined && { website }),
+    ...(logo     !== undefined && { logo }),
+  }
+  const profile = await prisma.clientProfile.upsert({
+    where:  { userId: req.user.id },
+    update: data,
+    create: { userId: req.user.id, ...data },
+  })
+  res.json(profile)
+})
+
 // ── GET /profiles/:id ─────────────────────────────────────────────────────────
 // Public — single profile with full details
 router.get('/:id', async (req, res) => {

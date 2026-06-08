@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, projects as projectsApi, feed as feedApi, marketplace as marketplaceApi, news as newsApi, uploadFile, setToken, clearToken } from './lib/api.js';
+import { auth as authApi, admin as adminApi, conversations as convApi, profiles, jobs as jobsApi, projects as projectsApi, feed as feedApi, marketplace as marketplaceApi, news as newsApi, notifications as notifApi, uploadFile, setToken, clearToken } from './lib/api.js';
 
 // ─── useBusy ────────────────────────────────────────────────────────────────
 // Submit-button guard against spam-clicks. Two-layer:
@@ -2353,30 +2353,50 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
   const [newPost, setNewPost]         = useState('');
   const [submitBanner, setSubmitBanner] = useState(false); // pending success banner
   const [sharing, runShare]           = useBusy();         // guards spam-clicks on Submit
+  const [imageFile, setImageFile]     = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+
+  const clearImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImageFile(null);
+    setImagePreview(null);
+  };
 
   const isStudent = currentUser?.role === 'student';
   const isClient  = currentUser?.role === 'client';
   const isAdmin   = currentUser?.role === 'admin';
 
-  // Optimistic +1 with backend confirmation. We don't track per-user likes
-  // server-side yet, so toggling is also one-way (only an increment).
+  // Optimistic toggle, then reconcile with the server's authoritative count.
   const toggleLike = async id => {
     setFeedPosts(ps => ps.map(p =>
-      p.id === id ? { ...p, liked: true, likes: p.likes + 1 } : p
+      p.id === id ? { ...p, liked: !p.liked, likes: p.likes + (p.liked ? -1 : 1) } : p
     ));
-    try { await feedApi.like(id); }
-    catch (err) { console.warn('[feed] like failed:', err.message); }
+    try {
+      const res = await feedApi.like(id);
+      setFeedPosts(ps => ps.map(p =>
+        p.id === id ? { ...p, liked: res.liked, likes: res.likes } : p
+      ));
+    } catch (err) {
+      console.warn('[feed] like failed:', err.message);
+    }
   };
 
   const handleShare = () => runShare(async () => {
-    if (!newPost.trim()) return;
+    if (!newPost.trim() && !imageFile) return;
     try {
+      let imageUrl = null;
+      if (imageFile) {
+        const up = await uploadFile(imageFile, 'feed');
+        imageUrl = up.url;
+      }
       await feedApi.create({
-        content: newPost.trim(),
-        tags:    newPost.match(/#\w+/g) || [],
+        content:  newPost.trim(),
+        tags:     newPost.match(/#\w+/g) || [],
+        imageUrl,
       });
       await refreshFeed?.();   // admin posts appear instantly; others stay pending
       setNewPost('');
+      clearImage();
       setSubmitBanner(true);
       setTimeout(() => setSubmitBanner(false), 4000);
     } catch (e) {
@@ -2460,8 +2480,16 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
                   onChange={e => setNewPost(e.target.value)}
                   className="w-full text-[#21326c] text-sm resize-none border-0 focus:outline-none placeholder:text-[#21326c]/50 bg-transparent"
                 />
-                <input type="file" accept="image/*" id="feed-img-upload" className="hidden" onChange={e => { if (e.target.files[0]) setNewPost(p => p + ` [Image: ${e.target.files[0].name}]`); }} />
+                <input type="file" accept="image/*" id="feed-img-upload" className="hidden" onChange={e => { const f = e.target.files[0]; if (f) { if (imagePreview) URL.revokeObjectURL(imagePreview); setImageFile(f); setImagePreview(URL.createObjectURL(f)); } e.target.value = ''; }} />
                 <input type="file" accept="video/*" id="feed-vid-upload" className="hidden" onChange={e => { if (e.target.files[0]) setNewPost(p => p + ` [Video: ${e.target.files[0].name}]`); }} />
+                {imagePreview && (
+                  <div className="relative mt-2 inline-block">
+                    <img src={imagePreview} alt="Selected" className="max-h-48 rounded-xl border border-[#21326c]/10" />
+                    <button onClick={clearImage} title="Remove image" className="absolute top-1 right-1 bg-white/90 rounded-full p-1 text-[#21326c] hover:bg-white shadow-sm">
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center justify-between pt-3 border-t border-[#21326c]/10">
                   <div className="flex gap-2">
                     <button onClick={() => document.getElementById('feed-img-upload').click()} title="Attach image" className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors"><Camera size={16} /></button>
@@ -2470,7 +2498,7 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
                   </div>
                   <button
                     onClick={handleShare}
-                    disabled={sharing || !newPost.trim()}
+                    disabled={sharing || (!newPost.trim() && !imageFile)}
                     className="px-4 py-1.5 rounded-full text-sm font-semibold text-white disabled:opacity-40 transition-all hover:opacity-90"
                     style={{ background: '#ff9044' }}
                   >
@@ -2569,25 +2597,30 @@ function FeedPost({ post, onLike, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Image / Video */}
-      <div
-        className="relative mx-5 mb-4 rounded-xl overflow-hidden h-52 flex items-center justify-center"
-        style={{ background: `linear-gradient(160deg, ${post.imageColor}aa, ${post.imageColor})` }}
-      >
-        <span className="text-white font-medium text-sm bg-black/20 px-3 py-1.5 rounded-lg">{post.imageLabel}</span>
-        {post.hasVideo && (
-          <button onClick={() => alert('Video playback requires a media server. Coming soon.')} className="absolute inset-0 flex items-center justify-center">
-            <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
-              <Play size={20} fill="#21326c" color="#21326c" />
+      {/* Image / Video — only when the post actually has media */}
+      {(post.imageUrl || post.hasVideo) && (
+        <div className="relative mx-5 mb-4 rounded-xl overflow-hidden">
+          {post.imageUrl ? (
+            <img src={post.imageUrl} alt="" className="w-full max-h-96 object-cover" />
+          ) : (
+            <div className="h-52 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${post.imageColor}aa, ${post.imageColor})` }}>
+              <span className="text-white font-medium text-sm bg-black/20 px-3 py-1.5 rounded-lg">{post.imageLabel}</span>
             </div>
-          </button>
-        )}
-        {post.hasVideo && (
-          <span className="absolute top-3 right-3 text-xs font-semibold bg-red-500 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
-            <Play size={10} fill="white" /> Tutorial
-          </span>
-        )}
-      </div>
+          )}
+          {post.hasVideo && (
+            <button onClick={() => alert('Video playback requires a media server. Coming soon.')} className="absolute inset-0 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
+                <Play size={20} fill="#21326c" color="#21326c" />
+              </div>
+            </button>
+          )}
+          {post.hasVideo && (
+            <span className="absolute top-3 right-3 text-xs font-semibold bg-red-500 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
+              <Play size={10} fill="white" /> Tutorial
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="px-5 pb-4">
@@ -3790,56 +3823,43 @@ function MarketplacePage({ listings, setListings, pendingListings, setPendingLis
     }
   };
 
-  // ── Offer flow ───────────────────────────────────────────────────────────────
-  const submitOffer = () => {
+  // ── Offer flow (backed by the API) ───────────────────────────────────────────
+  const submitOffer = async () => {
     if (!offerForm.amount || !targetListing) return;
-    const offer = {
-      id: Date.now(),
-      from: currentUser.name,
-      fromInitials: currentUser.initials,
-      fromColor: currentUser.avatarColor,
-      amount: Number(offerForm.amount),
-      message: offerForm.message,
-      status: 'pending',
-      reply: null,
-    };
-    setListings(ls => ls.map(l => l.id === targetListing.id ? { ...l, offers: [...l.offers, offer] } : l));
-    setShowOfferModal(false);
-    setOfferSent(targetListing.id);
-    setTimeout(() => setOfferSent(null), 3500);
-    setOfferForm({ amount: '', message: '' });
-    setTargetListing(null);
+    const listingId = targetListing.id;
+    try {
+      await marketplaceApi.makeOffer(listingId, { amount: Number(offerForm.amount), message: offerForm.message });
+      setShowOfferModal(false);
+      setOfferSent(listingId);
+      setTimeout(() => setOfferSent(null), 3500);
+      setOfferForm({ amount: '', message: '' });
+      setTargetListing(null);
+      await refreshMarketplace?.();
+    } catch (e) {
+      alert(`Couldn't send offer: ${e.message}`);
+    }
   };
 
-  const acceptOffer = (listingId, offerId) => {
-    setListings(ls => ls.map(l => {
-      if (l.id !== listingId) return l;
-      return {
-        ...l,
-        status: 'sold',
-        offers: l.offers.map(o => ({
-          ...o,
-          status: o.id === offerId ? 'accepted' : (o.status === 'pending' ? 'rejected' : o.status),
-        })),
-      };
-    }));
+  const acceptOffer = async (_listingId, offerId) => {
+    try { await marketplaceApi.acceptOffer(offerId); await refreshMarketplace?.(); }
+    catch (e) { alert(`Couldn't accept offer: ${e.message}`); }
   };
 
-  const rejectOffer = (listingId, offerId) => {
-    setListings(ls => ls.map(l => {
-      if (l.id !== listingId) return l;
-      return { ...l, offers: l.offers.map(o => o.id === offerId ? { ...o, status: 'rejected' } : o) };
-    }));
+  const rejectOffer = async (_listingId, offerId) => {
+    try { await marketplaceApi.rejectOffer(offerId); await refreshMarketplace?.(); }
+    catch (e) { alert(`Couldn't reject offer: ${e.message}`); }
   };
 
-  const replyToOffer = (listingId, offerId) => {
+  const replyToOffer = async (_listingId, offerId) => {
     const text = replyText[offerId]?.trim();
     if (!text) return;
-    setListings(ls => ls.map(l => {
-      if (l.id !== listingId) return l;
-      return { ...l, offers: l.offers.map(o => o.id === offerId ? { ...o, reply: text } : o) };
-    }));
-    setReplyText(r => ({ ...r, [offerId]: '' }));
+    try {
+      await marketplaceApi.replyOffer(offerId, text);
+      setReplyText(r => ({ ...r, [offerId]: '' }));
+      await refreshMarketplace?.();
+    } catch (e) {
+      alert(`Couldn't send reply: ${e.message}`);
+    }
   };
 
   // ── Status badge ─────────────────────────────────────────────────────────────
@@ -5879,20 +5899,18 @@ function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone }) {
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 
 // Seed notifications for logged-in roles (demo)
-const SEED_NOTIFICATIONS = {
-  student: [
-    { id: 'n1', icon: 'money',   title: 'Deposit received for "Office Interior Design"', body: '4,500 EGP is held in escrow. Start working!', time: '2 days ago', read: false, iconBg: '#dcfce7' },
-    { id: 'n2', icon: 'star',    title: 'Al-Safwa Dev. left you a 5★ review', body: '"Nour absolutely nailed the brief. Will hire again."', time: '2 weeks ago', read: true },
-    { id: 'n3', icon: 'money',   title: '4,500 EGP released to your wallet', body: 'Full payment for "Office Interior Design" released.', time: '2 weeks ago', read: true, iconBg: '#dcfce7' },
-    { id: 'n4', icon: 'bag',     title: 'New job matching your skills', body: '"UI Design for Fintech App" — 4,500 EGP · Apply now', time: '3 days ago', read: false },
-  ],
-  client: [
-    { id: 'n1', icon: 'check',   title: 'New application on "Brand Identity"', body: 'Karim Ashraf applied to your project.', time: '1 day ago', read: false },
-    { id: 'n2', icon: 'check',   title: 'New application on "Brand Identity"', body: 'Ahmed Khalil also applied. Review both.', time: '18 hours ago', read: false },
-    { id: 'n3', icon: 'bag',     title: 'Delivery received — Client Portal App', body: 'Laila Mansour submitted the final files.', time: '2 days ago', read: false },
-    { id: 'n4', icon: 'money',   title: 'Project complete — Office Interior Design', body: 'Full 9,000 EGP paid. Don\'t forget to leave a review!', time: '2 weeks ago', read: true, iconBg: '#dcfce7' },
-  ],
-};
+// Map a backend notification row to the shape NotificationPanel expects.
+function mapNotification(n) {
+  return {
+    id:    n.id,
+    icon:  n.type,                       // money | star | bag | check | message | info
+    title: n.title,
+    body:  n.body || '',
+    time:  formatRelativeTime(n.createdAt),
+    read:  n.read,
+    link:  n.link || null,
+  };
+}
 
 // ─── API ↔ talent shape mappers ──────────────────────────────────────────────
 // The downstream components were built against the mock TALENTS shape. These
@@ -5987,7 +6005,7 @@ function mapApiFeedPost(p) {
     comments:    0,                        // not modelled yet
     shares:      0,
     hasVideo:    false,
-    liked:       false,                    // no per-user like tracking yet
+    liked:       Boolean(p.liked),
     status:      p.status,
   };
 }
@@ -6095,6 +6113,31 @@ function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, setView }
 
   const statusLabel = s => s === 'pending' ? 'Pending admin review' : s === 'filled' ? 'Filled' : s === 'live' ? 'Live' : s;
 
+  // Editable client details (company, bio, website).
+  const [cp, setCp]             = useState(null);
+  const [showEdit, setShowEdit] = useState(false);
+  const [form, setForm]         = useState({ company: '', bio: '', website: '' });
+  const [saving, setSaving]     = useState(false);
+
+  useEffect(() => {
+    profiles.clientProfile()
+      .then(p => { setCp(p); setForm({ company: p.company || '', bio: p.bio || '', website: p.website || '' }); })
+      .catch(() => {});
+  }, []);
+
+  const saveProfile = async () => {
+    setSaving(true);
+    try {
+      const p = await profiles.updateClientProfile(form);
+      setCp(p);
+      setShowEdit(false);
+    } catch (e) {
+      alert(`Couldn't save: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
       {/* Header */}
@@ -6107,12 +6150,21 @@ function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, setView }
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="font-display text-2xl font-bold text-[#21326c]">{currentUser?.name}</h1>
-              <div className="flex items-center gap-2 mt-1">
+              {cp?.company && <p className="text-sm font-medium text-[#21326c]/80 mt-0.5">{cp.company}</p>}
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#21326c12', color: '#21326c' }}>Client</span>
                 {currentUser?.email && <span className="text-sm text-[#21326c]/50">{currentUser.email}</span>}
+                {cp?.website && (
+                  <a href={/^https?:\/\//i.test(cp.website) ? cp.website : `https://${cp.website}`} target="_blank" rel="noreferrer" className="text-sm text-[#21326c] hover:underline inline-flex items-center gap-1">
+                    <ExternalLink size={12} /> Website
+                  </a>
+                )}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => setShowEdit(true)} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors">
+                <Pen size={13} /> Edit
+              </button>
               <button onClick={() => setView('jobs')} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all" style={{ background: '#ff9044' }}>
                 <Plus size={14} /> Post a Job
               </button>
@@ -6121,6 +6173,7 @@ function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, setView }
               </button>
             </div>
           </div>
+          {cp?.bio && <p className="text-sm text-[#21326c]/70 leading-relaxed mt-4">{cp.bio}</p>}
           <div className="flex gap-6 mt-5">
             <div>
               <p className="font-display text-2xl font-bold text-[#21326c]">{myJobs.length}</p>
@@ -6177,6 +6230,35 @@ function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, setView }
           ))}
         </div>
       )}
+
+      {/* Edit details modal */}
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Edit your details">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Company / Organisation</label>
+            <input type="text" placeholder="e.g. Al-Safwa Developments" value={form.company}
+              onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
+              className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-[#21326c] mb-1.5">About</label>
+            <textarea rows={4} placeholder="Tell talent about your company and the kind of work you commission." value={form.bio}
+              onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
+              className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm resize-none focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Website</label>
+            <input type="text" placeholder="e.g. alsafwa.com" value={form.website}
+              onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
+              className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+          </div>
+          <button onClick={saveProfile} disabled={saving}
+            className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50"
+            style={{ background: '#ff9044' }}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -6364,19 +6446,39 @@ export default function App() {
     para2: "We built a platform that verifies students from Egypt's top creative institutions, connects them with real clients and briefs, and gives them the tools to grow a sustainable creative career — all while they're still studying.",
   });
 
+  // Live notifications from the backend. addNotification still exists for
+  // ephemeral, client-side feedback (it won't survive a refresh).
+  const refreshNotifications = useCallback(() => {
+    if (!currentUser) { setNotifications([]); return Promise.resolve(); }
+    return notifApi.list()
+      .then(list => setNotifications(list.map(mapNotification)))
+      .catch(err => console.warn('[notifications] failed to load:', err.message));
+  }, [currentUser]);
+  useEffect(() => { refreshNotifications(); }, [refreshNotifications]);
+  useEffect(() => {
+    const onFocus = () => refreshNotifications();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshNotifications]);
+
   const addNotification = (notif) => {
-    setNotifications(ns => [{ ...notif, id: `n-${Date.now()}`, read: false }, ...ns]);
+    setNotifications(ns => [{ ...notif, id: `local-${Date.now()}`, read: false }, ...ns]);
   };
-  const markNotifRead = (id) => setNotifications(ns => ns.map(n => n.id === id ? { ...n, read: true } : n));
-  const markAllNotifsRead = () => setNotifications(ns => ns.map(n => ({ ...n, read: true })));
+  const markNotifRead = (id) => {
+    setNotifications(ns => ns.map(n => n.id === id ? { ...n, read: true } : n));
+    notifApi.read(id).catch(() => {});
+  };
+  const markAllNotifsRead = () => {
+    setNotifications(ns => ns.map(n => ({ ...n, read: true })));
+    notifApi.readAll().catch(() => {});
+  };
 
   const handleLogin = user => {
     setCurrentUser(user);
     // Connect socket with the stored JWT
     const token = localStorage.getItem('lawnn_token');
     if (token) connectSocket(token);
-    // Seed role-specific demo notifications
-    setNotifications(SEED_NOTIFICATIONS[user.role] || []);
+    // Notifications load via the refreshNotifications effect once currentUser is set.
     // Students are prompted whenever their profile is incomplete — driven by the
     // completeness effect once talent profiles load (reset the session flag here).
     // Clients keep one-time, per-device dismissal.

@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
+import { notify } from '../lib/notify.js'
 
 const router = Router()
 
 // Strip password and reshape post for client consumption.
 function shape(post) {
-  const { user, ...rest } = post
+  const { user, likedBy, ...rest } = post
   return {
     ...rest,
     author:      user?.name || 'Anonymous',
@@ -14,6 +15,7 @@ function shape(post) {
     initials:    user?.initials || '??',
     avatarColor: user?.avatarColor || '#21326c',
     university:  user?.profile?.university || '',
+    liked:       Array.isArray(likedBy) && likedBy.length > 0,
   }
 }
 
@@ -21,6 +23,7 @@ function shape(post) {
 // Public — approved posts. Admins (when authenticated) also see pending.
 router.get('/', optionalAuth, async (req, res) => {
   const isAdmin = req.user?.role === 'admin'
+  const userId  = req.user?.id
   const posts = await prisma.feedPost.findMany({
     where: isAdmin ? undefined : { status: 'approved' },
     include: {
@@ -30,6 +33,8 @@ router.get('/', optionalAuth, async (req, res) => {
           profile: { select: { university: true } },
         },
       },
+      // Only the caller's own like row, so `shape` can set `liked`.
+      ...(userId ? { likedBy: { where: { userId }, select: { userId: true } } } : {}),
     },
     orderBy: { createdAt: 'desc' },
     take: 100,
@@ -65,17 +70,31 @@ router.post('/', requireAuth, async (req, res) => {
 })
 
 // ── POST /feed/:id/like ───────────────────────────────────────────────────────
-// Naive like — just increments the counter. No per-user tracking yet.
+// Toggle the caller's like on a post. Returns the new count and liked state.
 router.post('/:id/like', requireAuth, async (req, res) => {
-  try {
-    const post = await prisma.feedPost.update({
-      where: { id: req.params.id },
-      data:  { likes: { increment: 1 } },
-    })
-    res.json({ likes: post.likes })
-  } catch {
-    res.status(404).json({ error: 'Post not found' })
+  const feedPostId = req.params.id
+  const userId     = req.user.id
+
+  const exists = await prisma.feedPost.findUnique({ where: { id: feedPostId }, select: { id: true } })
+  if (!exists) return res.status(404).json({ error: 'Post not found' })
+
+  const existing = await prisma.feedLike.findUnique({
+    where: { userId_feedPostId: { userId, feedPostId } },
+  })
+
+  if (existing) {
+    const [, post] = await prisma.$transaction([
+      prisma.feedLike.delete({ where: { userId_feedPostId: { userId, feedPostId } } }),
+      prisma.feedPost.update({ where: { id: feedPostId }, data: { likes: { decrement: 1 } } }),
+    ])
+    return res.json({ likes: Math.max(0, post.likes), liked: false })
   }
+
+  const [, post] = await prisma.$transaction([
+    prisma.feedLike.create({ data: { userId, feedPostId } }),
+    prisma.feedPost.update({ where: { id: feedPostId }, data: { likes: { increment: 1 } } }),
+  ])
+  return res.json({ likes: post.likes, liked: true })
 })
 
 // ── PATCH /feed/:id/status ────────────────────────────────────────────────────
@@ -89,6 +108,15 @@ router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) 
     where: { id: req.params.id },
     data:  { status },
   })
+
+  if (status === 'approved') {
+    await notify(post.userId, {
+      type: 'check',
+      title: 'Your post was approved',
+      body: 'It\'s now live in the feed.',
+      link: 'feed',
+    })
+  }
   res.json(post)
 })
 

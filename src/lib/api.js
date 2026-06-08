@@ -49,6 +49,9 @@ export const profiles = {
   list:   (params = {}) => request('/profiles?' + new URLSearchParams(params)),
   get:    (id)          => request(`/profiles/${id}`),
   update: (id, body)    => request(`/profiles/${id}`, { method: 'PATCH', body }),
+  // Client (not talent) profile of the current user.
+  clientProfile:       () => request('/profiles/client/me'),
+  updateClientProfile: (body) => request('/profiles/client/me', { method: 'PATCH', body }),
 }
 
 // ── Jobs ──────────────────────────────────────────────────────────────────────
@@ -107,6 +110,10 @@ export const marketplace = {
   update:     (id, body)     => request(`/marketplace/${id}`,             { method: 'PATCH',  body }),
   setStatus:  (id, status)   => request(`/marketplace/${id}/status`,      { method: 'PATCH',  body: { status } }),
   delete:     (id)           => request(`/marketplace/${id}`,             { method: 'DELETE' }),
+  makeOffer:   (id, body)       => request(`/marketplace/${id}/offers`,           { method: 'POST', body }),
+  acceptOffer: (offerId)        => request(`/marketplace/offers/${offerId}/accept`, { method: 'POST' }),
+  rejectOffer: (offerId)        => request(`/marketplace/offers/${offerId}/reject`, { method: 'POST' }),
+  replyOffer:  (offerId, reply) => request(`/marketplace/offers/${offerId}/reply`,  { method: 'POST', body: { reply } }),
 }
 
 // ── News ──────────────────────────────────────────────────────────────────────
@@ -116,6 +123,14 @@ export const news = {
   create:  (body)     => request('/news',        { method: 'POST',   body }),
   update:  (id, body) => request(`/news/${id}`,   { method: 'PATCH',  body }),
   delete:  (id)       => request(`/news/${id}`,   { method: 'DELETE' }),
+}
+
+// ── Notifications ───────────────────────────────────────────────────────────
+
+export const notifications = {
+  list:    ()   => request('/notifications'),
+  read:    (id) => request(`/notifications/${id}/read`, { method: 'POST' }),
+  readAll: ()   => request('/notifications/read-all',   { method: 'POST' }),
 }
 
 // ── Uploads ───────────────────────────────────────────────────────────────────
