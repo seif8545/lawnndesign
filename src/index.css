@@ -94,7 +94,7 @@ h1, h2, h3 {
   background-size: 24px 24px;
 }
 .modal-backdrop {
-  background: rgba(33, 50, 108, 0.4);
+  background: rgba(33, 50, 108, 0.55);
   backdrop-filter: blur(4px);
 }
 

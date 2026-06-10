@@ -22,6 +22,7 @@ function useBusy() {
   }, []);
   return [busy, run];
 }
+import { createPortal } from 'react-dom';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket.js';
 import {
   Search, Bell, MessageSquare, Briefcase, Users, Home,
@@ -32,38 +33,11 @@ import {
   GraduationCap, Sparkles, ArrowRight, Lock, Droplets,
   BookOpen, Pen, Video, Image as ImageIcon,
   ExternalLink, Info, TrendingUp, Hash,
-  Zap, Menu, ChevronLeft, ShoppingBag, Package, BadgeCheck,
+  Menu, ChevronLeft, ShoppingBag, Package, BadgeCheck,
   Trash2, Wallet, FileImage, File, Hourglass, PackageCheck,
   CreditCard, PartyPopper,
   Grid, Eye, Award, Tag, Palette, Layers, Stamp, MessageSquareText, UserCheck
 } from 'lucide-react';
-
-// ─── MOCK DATA ────────────────────────────────────────────────────────────────
-
-// Per-project seeded chat messages (keyed by projectId)
-const SEED_CHAT_MESSAGES = {
-  'proj-2': [
-    { id: 1, from: 'them', text: 'Hi Yomna! We just confirmed the deposit — excited to get started. Please review the drawings I sent over.', time: '4 days ago' },
-    { id: 2, from: 'me', text: "Got them, thank you! I'll start blocking out the living room and kitchen first. Should have initial renders to share within 5 days.", time: '4 days ago' },
-    { id: 3, from: 'them', text: 'Perfect. One note — the client wants the marble to feel warm, not cold. Think Sinai stone rather than Carrara.', time: '3 days ago' },
-    { id: 4, from: 'me', text: "Absolutely — I was already leaning that way. I'll prepare 3 material options and you can pick the direction.", time: '3 days ago' },
-    { id: 5, from: 'them', text: 'Great renders! Can you adjust the lighting in the master bedroom — it feels a little flat right now?', time: '1 day ago' },
-    { id: 6, from: 'me', text: 'Sure, I can share the V-Ray files once the lighting pass is done. Sending a preview this afternoon.', time: '10:32 AM' },
-  ],
-  'proj-3': [
-    { id: 1, from: 'them', text: 'Laila, the Figma prototype looks really solid. Component structure is very clean.', time: '2 days ago' },
-    { id: 2, from: 'me', text: 'Thank you! I built a full design token system so dark mode and white-labelling are trivial to add later.', time: '2 days ago' },
-    { id: 3, from: 'them', text: 'One request — could we see a dark mode variant of the main dashboard?', time: '1 day ago' },
-    { id: 4, from: 'me', text: "Already done — check the 'Dark' page in the Figma file. All tokens are linked so colours flip automatically.", time: '1 day ago' },
-    { id: 5, from: 'them', text: 'Sent the final brand guide PDF', time: 'Yesterday' },
-  ],
-  'proj-4': [
-    { id: 1, from: 'them', text: 'Yomna, the renders were absolutely stunning. The client approved everything on the first pass.', time: '3 weeks ago' },
-    { id: 2, from: 'me', text: "So glad! The Sinai marble palette really elevated the whole scheme. It was a great brief to work on.", time: '3 weeks ago' },
-    { id: 3, from: 'them', text: "We've released the final payment to your wallet. Left you a 5★ review — well deserved.", time: '2 weeks ago' },
-    { id: 4, from: 'me', text: "Thank you so much! Looking forward to working together on the next one.", time: '2 weeks ago' },
-  ],
-};
 
 // ─── SHARED COLOR PALETTE ───────────────────────────────────────────────────────
 const PRIMARY_COLOR = '#21326c';
@@ -460,7 +434,7 @@ function Modal({ open, onClose, title, children, wide = false }) {
       delete e.currentTarget.dataset.pressed;
     }
   };
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:px-4 sm:pb-4 sm:pt-20 modal-backdrop"
       style={{ zIndex: 1000 }}
@@ -478,7 +452,8 @@ function Modal({ open, onClose, title, children, wide = false }) {
         </div>
         <div className="px-5 py-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -863,6 +838,14 @@ function HomePage({ setView, setSelectedTalent, talents }) {
     return true;
   });
 
+  // Real stats derived from live talent data — no hardcoded figures.
+  const studentCount = talents.length;
+  const facultyCount = new Set(talents.map(t => t.university).filter(Boolean)).size;
+  const ratedTalents = talents.filter(t => t.rating > 0);
+  const avgRating = ratedTalents.length
+    ? (ratedTalents.reduce((s, t) => s + t.rating, 0) / ratedTalents.length).toFixed(1)
+    : null;
+
   return (
     <div className="animate-fade-in">
       {/* Hero */}
@@ -880,7 +863,7 @@ function HomePage({ setView, setSelectedTalent, talents }) {
               Of Creators
             </h1>
             <p className="text-base sm:text-lg text-[#21326c] mb-6 sm:mb-8 leading-relaxed">
-              Hire verified top-tier students for architecture, design, and fine arts. Exceptional creative work at honest rates — or let Lawnn pick your talent.
+              Hire verified top-tier students for architecture, design, and fine arts. Exceptional creative work at honest rates.
             </p>
             <div className="flex flex-wrap gap-3">
               <button
@@ -897,11 +880,13 @@ function HomePage({ setView, setSelectedTalent, talents }) {
                 <Users size={16} /> Browse Talent
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 text-xs sm:text-sm text-[#21326c]">
-              <span className="flex items-center gap-1.5"><CheckCircle size={13} className="text-[#21326c]" /> 200+ Verified Students</span>
-              <span className="flex items-center gap-1.5"><Building2 size={13} className="text-[#21326c]" /> 12 Faculties</span>
-              <span className="flex items-center gap-1.5"><Star size={13} fill="#db9630" color="#db9630" /> 4.9 Avg. Rating</span>
-            </div>
+            {(studentCount > 0 || avgRating) && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 text-xs sm:text-sm text-[#21326c]">
+                {studentCount > 0 && <span className="flex items-center gap-1.5"><CheckCircle size={13} className="text-[#21326c]" /> {studentCount} Verified Student{studentCount === 1 ? '' : 's'}</span>}
+                {facultyCount > 0 && <span className="flex items-center gap-1.5"><Building2 size={13} className="text-[#21326c]" /> {facultyCount} Facult{facultyCount === 1 ? 'y' : 'ies'}</span>}
+                {avgRating && <span className="flex items-center gap-1.5"><Star size={13} fill="#db9630" color="#db9630" /> {avgRating} Avg. Rating</span>}
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -974,31 +959,6 @@ function HomePage({ setView, setSelectedTalent, talents }) {
         </div>
       </section>
 
-      {/* VIP Concierge Banner */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
-        <div className="rounded-2xl p-6 sm:p-8 relative overflow-hidden" style={{ background: '#21326c' }}>
-          <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-10" style={{ background: '#db9630', filter: 'blur(60px)', transform: 'translate(30%, -30%)' }} />
-          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-            <div className="text-white">
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles size={16} className="text-yellow-400" />
-                <span className="text-yellow-400 font-semibold text-sm">VIP Concierge</span>
-              </div>
-              <h3 className="font-display text-2xl sm:text-3xl font-bold mb-2 text-white">Let Lawnn do the search</h3>
-              <p className="text-sm sm:text-base leading-relaxed max-w-lg text-white/80">
-                Post your job with VIP Concierge (+200 EGP) and our team hand-picks the top 3 matching students for you. No scrolling, no guesswork — just curated talent delivered.
-              </p>
-            </div>
-            <button
-              onClick={() => setView('jobs')}
-              className="flex-shrink-0 flex items-center gap-2 px-6 py-3 rounded-full font-semibold transition-all hover:opacity-90"
-              style={{ background: '#ff9044', color: '#fff' }}
-            >
-              <Zap size={16} /> Post with VIP
-            </button>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
@@ -1070,8 +1030,8 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
   const [selectedJobForApply, setSelectedJobForApply] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
   const [applySuccess, setApplySuccess] = useState(false);
-  const [postForm, setPostForm] = useState({ title: '', brief: '', budget: '', skills: [], vip: false, attachments: [] });
-  const [applyForm, setApplyForm] = useState({ note: '', samples: [], uploadedFiles: [] });
+  const [postForm, setPostForm] = useState({ title: '', brief: '', budget: '', skills: [], attachments: [] });
+  const [applyForm, setApplyForm] = useState({ note: '', uploadedFiles: [] });
   const [filterCat, setFilterCat] = useState('all');
   const [postSuccess, setPostSuccess] = useState(false);
   const [posting,   runPost]    = useBusy();  // guards duplicate job-post submits
@@ -1117,23 +1077,6 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
       await refreshJobs?.();
     } catch (e) { alert(`Couldn't reject: ${e.message}`); }
   });
-
-  const PORTFOLIO_SAMPLES = [
-    { id: 'a', label: 'Villa Interior — New Cairo', color: '#c4622d' },
-    { id: 'b', label: 'Co-working Space 3D Viz', color: '#21326c' },
-    { id: 'c', label: 'Boutique Hotel Lobby', color: '#db9630' },
-    { id: 'd', label: 'Restaurant Moodboard', color: '#21326c' },
-    { id: 'e', label: 'Residential Kitchen Render', color: '#21326c' },
-  ];
-
-  const toggleSample = id => {
-    setApplyForm(f => ({
-      ...f,
-      samples: f.samples.includes(id)
-        ? f.samples.filter(s => s !== id)
-        : f.samples.length < 3 ? [...f.samples, id] : f.samples,
-    }));
-  };
 
   const handleApplyFileAdd = async files => {
     const remaining = 3 - applyForm.uploadedFiles.length;
@@ -1193,7 +1136,6 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
         budget:     parseInt(postForm.budget, 10) || 0,
         budgetType: 'Fixed',
         category:   'Visuals & Branding',
-        vip:        Boolean(postForm.vip),
         skills:     postForm.skills,
         // Attachments are uploaded to Supabase Storage by handleJobAttachmentAdd
         // before reaching here, so `url` is the persistent public URL.
@@ -1208,7 +1150,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
       setTimeout(() => {
         setShowPostModal(false);
         setPostSuccess(false);
-        setPostForm({ title: '', brief: '', budget: '', skills: [], vip: false, attachments: [] });
+        setPostForm({ title: '', brief: '', budget: '', skills: [], attachments: [] });
       }, 2500);
     } catch (e) {
       alert(`Couldn't post job: ${e.message}`);
@@ -1273,11 +1215,6 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap mb-2">
                   <h3 className="font-semibold text-[#21326c] text-lg leading-tight">{job.title}</h3>
-                  {job.vip && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fdf0d3', color: '#21326c', borderColor: '#e4ae50', border: '1px solid' }}>
-                      <Sparkles size={10} /> VIP Concierge
-                    </span>
-                  )}
                   {job.status && job.status !== 'live' && (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#db963015', color: '#db9630' }}>
                       <Clock size={10} /> {job.status === 'pending' ? 'Pending admin review' : job.status === 'filled' ? 'Filled' : job.status}
@@ -1361,7 +1298,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
               <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Job Title *</label>
               <input
                 type="text"
-                placeholder="e.g. Brand Identity for F&B Startup"
+                placeholder="e.g. Logo & brand identity for a café"
                 value={postForm.title}
                 onChange={e => setPostForm(f => ({ ...f, title: e.target.value }))}
                 className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] focus:border-[#21326c] transition-all placeholder:text-[#21326c]"
@@ -1444,36 +1381,13 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
               </div>
             </div>
 
-            {/* VIP Toggle */}
-            <div
-              className={`rounded-xl border-2 p-4 cursor-pointer transition-all ${postForm.vip ? 'border-yellow-400 bg-yellow-50' : 'border-[#21326c]/10 bg-[#21326c]/5'}`}
-              onClick={() => setPostForm(f => ({ ...f, vip: !f.vip }))}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Sparkles size={20} className={postForm.vip ? 'text-yellow-500' : 'text-[#21326c]'} />
-                  <div>
-                    <p className="font-semibold text-[#21326c] text-sm">VIP Concierge (+200 EGP)</p>
-                    <p className="text-xs text-[#21326c] mt-0.5">Let Lawnn hand-pick the top 3 matching students for your project</p>
-                  </div>
-                </div>
-                <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${postForm.vip ? 'bg-yellow-400' : 'bg-[#21326c]/30'}`}>
-                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${postForm.vip ? 'translate-x-5' : 'translate-x-0'}`} />
-                </div>
-              </div>
-            </div>
-
             <button
               onClick={handlePost}
               disabled={posting || !postForm.title || !postForm.brief || !postForm.budget}
               className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: '#ff9044' }}
             >
-              {posting
-                ? 'Posting…'
-                : postForm.vip
-                  ? `Post Job — ${(parseInt(postForm.budget || 0) + 200).toLocaleString()} EGP total`
-                  : 'Post Job'}
+              {posting ? 'Posting…' : 'Post Job'}
             </button>
           </div>
         )}
@@ -1482,7 +1396,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
       {/* APPLY MODAL */}
       <Modal
         open={showApplyModal}
-        onClose={() => { setShowApplyModal(false); setApplyForm({ note: '', samples: [], uploadedFiles: [] }); }}
+        onClose={() => { setShowApplyModal(false); setApplyForm({ note: '', uploadedFiles: [] }); }}
         title={`Apply: ${selectedJobForApply?.title || ''}`}
         wide
       >
@@ -1505,33 +1419,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
 
           <div>
             <label className="block text-sm font-semibold text-[#21326c] mb-1">Portfolio Samples</label>
-            <p className="text-xs text-[#21326c] mb-3">Choose existing pieces or upload your own files (images / PDFs) — up to 3 total</p>
-
-            {/* Existing mock samples */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 mb-3">
-              {PORTFOLIO_SAMPLES.map(sample => {
-                const selected = applyForm.samples.includes(sample.id);
-                return (
-                  <div
-                    key={sample.id}
-                    onClick={() => toggleSample(sample.id)}
-                    className={`relative rounded-xl cursor-pointer overflow-hidden border-2 transition-all ${selected ? 'border-[#21326c]' : 'border-transparent'}`}
-                  >
-                    <div
-                      className="h-20 flex items-end p-2"
-                      style={{ background: `linear-gradient(160deg, ${sample.color}aa, ${sample.color})` }}
-                    >
-                      <span className="text-white font-medium leading-tight" style={{ fontSize: '9px' }}>{sample.label}</span>
-                    </div>
-                    {selected && (
-                      <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#21326c] flex items-center justify-center">
-                        <CheckCircle size={12} color="white" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <p className="text-xs text-[#21326c] mb-3">Upload your work (images / PDFs) — up to 3 files</p>
 
             {/* Uploaded files */}
             {applyForm.uploadedFiles.length > 0 && (
@@ -1549,14 +1437,14 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
               </div>
             )}
 
-            {(applyForm.samples.length + applyForm.uploadedFiles.length) < 3 && (
+            {applyForm.uploadedFiles.length < 3 && (
               <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[#21326c]/30 text-sm text-[#21326c]/60 hover:border-[#21326c]/60 hover:text-[#21326c] transition-colors w-full justify-center">
                 <Upload size={14} /> Upload portfolio files
                 <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={e => handleApplyFileAdd(e.target.files)} />
               </label>
             )}
 
-            <p className="text-xs text-[#21326c] mt-2">{applyForm.samples.length + applyForm.uploadedFiles.length}/3 selected</p>
+            <p className="text-xs text-[#21326c] mt-2">{applyForm.uploadedFiles.length}/3 uploaded</p>
           </div>
 
           {applySuccess ? (
@@ -1585,13 +1473,13 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                   setTimeout(() => {
                     setShowApplyModal(false);
                     setApplySuccess(false);
-                    setApplyForm({ note: '', samples: [], uploadedFiles: [] });
+                    setApplyForm({ note: '', uploadedFiles: [] });
                   }, 2500);
                 } catch (err) {
                   alert(`Couldn't submit: ${err.message}`);
                 }
               })}
-              disabled={applying || !applyForm.note || (applyForm.samples.length + applyForm.uploadedFiles.length) === 0}
+              disabled={applying || !applyForm.note || applyForm.uploadedFiles.length === 0}
               className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: '#ff9044' }}
             >
@@ -1662,11 +1550,6 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
             <div>
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <h2 className="font-display text-xl font-bold text-[#21326c]">{selectedJob.title}</h2>
-                {selectedJob.vip && (
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fdf0d3', color: '#21326c', border: '1px solid #e4ae50' }}>
-                    <Sparkles size={10} /> VIP
-                  </span>
-                )}
               </div>
               <p className="text-sm text-[#21326c]/60">{selectedJob.client} · {selectedJob.postedAgo} · {selectedJob.applicants} applicants</p>
             </div>
@@ -2536,7 +2419,6 @@ function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPos
 }
 
 function FeedPost({ post, onLike, isAdmin, onDelete }) {
-  const [showComments, setShowComments] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showMore, setShowMore] = useState(false);
 
@@ -2624,15 +2506,12 @@ function FeedPost({ post, onLike, isAdmin, onDelete }) {
 
       {/* Actions */}
       <div className="px-5 pb-4">
-        <div className="flex items-center gap-1 mb-3">
-          <div className="flex -space-x-1">
-            {['#21326c', '#c4622d', '#db9630'].map((c, i) => (
-              <div key={i} className="w-5 h-5 rounded-full border-2 border-white" style={{ background: c }} />
-            ))}
+        {post.likes > 0 && (
+          <div className="flex items-center gap-1.5 mb-3">
+            <Heart size={12} fill="#ef4444" className="text-red-500" />
+            <span className="text-xs text-[#21326c]">{post.likes} {post.likes === 1 ? 'like' : 'likes'}</span>
           </div>
-          <span className="text-xs text-[#21326c] ml-1">{post.likes} likes</span>
-          <span className="text-xs text-[#21326c] ml-2">{post.comments} comments</span>
-        </div>
+        )}
 
         <div className="flex items-center gap-1 border-t border-[#21326c]/10 pt-3">
           <button
@@ -2642,31 +2521,12 @@ function FeedPost({ post, onLike, isAdmin, onDelete }) {
             }`}
           >
             <Heart size={16} fill={post.liked ? '#ef4444' : 'none'} />
-            Like
-          </button>
-          <button
-            onClick={() => setShowComments(!showComments)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-[#21326c] hover:bg-[#21326c]/5 transition-colors flex-1 justify-center"
-          >
-            <MessageCircle size={16} /> Comment
+            {post.liked ? 'Liked' : 'Like'}
           </button>
           <button onClick={handleShare} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-[#21326c] hover:bg-[#21326c]/5 transition-colors flex-1 justify-center">
             <Share2 size={16} /> {copied ? 'Copied!' : 'Share'}
           </button>
         </div>
-
-        {showComments && (
-          <div className="mt-3 pt-3 border-t border-[#21326c]/10">
-            <div className="flex gap-2">
-              <Avatar initials="YF" color="#db9630" size="sm" />
-              <input
-                type="text"
-                placeholder="Add a comment..."
-                className="flex-1 text-sm px-3 py-2 rounded-full bg-[#21326c]/5 border-0 focus:outline-none focus:ring-2 focus:ring-[#21326c] text-[#21326c] placeholder:text-[#21326c]"
-              />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -3317,17 +3177,24 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-16">
-          {[
-            { label: '200+', desc: 'Verified Students', Icon: GraduationCap },
-            { label: '12',   desc: 'Partner Faculties',  Icon: Building2 },
-            { label: '4.9★', desc: 'Average Rating',     Icon: Star },
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl border border-[#21326c]/10 p-6 text-center">
-              <s.Icon size={24} className="mx-auto mb-3 text-[#21326c]" />
-              <p className="font-display text-4xl font-bold text-[#21326c] mb-1">{s.label}</p>
-              <p className="text-sm text-[#21326c]">{s.desc}</p>
-            </div>
-          ))}
+          {(() => {
+            const studentCount = talents.length;
+            const facultyCount = new Set(talents.map(t => t.university).filter(Boolean)).size;
+            const rated = talents.filter(t => t.rating > 0);
+            const avg = rated.length ? (rated.reduce((s, t) => s + t.rating, 0) / rated.length).toFixed(1) : null;
+            const stats = [
+              { label: String(studentCount), desc: 'Verified Students', Icon: GraduationCap },
+              { label: String(facultyCount), desc: 'Partner Faculties',  Icon: Building2 },
+              ...(avg ? [{ label: `${avg}★`, desc: 'Average Rating', Icon: Star }] : []),
+            ];
+            return stats.map(s => (
+              <div key={s.desc} className="bg-white rounded-2xl border border-[#21326c]/10 p-6 text-center">
+                <s.Icon size={24} className="mx-auto mb-3 text-[#21326c]" />
+                <p className="font-display text-4xl font-bold text-[#21326c] mb-1">{s.label}</p>
+                <p className="text-sm text-[#21326c]">{s.desc}</p>
+              </div>
+            ));
+          })()}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -3339,8 +3206,8 @@ function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, setAbou
             },
             {
               title: 'For Clients',
-              body: 'Browse verified student talent, post jobs, or let our VIP Concierge hand-pick the best match for your brief. Every student on Lawnn is verified by their faculty and reviewed by our team.',
-              features: ['Vetted creative talent', 'Post jobs & receive applications', 'VIP concierge matching', 'Secure payments via escrow', 'Direct messaging'],
+              body: 'Browse verified student talent and post jobs to find the best match for your brief. Every student on Lawnn is verified by their faculty and reviewed by our team.',
+              features: ['Vetted creative talent', 'Post jobs & receive applications', 'Secure payments via escrow', 'Direct messaging'],
             },
           ].map(card => (
             <div key={card.title} className="bg-white rounded-2xl border border-[#21326c]/10 p-8">
@@ -4423,7 +4290,7 @@ function AdminUsersTab() {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Full Name *</label>
-                <input type="text" placeholder="e.g. Nour El-Sayed" value={form.name}
+                <input type="text" placeholder="Student's full name" value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
               </div>
@@ -4529,7 +4396,7 @@ function AdminUsersTab() {
             </div>
             <div>
               <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Full Name / Company *</label>
-              <input type="text" placeholder="e.g. Al-Safwa Developments" value={clientForm.name}
+              <input type="text" placeholder="Client name or company" value={clientForm.name}
                 onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))}
                 className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
             </div>
@@ -5088,7 +4955,6 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
                 <div>
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <h3 className="font-semibold text-[#21326c] text-base">{p.title}</h3>
-                    {p.vip && <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fdf0d3', color: '#21326c', border: '1px solid #e4ae50' }}><Sparkles size={9} className="inline mr-1" />VIP</span>}
                   </div>
                   <p className="text-sm text-[#21326c]/60">{p.postedAt} · {p.budget.toLocaleString()} EGP</p>
                 </div>
@@ -5114,7 +4980,7 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
       )}
 
       {/* ── PROJECT DETAIL PANEL ── */}
-      {proj && (
+      {proj && createPortal((
         <div className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:px-4 sm:pb-4 sm:pt-20 modal-backdrop" style={{ zIndex: 1000 }} onClick={() => setSelected(null)}>
           <div
             className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[88vh] overflow-y-auto animate-fade-in flex flex-col"
@@ -5454,7 +5320,7 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
 
       {/* New Project Modal (simple re-use of job post UI) */}
       <Modal open={showPostModal} onClose={() => setShowPostModal(false)} title="Post a New Project" wide>
@@ -5467,7 +5333,6 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
                 title:  project.title,
                 brief:  project.brief,
                 budget: project.budget,
-                vip:    project.vip,
                 // No talentId — project starts in 'open' until a talent is hired.
               });
               await refreshProjects?.();
@@ -5484,14 +5349,14 @@ function ProjectsPage({ projects, setProjects, currentUser, setView, setSelected
 }
 
 function NewProjectForm({ currentUser, onSubmit, busy = false }) {
-  const [form, setForm] = useState({ title: '', brief: '', budget: '', skills: [], vip: false });
+  const [form, setForm] = useState({ title: '', brief: '', budget: '', skills: [] });
   const [newSkill, setNewSkill] = useState('');
   const addSkill = () => { const s = newSkill.trim(); if (s && !form.skills.includes(s)) setForm(f => ({ ...f, skills: [...f.skills, s] })); setNewSkill(''); };
   return (
     <div className="space-y-5">
       <div>
         <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Project Title *</label>
-        <input type="text" placeholder="e.g. Brand Identity for F&B Startup" value={form.title}
+        <input type="text" placeholder="e.g. Logo & brand identity for a café" value={form.title}
           onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
           className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
       </div>
@@ -5522,7 +5387,7 @@ function NewProjectForm({ currentUser, onSubmit, busy = false }) {
         <SkillPicker currentTags={form.skills} onAdd={s => setForm(f => ({ ...f, skills: [...f.skills, s] }))} />
       </div>
       <button
-        onClick={() => onSubmit({ id: `proj-${Date.now()}`, title: form.title, brief: form.brief, budget: parseInt(form.budget) || 0, tags: form.skills, vip: form.vip })}
+        onClick={() => onSubmit({ title: form.title, brief: form.brief, budget: parseInt(form.budget) || 0, tags: form.skills })}
         disabled={busy || !form.title || !form.brief || !form.budget}
         className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         style={{ background: '#ff9044' }}
@@ -5751,7 +5616,7 @@ function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone }) {
                 <p className="text-xs text-white/70">Client account</p>
               </div>
             </div>
-            <p className="text-white/80 text-sm leading-relaxed">Browse 200+ verified students from 12 of Egypt's top creative faculties.</p>
+            <p className="text-white/80 text-sm leading-relaxed">Browse verified students from Egypt's top creative faculties.</p>
           </div>
           <div className="space-y-2">
             {[
@@ -5976,7 +5841,6 @@ function mapApiJob(j) {
     budget:     j.budget,                          // number — formatted at render
     budgetType: j.budgetType || 'Fixed',
     category:   j.category || 'Visuals & Branding',
-    vip:        Boolean(j.vip),
     status:     j.status,
     clientId:   j.clientId,
     client:     j.client?.name || 'Anonymous',
@@ -6054,7 +5918,6 @@ function mapApiProject(p) {
     title:                  p.title,
     brief:                  p.brief,
     budget:                 p.budget,
-    vip:                    Boolean(p.vip),
     status:                 p.status,
     clientId:               p.clientId,
     clientName:             p.client?.name || '',
@@ -6236,7 +6099,7 @@ function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, setView }
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Company / Organisation</label>
-            <input type="text" placeholder="e.g. Al-Safwa Developments" value={form.company}
+            <input type="text" placeholder="Your company or organisation" value={form.company}
               onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
               className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
           </div>
