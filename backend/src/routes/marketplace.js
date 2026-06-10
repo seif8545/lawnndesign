@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { notify } from '../lib/notify.js'
+import { safeUrl, nonNegativeInt } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -68,14 +69,18 @@ router.post('/', requireAuth, async (req, res) => {
   if (!title || !description || price === undefined) {
     return res.status(400).json({ error: 'title, description, and price are required' })
   }
+  const priceInt = nonNegativeInt(price)
+  if (priceInt === null) {
+    return res.status(400).json({ error: 'price must be a non-negative number' })
+  }
   const listing = await prisma.marketplaceListing.create({
     data: {
       sellerId:    req.user.id,
       title,
       description,
-      price:       parseInt(price, 10) || 0,
+      price:       priceInt,
       category:    category || 'Other',
-      fileUrl:     fileUrl || null,
+      fileUrl:     safeUrl(fileUrl),
       status:      req.user.role === 'admin' ? 'active' : 'pending',
     },
     include: {

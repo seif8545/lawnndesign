@@ -1,11 +1,19 @@
 import { Server } from 'socket.io'
 import jwt from 'jsonwebtoken'
 import prisma from './lib/prisma.js'
+import { safeUrl } from './lib/sanitize.js'
 
 export function initSocket(httpServer) {
+  // Match the REST layer: support a comma-separated list of allowed origins
+  // rather than treating the whole string as one literal origin.
+  const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+      origin: allowedOrigins,
       credentials: true,
     },
   })
@@ -55,7 +63,7 @@ export function initSocket(httpServer) {
           conversationId,
           senderId: userId,
           content:  content.trim(),
-          fileUrl:  fileUrl  || null,
+          fileUrl:  safeUrl(fileUrl),
           fileName: fileName || null,
           fileMime: fileMime || null,
         },

@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { signPrivateRead } from './uploads.js'
 import { notify } from '../lib/notify.js'
+import { safeUrl, nonNegativeInt } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -59,8 +60,25 @@ router.get('/:id', async (req, res) => {
 router.post('/', requireAuth, requireRole('client', 'admin'), async (req, res) => {
   const { title, brief, budget, budgetType, category, vip, skills = [], attachments = [] } = req.body
 
-  if (!title || !brief || !budget) {
+  if (!title || !brief || budget === undefined) {
     return res.status(400).json({ error: 'title, brief, and budget are required' })
+  }
+  const budgetInt = nonNegativeInt(budget)
+  if (budgetInt === null) {
+    return res.status(400).json({ error: 'budget must be a non-negative number' })
+  }
+
+  // Validate attachment URLs up front — reject any non-http(s)/unsafe value so
+  // an attacker can't persist a `javascript:` link that the UI renders as href.
+  const cleanAttachments = []
+  for (const a of Array.isArray(attachments) ? attachments : []) {
+    const url = safeUrl(a?.url)
+    if (!url) return res.status(400).json({ error: 'An attachment has an invalid URL' })
+    cleanAttachments.push({
+      name: String(a.name || 'file'),
+      url,
+      mimeType: a.mimeType || a.type || 'application/octet-stream',
+    })
   }
 
   const job = await prisma.job.create({
@@ -68,21 +86,17 @@ router.post('/', requireAuth, requireRole('client', 'admin'), async (req, res) =
       clientId: req.user.id,
       title,
       brief,
-      budget: parseInt(budget),
+      budget: budgetInt,
       budgetType: budgetType || 'Fixed',
       category: category || 'Visuals & Branding',
       vip: Boolean(vip),
       // Admins post live; clients go to pending review
       status: req.user.role === 'admin' ? 'live' : 'pending',
       skills: {
-        create: skills.map(skill => ({ skill })),
+        create: (Array.isArray(skills) ? skills : []).map(skill => ({ skill: String(skill) })),
       },
       attachments: {
-        create: attachments.map(a => ({
-          name: a.name,
-          url: a.url,
-          mimeType: a.mimeType || a.type || 'application/octet-stream',
-        })),
+        create: cleanAttachments,
       },
     },
     include: { skills: true, attachments: true },
@@ -197,17 +211,24 @@ router.post('/:id/applications', requireAuth, requireRole('student'), async (req
     return res.status(409).json({ error: 'You have already applied to this job' })
   }
 
+  const cleanFiles = []
+  for (const f of Array.isArray(files) ? files : []) {
+    const url = safeUrl(f?.url)
+    if (!url) return res.status(400).json({ error: 'An attached file has an invalid URL' })
+    cleanFiles.push({
+      name: String(f.name || 'file'),
+      url,
+      mimeType: f.mimeType || f.type || 'application/octet-stream',
+    })
+  }
+
   const application = await prisma.application.create({
     data: {
       jobId: req.params.id,
       userId: req.user.id,
       note,
       files: {
-        create: files.map(f => ({
-          name: f.name,
-          url: f.url,
-          mimeType: f.mimeType || f.type || 'application/octet-stream',
-        })),
+        create: cleanFiles,
       },
     },
     include: { files: true },

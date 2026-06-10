@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { notify } from '../lib/notify.js'
+import { safeUrl } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -53,7 +54,7 @@ router.post('/', requireAuth, async (req, res) => {
     data: {
       userId:   req.user.id,
       content:  content.trim(),
-      imageUrl: imageUrl || null,
+      imageUrl: safeUrl(imageUrl),
       tags:     Array.isArray(tags) ? tags : [],
       status:   req.user.role === 'admin' ? 'approved' : 'pending',
     },

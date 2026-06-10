@@ -1585,7 +1585,7 @@ function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, cur
                 <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wide mb-2">Reference Files</p>
                 <div className="space-y-2">
                   {selectedJob.attachments.map(att => (
-                    <a key={att.id} href={att.url} target="_blank" rel="noreferrer"
+                    <a key={att.id} href={/^https?:\/\//i.test(att.url || '') ? att.url : undefined} target="_blank" rel="noreferrer"
                       className="flex items-center gap-3 px-3 py-2 bg-[#21326c]/5 hover:bg-[#21326c]/10 rounded-xl transition-colors group"
                     >
                       {att.type.startsWith('image/') ? <ImageIcon size={14} className="text-[#21326c] flex-shrink-0" /> : <File size={14} className="text-[#21326c] flex-shrink-0" />}

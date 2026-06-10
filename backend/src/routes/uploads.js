@@ -85,31 +85,12 @@ router.post('/sign', requireAuth, async (req, res) => {
   })
 })
 
-// ── POST /uploads/sign-read ──────────────────────────────────────────────────
-// Mint a short-lived signed read URL for a private-bucket object.
-// Body: { path, expiresIn? }
-// NB: authorisation of "can this caller see this file?" is enforced by whoever
-// CALLS this endpoint upstream (e.g. the job-applications route below).
-// We expose it here for ad-hoc use but it's intended as a helper, not a
-// public lookup — any authenticated user calling it for a known path would
-// get a working URL. For sensitive flows, sign internally instead of via HTTP.
-router.post('/sign-read', requireAuth, async (req, res) => {
-  const { path, expiresIn = 60 * 60 } = req.body || {}
-  if (!path || typeof path !== 'string') {
-    return res.status(400).json({ error: 'path is required' })
-  }
-
-  const { data, error } = await supabase
-    .storage
-    .from(PRIVATE_BUCKET)
-    .createSignedUrl(path, expiresIn)
-
-  if (error) {
-    console.error('[uploads] createSignedUrl failed:', error)
-    return res.status(500).json({ error: 'Could not create signed read URL' })
-  }
-  return res.json({ signedUrl: data.signedUrl, expiresIn })
-})
+// NOTE: A public `POST /uploads/sign-read` endpoint was removed for security.
+// It would mint a signed read URL for ANY private-bucket path supplied by any
+// authenticated caller, bypassing the per-resource authorisation enforced by
+// the routes that actually own those files (e.g. jobs.js applications). Private
+// files are now only ever signed internally via `signPrivateRead` below, called
+// from a route that has already checked the caller is allowed to see the file.
 
 // Helper used by other routes (e.g. jobs.js applications endpoint) to swap
 // stored paths for short-lived signed read URLs before sending to the client.

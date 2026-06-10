@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
+import { safeUrl } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -45,7 +46,7 @@ router.patch('/client/me', requireAuth, requireRole('client', 'admin'), async (r
     ...(company  !== undefined && { company }),
     ...(bio      !== undefined && { bio }),
     ...(website  !== undefined && { website }),
-    ...(logo     !== undefined && { logo }),
+    ...(logo     !== undefined && { logo: safeUrl(logo) }),
   }
   const profile = await prisma.clientProfile.upsert({
     where:  { userId: req.user.id },
@@ -100,7 +101,7 @@ router.patch('/:id', requireAuth, requireRole('student', 'admin'), async (req, r
       ...(dept !== undefined && { dept }),
       ...(year !== undefined && { year: parseInt(year) }),
       ...(isGrad !== undefined && { isGrad }),
-      ...(avatar !== undefined && { avatar }),
+      ...(avatar !== undefined && { avatar: safeUrl(avatar) }),
     },
   })
 
@@ -124,8 +125,8 @@ router.patch('/:id', requireAuth, requireRole('student', 'admin'), async (req, r
           label: item.label,
           color: item.color || '#21326c',
           height: item.h || item.height || 'medium',
-          imageUrl: item.imageUrl || null,
-          pdfUrl: item.pdfUrl || null,
+          imageUrl: safeUrl(item.imageUrl),
+          pdfUrl: safeUrl(item.pdfUrl),
           pdfName: item.pdfName || null,
           sortOrder: i,
         })),

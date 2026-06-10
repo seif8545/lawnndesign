@@ -18,6 +18,13 @@ import notificationRoutes  from './routes/notifications.js'
 import uploadRoutes        from './routes/uploads.js'
 import { initSocket }      from './socket.js'
 
+// Fail fast on misconfiguration: a missing/weak JWT secret silently breaks auth
+// or, worse, makes tokens forgeable. Refuse to boot without a strong one.
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error('FATAL: JWT_SECRET is missing or too short (need at least 32 characters).')
+  process.exit(1)
+}
+
 const app    = express()
 const server = http.createServer(app)
 const PORT   = process.env.PORT || 3001
@@ -44,6 +51,18 @@ app.use(cors({
   credentials: true,
 }))
 app.use(express.json({ limit: '1mb' }))
+
+// Baseline limiter on every request — blunts scraping, brute-forcing of
+// object IDs, and notification/offer/upload-sign spam. Generous enough not to
+// bother normal use.
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please slow down.' },
+})
+app.use(globalLimiter)
 
 // Rate limit auth endpoints to slow credential stuffing and abuse.
 const authLimiter = rateLimit({
