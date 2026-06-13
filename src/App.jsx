@@ -403,12 +403,11 @@ function CategoryPill({ label, icon: Icon, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border transition-all duration-200 whitespace-nowrap`}
-      style={{
-        backgroundColor: active ? '#ff9044' : '#21326c',
-        color: '#ffffff',
-        borderColor: active ? '#ff9044' : '#21326c'
-      }}
+      className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all duration-200 whitespace-nowrap ${
+        active
+          ? 'bg-[#21326c] text-white border-[#21326c]'
+          : 'bg-transparent text-[#21326c] border-[#21326c]/20 hover:border-[#21326c]/50 hover:bg-[#21326c]/5'
+      }`}
     >
       {Icon && <Icon size={15} />}
       {label}
@@ -708,17 +707,18 @@ function TopNav({ view, setView, currentUser, onLoginClick, onLogout, notificati
           </button>
 
           {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
+          <nav className="hidden md:flex items-center gap-0.5 flex-1 justify-center">
             {navItems.map(item => (
               <button
                 key={item.id}
                 onClick={() => setView(item.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  view === item.id ? 'bg-[#21326c]/10 text-[#21326c]' : 'text-[#21326c] hover:bg-[#21326c]/5'
+                className={`px-3.5 py-2 text-sm transition-colors ${
+                  view === item.id
+                    ? 'text-[#21326c] font-semibold'
+                    : 'text-[#21326c]/55 font-medium hover:text-[#21326c]'
                 }`}
               >
-                <item.icon size={15} />
-                <span>{item.label}</span>
+                {item.label}
               </button>
             ))}
           </nav>
@@ -735,7 +735,7 @@ function TopNav({ view, setView, currentUser, onLoginClick, onLogout, notificati
                 </button>
                 <button
                   onClick={() => setView('jobs')}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
                   style={{ background: '#ff9044' }}
                 >
                   <Plus size={15} />
@@ -747,7 +747,7 @@ function TopNav({ view, setView, currentUser, onLoginClick, onLogout, notificati
                 {currentUser.role === 'client' && (
                   <button
                     onClick={() => setView('jobs')}
-                    className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90"
+                    className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded text-sm font-semibold text-white transition-all hover:opacity-90"
                     style={{ background: '#ff9044' }}
                   >
                     <Plus size={15} /> Post a Job
@@ -846,47 +846,79 @@ function HomePage({ setView, setSelectedTalent, talents }) {
     ? (ratedTalents.reduce((s, t) => s + t.rating, 0) / ratedTalents.length).toFixed(1)
     : null;
 
+  // Hero feature image, pulled from a real talent's portfolio (no hardcoded art).
+  // Falls back to a typographic gallery card when no portfolio image exists yet.
+  const heroFeature = (() => {
+    const t = talents.find(t => t.portfolio?.some(p => p.imageUrl));
+    if (!t) return null;
+    const item = t.portfolio.find(p => p.imageUrl);
+    return { imageUrl: item.imageUrl, name: t.name, university: t.university };
+  })();
+
   return (
     <div className="animate-fade-in">
-      {/* Hero */}
-      <section className="hero-pattern py-12 sm:py-20 lg:py-24 px-4 relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-8 right-8 w-64 h-64 rounded-full opacity-5" style={{ background: '#21326c', filter: 'blur(60px)' }} />
-          <div className="absolute bottom-8 left-8 w-48 h-48 rounded-full opacity-5" style={{ background: '#c4622d', filter: 'blur(50px)' }} />
-        </div>
-        <div className="max-w-7xl mx-auto">
-          <div className="max-w-2xl">
-            
-            <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black leading-tight mb-4" style={{ color: '#21326c' }}>
+      {/* Hero — editorial split */}
+      <section className="hero-pattern border-b hairline">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 items-stretch">
+          {/* Left — copy */}
+          <div className="lg:col-span-7 px-5 sm:px-8 lg:px-12 py-14 sm:py-20 lg:py-28 lg:border-r hairline flex flex-col justify-center">
+            <span className="kicker mb-5">Egypt's Creative Students · لون</span>
+            <h1 className="font-display font-semibold leading-[1.05] tracking-tight text-[#21326c] text-4xl sm:text-5xl lg:text-[64px] mb-5">
               Empowering the next{' '}
-              <em className="not-italic" style={{ color: '#ff9044' }}>Generation</em>{' '}
-              Of Creators
+              <em className="italic font-medium" style={{ color: '#ff9044' }}>Generation</em>{' '}
+              of Creators.
             </h1>
-            <p className="text-base sm:text-lg text-[#21326c] mb-6 sm:mb-8 leading-relaxed">
+            <p className="text-base sm:text-lg text-[#21326c]/80 leading-relaxed max-w-[88%] mb-8">
               Hire verified top-tier students for architecture, design, and fine arts. Exceptional creative work at honest rates.
             </p>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => setView('jobs')}
-                className="flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-semibold text-white transition-all hover:opacity-90 shadow-lg text-sm sm:text-base"
+                className="group flex items-center gap-2 px-7 py-3 rounded-md font-semibold text-white text-sm sm:text-base transition-all hover:brightness-105"
                 style={{ background: '#ff9044' }}
               >
-                Post a Job <ArrowRight size={16} />
+                Post a Job <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
               </button>
               <button
                 onClick={() => setView('directory')}
-                className="flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-semibold bg-white border border-[#21326c]/30 hover:border-[#21326c] transition-all text-[#21326c] text-sm sm:text-base"
+                className="flex items-center gap-2 px-7 py-3 rounded-md font-semibold text-sm sm:text-base border border-[#21326c] text-[#21326c] bg-transparent hover:bg-[#21326c] hover:text-white transition-all"
               >
-                <Users size={16} /> Browse Talent
+                Browse Talent
               </button>
             </div>
             {(studentCount > 0 || avgRating) && (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 text-xs sm:text-sm text-[#21326c]">
-                {studentCount > 0 && <span className="flex items-center gap-1.5"><CheckCircle size={13} className="text-[#21326c]" /> {studentCount} Verified Student{studentCount === 1 ? '' : 's'}</span>}
-                {facultyCount > 0 && <span className="flex items-center gap-1.5"><Building2 size={13} className="text-[#21326c]" /> {facultyCount} Facult{facultyCount === 1 ? 'y' : 'ies'}</span>}
-                {avgRating && <span className="flex items-center gap-1.5"><Star size={13} fill="#db9630" color="#db9630" /> {avgRating} Avg. Rating</span>}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-8 text-sm text-[#21326c]/80">
+                <span className="flex items-center gap-1.5 font-medium text-[#21326c]"><CheckCircle size={14} /> Verified students</span>
+                {studentCount > 0 && <span className="flex items-center gap-1.5"><span className="text-[#21326c]/25">·</span> {studentCount} on Lawnn</span>}
+                {facultyCount > 0 && <span className="flex items-center gap-1.5"><span className="text-[#21326c]/25">·</span> {facultyCount} facult{facultyCount === 1 ? 'y' : 'ies'}</span>}
+                {avgRating && <span className="flex items-center gap-1.5"><span className="text-[#21326c]/25">·</span> {avgRating}★ avg. rating</span>}
               </div>
             )}
+          </div>
+
+          {/* Right — gallery-framed feature, drawn from live talent work */}
+          <div className="lg:col-span-5 px-5 sm:px-8 lg:px-12 py-10 lg:py-0 flex items-center justify-center">
+            <figure className="w-full max-w-sm">
+              <div className="relative aspect-[4/5] gallery-frame bg-[#f3efe4] overflow-hidden">
+                {heroFeature?.imageUrl ? (
+                  <div className="absolute inset-0" style={{ backgroundImage: `url(${heroFeature.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                ) : (
+                  <>
+                    <div className="absolute inset-0" style={{ background: 'linear-gradient(150deg, #fffefb 0%, #f3efe4 45%, #e9e2d2 100%)' }} />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8">
+                      <span className="font-display italic text-2xl text-[#21326c] leading-tight">Selected work from<br/>Egypt's creative students</span>
+                      <span className="kicker mt-4">Architecture · Interiors · Visuals · Fine Art</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              <figcaption className="mt-3 flex items-center justify-between">
+                <span className="kicker">{heroFeature ? 'Featured work' : 'A curated gallery'}</span>
+                <span className="font-body text-xs text-[#21326c]/70">
+                  {heroFeature ? `${heroFeature.name}${heroFeature.university ? ' · ' + heroFeature.university : ''}` : (facultyCount > 0 ? `${facultyCount} faculties` : 'Lawnn')}
+                </span>
+              </figcaption>
+            </figure>
           </div>
         </div>
       </section>
@@ -926,10 +958,13 @@ function HomePage({ setView, setSelectedTalent, talents }) {
 </div>
 
       {/* Categories & Talent Grid */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-display text-2xl font-bold text-[#21326c]">Trending Talent</h2>
-          <button onClick={() => setView('directory')} className="text-sm font-medium text-[#21326c] flex items-center gap-1 hover:opacity-80">
+      <section className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-12 py-16 sm:py-20">
+        <div className="flex items-end justify-between mb-8 border-b hairline pb-5">
+          <div>
+            <span className="kicker block mb-2">The Directory</span>
+            <h2 className="font-display text-3xl sm:text-4xl font-semibold text-[#21326c] leading-none">Selected Talent</h2>
+          </div>
+          <button onClick={() => setView('directory')} className="text-[13px] tracking-wide uppercase font-semibold text-[#21326c] flex items-center gap-1 hover:text-[#ff9044] transition-colors pb-1">
             View all <ChevronRight size={14} />
           </button>
         </div>
@@ -6511,21 +6546,32 @@ export default function App() {
       <main>{renderView()}</main>
 
       {/* Footer */}
-      <footer className="mt-16 border-t border-[#21326c]/10 py-8 px-4">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[#21326c]">
-          <div className="flex items-center gap-2">
-            <Droplets size={16} className="text-[#21326c]" />
-            <span className="font-display font-bold text-[#21326c]">Lawnn</span>
-            <span style={{ fontFamily: 'Noto Naskh Arabic' }}>لون</span>
-            <span>— Egyptian Creative Talent Platform</span>
+      <footer className="mt-20 border-t hairline py-10 px-4">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-display font-bold text-[#21326c] text-base">Lawnn</span>
+              <span className="text-[#21326c]/50 text-sm" style={{ fontFamily: 'Noto Naskh Arabic' }}>لون</span>
+            </div>
+            <p className="text-xs text-[#21326c]/45">Egyptian Creative Talent Platform · © {new Date().getFullYear()}</p>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-2 justify-center">
-            <button onClick={() => handleNavChange('about-lawnn')} className="hover:opacity-80 transition-colors">About Lawnn</button>
-            <button onClick={() => handleNavChange('news')}        className="hover:opacity-80 transition-colors">News</button>
-            <button onClick={() => handleNavChange('jobs')}        className="hover:opacity-80 transition-colors">For Clients</button>
-            <button onClick={() => handleNavChange('contact')}     className="hover:opacity-80 transition-colors">Contact &amp; FAQ</button>
-            <button onClick={() => handleNavChange('privacy')}     className="hover:opacity-80 transition-colors">Privacy</button>
-            <button onClick={() => handleNavChange('terms')}       className="hover:opacity-80 transition-colors">Terms</button>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {[
+              { label: 'About', nav: 'about-lawnn' },
+              { label: 'News', nav: 'news' },
+              { label: 'For Clients', nav: 'jobs' },
+              { label: 'Contact', nav: 'contact' },
+              { label: 'Privacy', nav: 'privacy' },
+              { label: 'Terms', nav: 'terms' },
+            ].map(({ label, nav }) => (
+              <button
+                key={nav}
+                onClick={() => handleNavChange(nav)}
+                className="text-xs text-[#21326c]/55 hover:text-[#21326c] transition-colors font-medium"
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       </footer>
