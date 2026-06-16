@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast.js';
 import { useState, useEffect } from 'react';
 import { BadgeCheck, Briefcase, CheckCircle, GraduationCap, Grid, MessageSquareText, Plus, Search, Send, Shield, Tag, Trash2, UserCheck, Users } from 'lucide-react';
 import { admin as adminApi, conversations as convApi, feed as feedApi, jobs as jobsApi, marketplace as marketplaceApi } from '../lib/api.js';
@@ -124,7 +125,7 @@ export function AdminUsersTab() {
       await adminApi.deleteUser(id);
       setClients(c => c.filter(u => u.id !== id));
     } catch (e) {
-      alert(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -366,7 +367,7 @@ export function AdminStartConversation({ onStarted }) {
       setQuery('');
       onStarted?.(conv);
     } catch (e) {
-      alert(`Couldn't start chat: ${e.message}`);
+      toast.error(`Couldn't start chat: ${e.message}`);
     } finally {
       setBusyId(null);
     }
@@ -437,11 +438,11 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
 
   const approveFeedPost = async post => {
     try { await feedApi.setStatus(post.id, 'approved'); await refreshFeed?.(); }
-    catch (e) { alert(`Couldn't approve: ${e.message}`); }
+    catch (e) { toast.error(`Couldn't approve: ${e.message}`); }
   };
   const rejectFeedPost = async id => {
     try { await feedApi.delete(id); await refreshFeed?.(); }
-    catch (e) { alert(`Couldn't reject: ${e.message}`); }
+    catch (e) { toast.error(`Couldn't reject: ${e.message}`); }
   };
 
   const approveJob = async job => {
@@ -450,7 +451,7 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
       // Server is source of truth — refetch splits live/pending again.
       await refreshJobs?.();
     } catch (e) {
-      alert(`Couldn't approve: ${e.message}`);
+      toast.error(`Couldn't approve: ${e.message}`);
     }
   };
   const rejectJob = async id => {
@@ -458,17 +459,17 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
       await jobsApi.delete(id);
       await refreshJobs?.();
     } catch (e) {
-      alert(`Couldn't reject: ${e.message}`);
+      toast.error(`Couldn't reject: ${e.message}`);
     }
   };
 
   const approveListing = async listing => {
     try { await marketplaceApi.setStatus(listing.id, 'active'); await refreshMarketplace?.(); }
-    catch (e) { alert(`Couldn't approve: ${e.message}`); }
+    catch (e) { toast.error(`Couldn't approve: ${e.message}`); }
   };
   const rejectListing = async id => {
     try { await marketplaceApi.delete(id); await refreshMarketplace?.(); }
-    catch (e) { alert(`Couldn't reject: ${e.message}`); }
+    catch (e) { toast.error(`Couldn't reject: ${e.message}`); }
   };
 
   const totalPending = pendingFeedPosts.length + pendingJobs.length + pendingListings.length;

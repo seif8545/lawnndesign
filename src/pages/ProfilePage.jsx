@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast.js';
 import { useState } from 'react';
 import { Briefcase, Camera, CheckCircle, ChevronLeft, File, FileImage, GraduationCap, Image as ImageIcon, Info, Lock, MessageSquare, Pen, Plus, Send, Upload, Wallet, X } from 'lucide-react';
 import { conversations as convApi, profiles, uploadFile } from '../lib/api.js';
@@ -67,7 +68,7 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
         ),
       }));
     } catch (e) {
-      alert(`Upload failed: ${e.message}`);
+      toast.error(`Upload failed: ${e.message}`);
     }
   };
 
@@ -322,7 +323,7 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                       const r = await uploadFile(file, 'avatar');
                       setEditDraft(d => ({ ...d, avatar: r.url }));
                     } catch (err) {
-                      alert(`Avatar upload failed: ${err.message}`);
+                      toast.error(`Avatar upload failed: ${err.message}`);
                     }
                   }}
                 />

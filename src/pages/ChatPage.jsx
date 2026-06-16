@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast.js';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { CheckCircle, ChevronLeft, Lock, MessageSquare, MessageSquareText, Search, Send, Shield, X } from 'lucide-react';
 import { conversations as convApi } from '../lib/api.js';
@@ -52,7 +53,7 @@ export function ChatPage({ currentUser }) {
       const conv = await convApi.support();
       await handleStartConversation(conv);
     } catch (e) {
-      alert(`Couldn't reach support: ${e.message}`);
+      toast.error(`Couldn't reach support: ${e.message}`);
     } finally {
       setSupportBusy(false);
     }

@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast.js';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Briefcase, CheckCircle, ChevronRight, CreditCard, DollarSign, Hourglass, PackageCheck, PartyPopper, Plus, Star, Trash2, Users, X } from 'lucide-react';
@@ -102,7 +103,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
         body: `You accepted ${app.talentName}'s application. Pay the 50% deposit to get started.`,
         time: 'Just now',
       });
-    } catch (e) { alert(`Couldn't accept: ${e.message}`); }
+    } catch (e) { toast.error(`Couldn't accept: ${e.message}`); }
   };
 
   const payDeposit = (projId) => runPay(async () => {
@@ -118,7 +119,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
         body: `${deposit.toLocaleString()} EGP held in escrow. Work can begin.`,
         time: 'Just now', iconBg: '#dcfce7',
       });
-    } catch (e) { alert(`Couldn't pay deposit: ${e.message}`); }
+    } catch (e) { toast.error(`Couldn't pay deposit: ${e.message}`); }
   });
 
   const approveDelivery = (projId) => runApprove(async () => {
@@ -131,7 +132,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
         body: `Full payment for "${proj.title}" has been released.`,
         time: 'Just now', iconBg: '#dcfce7',
       });
-    } catch (e) { alert(`Couldn't approve: ${e.message}`); }
+    } catch (e) { toast.error(`Couldn't approve: ${e.message}`); }
   });
 
   const submitReview = (projId) => runReview(async () => {
@@ -141,7 +142,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
       await refreshProjects?.();
       setReviewSubmitted(true);
       setReviewForm({ rating: 0, text: '' });
-    } catch (e) { alert(`Couldn't submit review: ${e.message}`); }
+    } catch (e) { toast.error(`Couldn't submit review: ${e.message}`); }
   });
 
   // Client deletes their own project. Backend allows it only when status='open'
@@ -155,7 +156,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
       await refreshProjects?.();
     } catch (e) {
       // 409 from backend means project is past 'open'; surface verbatim.
-      alert(e.message);
+      toast.error(e.message);
     }
   });
 
@@ -172,7 +173,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
         body: 'The client has been notified.',
         time: 'Just now', iconBg: '#dcfce7',
       });
-    } catch (e) { alert(`Couldn't submit: ${e.message}`); }
+    } catch (e) { toast.error(`Couldn't submit: ${e.message}`); }
   });
 
   return (
@@ -613,7 +614,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
               setShowPostModal(false);
               addNotification({ icon: 'bag', title: 'Project posted!', body: 'Project is now open. Hire a student to begin.', time: 'Just now' });
             } catch (e) {
-              alert(`Couldn't post project: ${e.message}`);
+              toast.error(`Couldn't post project: ${e.message}`);
             }
           })}
         />

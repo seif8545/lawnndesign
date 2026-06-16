@@ -3,6 +3,8 @@ import { auth as authApi, clearToken, feed as feedApi, jobs as jobsApi, marketpl
 import { connectSocket, disconnectSocket } from './lib/socket.js';
 import { TopNav } from './components/TopNav.jsx';
 import { AcceptInviteModal, LoginModal } from './components/auth.jsx';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
+import { Toaster } from './components/Toaster.jsx';
 import { mapApiFeedPost, mapApiJob, mapApiListing, mapApiNews, mapApiProfile, mapApiProject, mapNotification, talentToApiBody } from './lib/mappers.js';
 import { AboutPage } from './pages/AboutPage.jsx';
 import { AdminPage } from './pages/AdminPage.jsx';
@@ -284,6 +286,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen" style={{ background: '#fffcf4' }}>
+      <Toaster />
       <TopNav
         view={view}
         setView={handleNavChange}
@@ -323,7 +326,9 @@ export default function App() {
         />
       )}
 
-      <main>{renderView()}</main>
+      <main>
+        <ErrorBoundary resetKey={view}>{renderView()}</ErrorBoundary>
+      </main>
 
       {/* Footer */}
       <footer className="mt-20 border-t hairline py-10 px-4">

@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast.js';
 import { useState } from 'react';
 import { CheckCircle, Clock, DollarSign, ExternalLink, File, Image as ImageIcon, Paperclip, Plus, Trash2, Upload, Users, X } from 'lucide-react';
 import { jobs as jobsApi, uploadFile } from '../lib/api.js';
@@ -32,7 +33,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
       const apps = await jobsApi.applications(job.id);
       setReviewApps(apps);
     } catch (e) {
-      alert(`Couldn't load applications: ${e.message}`);
+      toast.error(`Couldn't load applications: ${e.message}`);
       setReviewingJob(null);
     } finally { setReviewBusy(false); }
   };
@@ -42,8 +43,8 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
       await jobsApi.acceptApplication(job.id, app.id);
       await Promise.all([refreshJobs?.(), refreshProjects?.()]);
       setReviewingJob(null);
-      alert('Hired! The project is now in your Projects tab.');
-    } catch (e) { alert(`Couldn't hire: ${e.message}`); }
+      toast.success('Hired! The project is now in your Projects tab.');
+    } catch (e) { toast.error(`Couldn't hire: ${e.message}`); }
   });
 
   // Reject a single pending application. Required before the client can delete
@@ -56,7 +57,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
       setReviewApps(apps => apps.map(a => a.id === app.id ? { ...a, status: 'rejected' } : a));
       // Refresh job list so applicant counts stay accurate.
       await refreshJobs?.();
-    } catch (e) { alert(`Couldn't reject: ${e.message}`); }
+    } catch (e) { toast.error(`Couldn't reject: ${e.message}`); }
   });
 
   const handleApplyFileAdd = async files => {
@@ -77,7 +78,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
       );
       setApplyForm(f => ({ ...f, uploadedFiles: [...f.uploadedFiles, ...uploaded] }));
     } catch (e) {
-      alert(`Upload failed: ${e.message}`);
+      toast.error(`Upload failed: ${e.message}`);
     }
   };
   const removeApplyFile = id => setApplyForm(f => ({ ...f, uploadedFiles: f.uploadedFiles.filter(uf => uf.id !== id) }));
@@ -104,7 +105,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
       );
       setPostForm(f => ({ ...f, attachments: [...f.attachments, ...uploaded] }));
     } catch (e) {
-      alert(`Upload failed: ${e.message}`);
+      toast.error(`Upload failed: ${e.message}`);
     }
   };
   const removeJobAttachment = id => setPostForm(f => ({ ...f, attachments: f.attachments.filter(a => a.id !== id) }));
@@ -134,7 +135,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
         setPostForm({ title: '', brief: '', budget: '', skills: [], attachments: [] });
       }, 2500);
     } catch (e) {
-      alert(`Couldn't post job: ${e.message}`);
+      toast.error(`Couldn't post job: ${e.message}`);
     }
   });
 
@@ -243,7 +244,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
                       } catch (err) {
                         // Backend returns a clear message for owner-side guardrails
                         // (pending apps, filled job). Surface it verbatim.
-                        alert(err.message);
+                        toast.error(err.message);
                       }
                     }}
                     className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
@@ -457,7 +458,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
                     setApplyForm({ note: '', uploadedFiles: [] });
                   }, 2500);
                 } catch (err) {
-                  alert(`Couldn't submit: ${err.message}`);
+                  toast.error(`Couldn't submit: ${err.message}`);
                 }
               })}
               disabled={applying || !applyForm.note || applyForm.uploadedFiles.length === 0}

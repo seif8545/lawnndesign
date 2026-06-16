@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast.js';
 import { useState } from 'react';
 import { BadgeCheck, CheckCircle, ChevronRight, DollarSign, Info, MessageCircle, Package, Pen, Plus, Send, ShoppingBag, Trash2, X } from 'lucide-react';
 import { marketplace as marketplaceApi } from '../lib/api.js';
@@ -70,7 +71,7 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
       await refreshMarketplace?.();
       setShowListingModal(false);
     } catch (e) {
-      alert(`Couldn't save listing: ${e.message}`);
+      toast.error(`Couldn't save listing: ${e.message}`);
     }
   });
 
@@ -79,7 +80,7 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
       await marketplaceApi.delete(listing.id);
       await refreshMarketplace?.();
     } catch (e) {
-      alert(`Couldn't delete: ${e.message}`);
+      toast.error(`Couldn't delete: ${e.message}`);
     }
   };
 
@@ -96,18 +97,18 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
       setTargetListing(null);
       await refreshMarketplace?.();
     } catch (e) {
-      alert(`Couldn't send offer: ${e.message}`);
+      toast.error(`Couldn't send offer: ${e.message}`);
     }
   };
 
   const acceptOffer = async (_listingId, offerId) => {
     try { await marketplaceApi.acceptOffer(offerId); await refreshMarketplace?.(); }
-    catch (e) { alert(`Couldn't accept offer: ${e.message}`); }
+    catch (e) { toast.error(`Couldn't accept offer: ${e.message}`); }
   };
 
   const rejectOffer = async (_listingId, offerId) => {
     try { await marketplaceApi.rejectOffer(offerId); await refreshMarketplace?.(); }
-    catch (e) { alert(`Couldn't reject offer: ${e.message}`); }
+    catch (e) { toast.error(`Couldn't reject offer: ${e.message}`); }
   };
 
   const replyToOffer = async (_listingId, offerId) => {
@@ -118,7 +119,7 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
       setReplyText(r => ({ ...r, [offerId]: '' }));
       await refreshMarketplace?.();
     } catch (e) {
-      alert(`Couldn't send reply: ${e.message}`);
+      toast.error(`Couldn't send reply: ${e.message}`);
     }
   };
 

@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast.js';
 import { useState, useEffect } from 'react';
 import { Briefcase, ExternalLink, Package, Pen, Plus } from 'lucide-react';
 import { profiles, projects as projectsApi } from '../lib/api.js';
@@ -33,7 +34,7 @@ export function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, se
       setCp(p);
       setShowEdit(false);
     } catch (e) {
-      alert(`Couldn't save: ${e.message}`);
+      toast.error(`Couldn't save: ${e.message}`);
     } finally {
       setSaving(false);
     }

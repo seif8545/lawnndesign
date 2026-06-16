@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast.js';
 import { useState } from 'react';
 import { Camera, Clock, ExternalLink, GraduationCap, Hash, Heart, MoreHorizontal, Play, Share2, Shield, Trash2, Video, X } from 'lucide-react';
 import { feed as feedApi, uploadFile } from '../lib/api.js';
@@ -55,18 +56,18 @@ export function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPending
       setSubmitBanner(true);
       setTimeout(() => setSubmitBanner(false), 4000);
     } catch (e) {
-      alert(`Couldn't post: ${e.message}`);
+      toast.error(`Couldn't post: ${e.message}`);
     }
   });
 
   const approvePost = async post => {
     try { await feedApi.setStatus(post.id, 'approved'); await refreshFeed?.(); }
-    catch (e) { alert(`Couldn't approve: ${e.message}`); }
+    catch (e) { toast.error(`Couldn't approve: ${e.message}`); }
   };
 
   const rejectPost = async id => {
     try { await feedApi.delete(id); await refreshFeed?.(); }
-    catch (e) { alert(`Couldn't reject: ${e.message}`); }
+    catch (e) { toast.error(`Couldn't reject: ${e.message}`); }
   };
 
   return (
@@ -262,7 +263,7 @@ export function FeedPost({ post, onLike, isAdmin, onDelete }) {
             </div>
           )}
           {post.hasVideo && (
-            <button onClick={() => alert('Video playback requires a media server. Coming soon.')} className="absolute inset-0 flex items-center justify-center">
+            <button onClick={() => toast.info('Video playback requires a media server. Coming soon.')} className="absolute inset-0 flex items-center justify-center">
               <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
                 <Play size={20} fill="#21326c" color="#21326c" />
               </div>

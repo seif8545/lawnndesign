@@ -1,69 +1,97 @@
-# Lawnn — Session Handoff
-
-## Critical Constraint
-**Fable only.** User will stop the response if model switches to Opus or anything else.
-
----
+# Lawnn — Session Handoff (updated 2026-06-16)
 
 ## Project
-- **Repo:** `C:\Users\DELL\Downloads\lawnndesign` (local only, no remote push)
-- **Stack:** Vite + React 18 + Tailwind frontend (`src/App.jsx` monolithic), Express + Prisma + Postgres (Supabase) + Socket.io backend
+- **Repo:** `C:\Users\DELL\Downloads\lawnndesign` (local; commits stay local)
+- **Stack:** Vite + React 18 + Tailwind frontend, Express + Prisma + Postgres (Supabase) + Socket.io backend
 - **Fonts:** Playfair Display (`font-display`), DM Sans (`font-body`), Noto Naskh Arabic
 - **Colors:** navy `#21326c`, orange `#ff9044`, cream bg `#fffcf4`
-- **Tailwind:** `font-display` = Playfair Display, `font-body` = DM Sans
+- **Supabase:** project `LawnnDesign`, id `fojptzeakjieqcuwgpbl` (region eu-west-1). MCP connector was connected this session.
+- **Test accounts (all named "Yomna"):** `student@lawnndesign.com`, `client@lawnndesign.com`, `admin@lawnndesign.com`. Passwords are bcrypt-hashed (unknown/unchanged).
 
 ---
 
-## What's Been Done
+## Biggest change this session: App.jsx was split up
+`src/App.jsx` went from a 6,580-line monolith (52 components) to a ~363-line orchestrator. Everything else was extracted into modules:
 
-### 1. Security Audit ✅
-All fixes applied locally (not committed). Key changes:
-- `backend/src/lib/sanitize.js` — NEW: `safeUrl()` (blocks `javascript:`, `data:`, `//`) and `nonNegativeInt()`
-- `backend/src/index.js` — JWT_SECRET fail-fast (min 32 chars), global rate limiter (600 req/15 min/IP)
-- `backend/src/socket.js` — CORS origin fixed (comma-split array), `safeUrl()` on `fileUrl` in `send_message`
-- `backend/src/routes/uploads.js` — Removed public `POST /uploads/sign-read` (confused deputy vuln)
-- `backend/src/routes/jobs.js` — `safeUrl()` on attachment/file URLs, `nonNegativeInt()` on budget
-- `backend/src/routes/feed.js` — `safeUrl()` on `imageUrl`
-- `backend/src/routes/marketplace.js` — `safeUrl()` on `fileUrl`, `nonNegativeInt()` on price
-- `backend/src/routes/profiles.js` — `safeUrl()` on avatar, portfolio imageUrl/pdfUrl, client logo
-- `SECURITY_REVIEW.md` — Full findings report written to project root
+- `src/lib/constants.js` — colors, SKILL_LIBRARY, status maps, INFO_PAGES copy
+- `src/lib/mappers.js` — all `mapApi*`, `formatRelativeTime`, `talentToApiBody`
+- `src/hooks/useBusy.js` — submit-guard hook
+- `src/components/ui.jsx` — Avatar, Modal, badges, pickers, NotificationPanel, etc.
+- `src/components/auth.jsx` — LoginModal, AcceptInviteModal
+- `src/components/TopNav.jsx`
+- `src/pages/*.jsx` — HomePage, JobBoardPage, DirectoryPage, ProfilePage, FeedPage, ChatPage, AboutPage, NewsPage, MarketplacePage, AdminPage, ProjectsPage, OnboardingFlow, ClientProfilePage, InfoPage
 
-### 2. Homepage Redesign ✅
-Reverted uncommitted "very bad" state first (via `git show HEAD:$f` pipe, bypassing locked index), then redesigned from committed baseline.
-
-**`src/index.css` changes:**
-- `.hero-pattern` — replaced dot-grid with warm cream gradient (`#fffefb → #fdf8ee → #fbf3e3`)
-- `.kicker` — 11px, 600w, 0.22em tracking, uppercase, color `#9a7b3f`
-- `.hairline` — `border-color: rgba(33,50,108,0.12)`
-- `.gallery-frame` — 1px navy border + deep box-shadow
-- `.talent-card:hover` — translateY(-3px) lift
-
-**`src/App.jsx` changes:**
-- **Hero** — editorial two-column split (7/12 + 5/12). Left: kicker → Playfair H1 with italic orange "Generation" → subheadline → sharp CTA buttons → trust stats. Right: `.gallery-frame` figure showing first talent's portfolio image (computed `heroFeature` var), falls back to typographic placeholder
-- **Talent section header** — kicker "The Directory", serif h2 "Selected Talent", `flex items-end justify-between` with hairline border-bottom
-- **CategoryPill** — inactive pills now transparent + `border-[#21326c]/20` (was solid navy); `rounded-md` corners
-- **Nav** — desktop links text-only (icons removed), active = `font-semibold` text (no bg), "Post a Job" CTA `rounded-full` → `rounded`
-- **Footer** — brand wordmark + Arabic stacked, copyright year, compact `text-xs` links with muted opacity, `hairline` top border
+The split was done mechanically (a script that sliced by declaration and auto-generated imports), verified with esbuild + a static reference check + a full `vite build`. **This split was committed** (commit message "ok", hash `15979426…`).
 
 ---
 
-## Known Issues
+## Uncommitted work (IMPORTANT — review & commit)
+Two features were added AFTER the "ok" commit and are NOT yet committed:
 
-### Git index.lock
-`.git/index.lock` exists and blocks commits. The sandbox cannot delete it (permissions). User must manually delete:
+1. **Error boundary**
+   - `src/components/ErrorBoundary.jsx` (new) — branded fallback, `resetKey` auto-recovers on navigation.
+   - `src/main.jsx` — wraps `<App/>` (top-level net).
+   - `src/App.jsx` — wraps `renderView()` with `<ErrorBoundary resetKey={view}>` so a page crash keeps nav/footer alive.
+
+2. **Toast system (replaced all 38 `alert()` calls)**
+   - `src/lib/toast.js` (new) — dependency-free pub/sub store; `toast()/.success/.error/.info`.
+   - `src/components/Toaster.jsx` (new) — renders stack top-right, auto-dismiss, color-coded; rendered once in `App.jsx`.
+   - 38 `alert()` → `toast.error` (36) / `toast.success` (1, "Hired!") / `toast.info` (1, video placeholder) across the 8 page files. The 4 `confirm()` dialogs were intentionally left as-is.
+
+Both verified: `vite build` passes (1554 modules) and jsdom runtime tests confirmed behavior.
+
+---
+
+## Onboarding reset (done this session) + how it works
+Mechanics differ by role:
+- **Student:** onboarding shows whenever the profile is incomplete (no bio OR no skills). NOT localStorage-gated.
+- **Client:** onboarding shows only when `lawnn_onboarding_done_<userId>` is ABSENT from browser localStorage. There is no DB column for this.
+
+Done in Supabase this session:
+- Student profile blanked: `bio=NULL`, all `profile_skills` deleted, `university/dept/year/avatar=NULL`, `hourlyRate=0`.
+- Client profile blanked: `company/bio/website/logo=NULL`.
+
+Still required for the CLIENT popup to reappear (browser, not DB):
+```js
+Object.keys(localStorage).filter(k => k.startsWith('lawnn_onboarding_done_')).forEach(k => localStorage.removeItem(k));
+localStorage.removeItem('lawnn_token');
+location.reload();
 ```
-C:\Users\DELL\Downloads\lawnndesign\.git\index.lock
-```
-Safe to delete — it's a 0-byte stale lock from a crashed git operation.
+Sharing access to a teammate = just hand over the 3 email/password pairs; onboarding appears fresh on their device (student via blank profile, client via their empty localStorage). Admin has no onboarding flow.
 
 ---
 
-## File State
-- `src/App.jsx` — 6580 lines, esbuild-verified no syntax errors
-- `src/index.css` — 194 lines, all new utility classes present
-- Both files have **uncommitted changes** (the redesign work above)
+## Environment quirks hit this session (read before building/git)
+- **Sandbox mount can serve stale/truncated copies.** A file edited via the editor once showed up truncated to the build tool; rebuilding the file via shell fixed it. If a build error points at a line that looks fine, re-check the file from the shell side.
+- **`npm run build` fails in-sandbox** only because it can't empty the pre-existing `dist/` (`EPERM`). Build to a fresh dir to verify: `npx vite build --outDir <tmp> --emptyOutDir`. On the user's Windows machine `npm run build` works normally.
+- **Stale `.git/index.lock`** (0-byte, dated Jun 10) has caused phantom "deleted/untracked" git status before. If git looks weird, delete `.git\index.lock` then `git reset`.
+- **Sandbox can't reach Supabase Postgres directly** (ports 6543/5432 blocked) and **can't reach the DB via Prisma** (client was generated for Windows). DB work must go through the Supabase MCP connector.
+- File deletion in the workspace was enabled this session (was previously "Operation not permitted").
 
 ---
 
-## Nothing Pending
-All planned tasks are complete. Once the user deletes the lock file, they can commit normally.
+## Backlog / next steps (pre-payments improvements, by priority)
+Reliability/UX (two done):
+- [x] Top-level + per-page error boundary
+- [x] Toasts replacing alert()
+- [ ] API client: handle 401/expiry (auto-logout) in `src/lib/api.js`
+- [ ] Accessibility pass (no ARIA anywhere; modal focus trap)
+- [ ] Responsive QA (sparse `md:`/`lg:` breakpoints)
+
+Backend/correctness:
+- [ ] Migration baseline — only 1 migration exists vs ~30 models (schema drifted via `db push`). Fix before payments.
+- [ ] Add tests (none exist) — Vitest + supertest.
+- [ ] Input validation library (zod) — currently all ad-hoc.
+- [ ] Pagination on list endpoints (jobs/feed/profiles/marketplace `findMany` are unbounded).
+- [ ] Observability + env validation (only JWT_SECRET checked; bare console.error).
+- [ ] Payments prep: raw-body webhook route (global `express.json` breaks signature verification); confirm money unit (EGP int — `walletBalance` comment is ambiguous).
+
+Loose ends:
+- [ ] Job→Project bridge TODO (`App.jsx`-era, now in `pages/`), projects.js endpoint TODO.
+- [ ] Repo hygiene: stray `vite.config.js.timestamp-*.mjs` files in root; `dist/` is tracked.
+
+---
+
+## Notes
+- Pre-split `App.jsx` is recoverable from git history (the commit before "ok"). The sandbox backup at `outputs/App.jsx.backup` does NOT persist across sessions.
+- A prior handoff noted a "Fable only" model constraint; it was not enforced this session. Confirm with the user if relevant.
