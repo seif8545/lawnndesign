@@ -1,14 +1,11 @@
 import { toast } from '../lib/toast.js';
 import { useState } from 'react';
-import { Briefcase, Camera, CheckCircle, ChevronLeft, File, FileImage, GraduationCap, Image as ImageIcon, Info, Lock, MessageSquare, Pen, Plus, Send, Upload, Wallet, X } from 'lucide-react';
+import { Briefcase, Camera, ChevronLeft, File, FileImage, GraduationCap, Image as ImageIcon, Info, MessageSquare, Pen, Plus, Send, Upload, Wallet, X } from 'lucide-react';
 import { conversations as convApi, profiles, uploadFile } from '../lib/api.js';
-import { AvailabilityBadge, Avatar, Modal, PortfolioBlock, SkillPicker, StarRating, VerifiedBadge } from '../components/ui.jsx';
+import { AvailabilityBadge, Modal, PortfolioBlock, SkillPicker, StarRating, VerifiedBadge } from '../components/ui.jsx';
 import { AVAILABILITY, PALETTE_COLORS } from '../lib/constants.js';
 
 export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
-  const [showHireModal, setShowHireModal]   = useState(false);
-  const [hireForm, setHireForm]             = useState({ title: '', brief: '', budget: '' });
-  const [hireSuccess, setHireSuccess]       = useState(false);
   const [showEditModal, setShowEditModal]   = useState(false);
   const [startingChat, setStartingChat]     = useState(false);
 
@@ -78,11 +75,6 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
     setShowEditModal(false);
   };
 
-  const submitHire = () => {
-    setHireSuccess(true);
-    setTimeout(() => { setShowHireModal(false); setHireSuccess(false); setHireForm({ title: '', brief: '', budget: '' }); }, 2500);
-  };
-
   if (!talent) return null;
 
   return (
@@ -132,23 +124,13 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                   <Pen size={15} /> Edit Profile
                 </button>
               ) : (
-                <>
-                  <button
-                    onClick={handleMessageClick}
-                    disabled={startingChat || !currentUser}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#21326c]/30 text-sm font-semibold text-[#21326c] hover:bg-[#21326c]/5 transition-colors disabled:opacity-50"
-                  >
-                    <MessageSquare size={15} /> {startingChat ? 'Opening…' : 'Message'}
-                  </button>
-
-                  <button
-                    onClick={() => setShowHireModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90"
-                    style={{ background: '#ff9044' }}
-                  >
-                    Hire for Project
-                  </button>
-                </>
+                <button
+                  onClick={handleMessageClick}
+                  disabled={startingChat || !currentUser}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full border border-[#21326c]/30 text-sm font-semibold text-[#21326c] hover:bg-[#21326c]/5 transition-colors disabled:opacity-50"
+                >
+                  <MessageSquare size={15} /> {startingChat ? 'Opening…' : 'Message'}
+                </button>
               )}
             </div>
           </div>
@@ -166,7 +148,7 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl mb-4 border border-[#21326c]/10" style={{ background: '#21326c08' }}>
               <Wallet size={14} className="text-[#21326c]" />
               <span className="text-sm font-semibold text-[#21326c]">{talent.walletBalance?.toLocaleString() || '0'} EGP</span>
-              <span className="text-xs text-[#21326c]/50">wallet balance</span>
+              <span className="text-xs text-[#21326c]/50">total earned · paid out by Lawnn</span>
             </div>
           )}
 
@@ -243,56 +225,6 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
         </div>
       </div>
     </div>
-
-    {/* ── HIRE FOR PROJECT MODAL ── */}
-    <Modal open={showHireModal} onClose={() => { setShowHireModal(false); setHireForm({ title: '', brief: '', budget: '' }); }} title={`Hire ${talent.name} for a Project`} wide>
-      {hireSuccess ? (
-        <div className="text-center py-8">
-          <div className="w-14 h-14 rounded-full bg-[#21326c]/10 flex items-center justify-center mx-auto mb-3">
-            <CheckCircle size={28} className="text-[#21326c]" />
-          </div>
-          <p className="font-display text-lg font-bold text-[#21326c] mb-1">Proposal Sent!</p>
-          <p className="text-sm text-[#21326c]/70">{talent.name} will review your brief and respond via messages.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 p-3 bg-[#21326c]/5 rounded-xl mb-2">
-            <Avatar initials={talent.initials} color={talent.avatarColor} size="md" />
-            <div>
-              <p className="font-semibold text-[#21326c] text-sm">{talent.name}</p>
-              <p className="text-xs text-[#21326c]/60">{talent.dept} · {talent.university}</p>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Project Title *</label>
-            <input type="text" placeholder="e.g. Brand Identity for my café" value={hireForm.title}
-              onChange={e => setHireForm(f => ({ ...f, title: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Project Brief *</label>
-            <textarea rows={4} placeholder="Describe what you need — deliverables, style, timeline..." value={hireForm.brief}
-              onChange={e => setHireForm(f => ({ ...f, brief: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all resize-none placeholder:text-[#21326c]/40" />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Budget (EGP) *</label>
-            <input type="number" placeholder="e.g. 3500" value={hireForm.budget}
-              onChange={e => setHireForm(f => ({ ...f, budget: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
-          </div>
-          <div className="text-xs text-[#21326c]/50 flex items-start gap-2 p-3 bg-[#21326c]/5 rounded-xl">
-            <Lock size={12} className="mt-0.5 flex-shrink-0" />
-            Payment is held in escrow by Lawnn and released to the student only on your approval of the final deliverable.
-          </div>
-          <button onClick={submitHire} disabled={!hireForm.title || !hireForm.brief || !hireForm.budget}
-            className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50"
-            style={{ background: '#ff9044' }}>
-            Send Proposal
-          </button>
-        </div>
-      )}
-    </Modal>
 
     {/* ── EDIT PROFILE MODAL ── */}
     <Modal open={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Your Profile" wide>

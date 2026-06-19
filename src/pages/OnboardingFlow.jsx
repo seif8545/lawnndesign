@@ -61,8 +61,8 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
           <div className="space-y-3">
             {[
               { icon: Users,        text: 'Get discovered by Egypt\'s top brands and agencies' },
-              { icon: Briefcase,    text: 'Apply to curated creative briefs on the Job Board' },
-              { icon: Wallet,       text: 'Get paid securely via escrow on every project' },
+              { icon: Briefcase,    text: 'Apply to curated creative projects' },
+              { icon: Wallet,       text: 'Get paid for every project, coordinated by Lawnn' },
               { icon: Award,        text: 'Build your verified portfolio with real client reviews' },
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#21326c06' }}>
@@ -225,8 +225,8 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
             {[
               { icon: Search,       text: 'Browse the talent directory and find the right match' },
               { icon: Send,         text: 'Post a brief and let students apply to your project' },
-              { icon: BadgeCheck,   text: 'Accept an offer, pay a protected deposit, and start' },
-              { icon: Wallet,       text: 'Pay the balance only when you approve the delivery' },
+              { icon: BadgeCheck,   text: 'Accept an offer, send a 50% deposit, and start' },
+              { icon: Wallet,       text: 'Send the balance once you approve the delivery' },
               { icon: Star,         text: 'Leave a review and build a history of great work' },
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#21326c06' }}>
@@ -265,18 +265,18 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
       ),
       cta: interests.length === 0 ? 'Skip' : 'Next: How it works →',
     },
-    // Step 2: How escrow works
+    // Step 2: How payments work
     {
-      title: 'Your money is protected',
-      sub: 'Lawnn uses escrow — you only pay in full when you approve the final delivery.',
+      title: 'Simple, staged payments',
+      sub: 'Pay a 50% deposit to start and the balance after you approve delivery — by InstaPay, coordinated by Lawnn.',
       content: (
         <div className="space-y-3">
           {[
             { num: '1', title: 'Post your project',   body: 'Describe your brief and budget. Students apply within 24–48 hours.', color: '#21326c' },
             { num: '2', title: 'Accept an offer',      body: 'Review student portfolios and applications, then accept the best fit.', color: '#a84f22' },
-            { num: '3', title: 'Pay 50% deposit',     body: 'Your deposit is held by Lawnn — not released until you approve delivery.', color: '#db9630' },
+            { num: '3', title: 'Send 50% deposit',     body: 'Transfer the deposit by InstaPay. Lawnn confirms it and notifies the student to start.', color: '#db9630' },
             { num: '4', title: 'Receive delivery',    body: 'The student submits their work. Review it at your own pace.', color: '#2563eb' },
-            { num: '5', title: 'Approve & pay balance', body: 'Happy with the work? Release the final 50% and leave a review.', color: '#16a34a' },
+            { num: '5', title: 'Approve & send balance', body: 'Happy with the work? Send the final 50% by InstaPay and leave a review.', color: '#16a34a' },
           ].map(({ num, title, body, color }) => (
             <div key={num} className="flex gap-3 p-3 rounded-xl" style={{ background: `${color}08`, border: `1px solid ${color}20` }}>
               <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold text-white mt-0.5" style={{ background: color }}>

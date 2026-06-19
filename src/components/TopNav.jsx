@@ -9,7 +9,7 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, not
     // Students: find work, network, manage their own profile.
     if (currentUser?.role === 'student') return [
       { id: 'feed',        label: 'Feed',        icon: Grid },
-      { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
+      { id: 'jobs',        label: 'Projects',    icon: Briefcase },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
       { id: 'profile',     label: 'My Profile',  icon: UserCheck },
       { id: 'news',        label: 'News',        icon: BookOpen },
@@ -18,7 +18,7 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, not
     if (currentUser?.role === 'client') return [
       { id: 'home',        label: 'Home',        icon: Home },
       { id: 'directory',   label: 'Talent',      icon: Users },
-      { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
+      { id: 'jobs',        label: 'Projects',    icon: Briefcase },
       { id: 'projects',    label: 'My Projects', icon: Package },
       { id: 'profile',     label: 'My Profile',  icon: UserCheck },
       { id: 'feed',        label: 'Feed',        icon: Grid },
@@ -31,7 +31,7 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, not
       { id: 'home',        label: 'Home',        icon: Home },
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'directory',   label: 'Talent',      icon: Users },
-      { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
+      { id: 'jobs',        label: 'Projects',    icon: Briefcase },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
       { id: 'news',        label: 'News',        icon: BookOpen },
     ];
@@ -39,7 +39,7 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, not
     return [
       { id: 'home',        label: 'Home',        icon: Home },
       { id: 'directory',   label: 'Talent',      icon: Users },
-      { id: 'jobs',        label: 'Job Board',   icon: Briefcase },
+      { id: 'jobs',        label: 'Projects',    icon: Briefcase },
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
       { id: 'news',        label: 'News',        icon: BookOpen },
@@ -97,7 +97,7 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, not
                   style={{ background: '#ff9044' }}
                 >
                   <Plus size={15} />
-                  <span className="hidden sm:inline">Post a Job</span>
+                  <span className="hidden sm:inline">Post a Project</span>
                 </button>
               </>
             ) : (
@@ -108,7 +108,7 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, not
                     className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded text-sm font-semibold text-white transition-all hover:opacity-90"
                     style={{ background: '#ff9044' }}
                   >
-                    <Plus size={15} /> Post a Job
+                    <Plus size={15} /> Post a Project
                   </button>
                 )}
                 <button

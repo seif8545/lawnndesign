@@ -18,16 +18,8 @@ export function connectSocket(token) {
     reconnectionDelay: 1000,
   })
 
-  socket.on('connect', () => {
-    console.log('[socket] connected', socket.id)
-  })
-
   socket.on('connect_error', (err) => {
     console.warn('[socket] connection error:', err.message)
-  })
-
-  socket.on('disconnect', (reason) => {
-    console.log('[socket] disconnected:', reason)
   })
 
   return socket

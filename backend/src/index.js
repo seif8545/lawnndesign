@@ -7,7 +7,6 @@ import rateLimit from 'express-rate-limit'
 
 import authRoutes          from './routes/auth.js'
 import profileRoutes       from './routes/profiles.js'
-import jobRoutes           from './routes/jobs.js'
 import projectRoutes       from './routes/projects.js'
 import adminRoutes         from './routes/admin.js'
 import conversationRoutes  from './routes/conversations.js'
@@ -79,7 +78,6 @@ app.use('/auth/accept-invite', authLimiter)
 // ── Routes ─────────────────────────────────────────────────────────────────────
 app.use('/auth',          authRoutes)
 app.use('/profiles',      profileRoutes)
-app.use('/jobs',          jobRoutes)
 app.use('/projects',      projectRoutes)
 app.use('/admin',         adminRoutes)
 app.use('/conversations', conversationRoutes)

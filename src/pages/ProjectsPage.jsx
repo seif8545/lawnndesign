@@ -1,8 +1,8 @@
 import { toast } from '../lib/toast.js';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Briefcase, CheckCircle, ChevronRight, CreditCard, DollarSign, Hourglass, PackageCheck, PartyPopper, Plus, Star, Trash2, Users, X } from 'lucide-react';
-import { projects as projectsApi } from '../lib/api.js';
+import { Briefcase, CheckCircle, ChevronRight, CreditCard, DollarSign, Hourglass, PackageCheck, PartyPopper, Plus, Star, Trash2, Upload, Users, X } from 'lucide-react';
+import { projects as projectsApi, uploadFile } from '../lib/api.js';
 import { AvailabilityBadge, Avatar, Modal, SkillPicker, StarPicker } from '../components/ui.jsx';
 import { useBusy } from '../hooks/useBusy.js';
 import { PROJECT_DONE_STATUSES, PROJECT_STATUS_LABELS, PROJECT_STATUS_STEPS } from '../lib/constants.js';
@@ -21,10 +21,10 @@ export function EscrowStepper({ status }) {
   const steps = [
     { key: 'open',           label: 'Post' },
     { key: 'offer_accepted', label: 'Accept Offer' },
-    { key: 'deposit_paid',   label: 'Pay Deposit' },
+    { key: 'deposit_paid',   label: 'Deposit' },
     { key: 'in_progress',    label: 'In Progress' },
     { key: 'delivered',      label: 'Delivery' },
-    { key: 'completed',      label: 'Full Payment' },
+    { key: 'completed',      label: 'Final Payment' },
     { key: 'reviewed',       label: 'Review' },
   ];
   const idx = PROJECT_STATUS_STEPS.indexOf(status);
@@ -60,6 +60,66 @@ export function EscrowStepper({ status }) {
   );
 }
 
+// Client-side uploader for an InstaPay transfer screenshot. Uploads to the
+// private 'payment-proof' bucket, then hands the stored path to onSend.
+function ProofUploader({ busy, sendLabel, onSend }) {
+  const [path, setPath] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const pick = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setUploading(true);
+    try {
+      const r = await uploadFile(f, 'payment-proof');
+      setPath(r.path);
+      setFileName(f.name);
+      setPreview(f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+    } catch (err) {
+      toast.error(`Upload failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <label className="block">
+        <input type="file" accept="image/*,application/pdf" onChange={pick} className="hidden" />
+        <span className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border-2 border-dashed border-[#21326c]/25 text-sm font-semibold text-[#21326c] cursor-pointer hover:bg-[#21326c]/5 transition-colors">
+          <Upload size={15} /> {uploading ? 'Uploading…' : path ? 'Replace screenshot' : 'Attach transfer screenshot'}
+        </span>
+      </label>
+      {preview && <img src={preview} alt="Transfer screenshot preview" className="max-h-40 rounded-xl mx-auto border border-[#21326c]/10" />}
+      {path && !preview && <p className="text-xs text-[#21326c]/60">{fileName} attached ✓</p>}
+      <button
+        onClick={() => onSend(path)}
+        disabled={busy || uploading || !path}
+        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{ background: '#ff9044' }}
+      >
+        {busy ? 'Submitting…' : sendLabel}
+      </button>
+      {!path && <p className="text-[11px] text-[#21326c]/40">Attach your InstaPay screenshot to continue.</p>}
+    </div>
+  );
+}
+
+// Read-only proof viewer (admin / paying client). `url` is a signed read URL.
+function ProofView({ url, label }) {
+  if (!url) {
+    return <p className="text-xs text-amber-700">No {label} screenshot uploaded yet.</p>;
+  }
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+      <img src={url} alt={`${label} screenshot`} className="max-h-48 rounded-xl mx-auto border border-[#21326c]/10 hover:opacity-90 transition-opacity" />
+      <span className="block mt-1 text-[11px] font-semibold text-[#2563eb]">Open full size ↗</span>
+    </a>
+  );
+}
+
 export function ProjectsPage({ projects, setProjects, currentUser, setView, setSelectedTalent, talents, addNotification, refreshProjects }) {
   const [selected, setSelected] = useState(null);
   const [showPostModal, setShowPostModal] = useState(false);
@@ -90,49 +150,41 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
   // Refresh selected when projects update
   const proj = selected ? projects.find(p => p.id === selected.id) : null;
 
-  // Accept an offer — currently unreachable through real data because the
-  // applications array is empty (see mapApiProject). Job→Project bridge TODO.
+  // Accept an applicant — hires them and moves the project to offer_accepted.
   const acceptApp = async (projId, appId) => {
     const app = proj?.applications?.find(a => a.id === appId);
     if (!app) return;
     try {
-      await projectsApi.advance(projId, { talentId: app.talentId });
+      await projectsApi.acceptApplication(projId, appId);
       await refreshProjects?.();
       addNotification({
-        icon: 'bag', title: `Offer accepted — ${proj.title}`,
-        body: `You accepted ${app.talentName}'s application. Pay the 50% deposit to get started.`,
+        icon: 'bag', title: `Applicant hired — ${proj.title}`,
+        body: `You hired ${app.talentName}. Send the 50% deposit to get started.`,
         time: 'Just now',
       });
-    } catch (e) { toast.error(`Couldn't accept: ${e.message}`); }
+    } catch (e) { toast.error(`Couldn't hire: ${e.message}`); }
   };
 
-  const payDeposit = (projId) => runPay(async () => {
-    const deposit = Math.round(proj.budget * 0.5);
+  // Client signals they've made the manual InstaPay transfer (deposit or final
+  // balance — backend infers which from project status). This pings Lawnn to
+  // verify and confirm; it does not advance the project itself.
+  const markPaymentSent = (projId, proofPath) => runPay(async () => {
+    if (!proofPath) { toast.error('Please attach the transfer screenshot first.'); return; }
     try {
-      // Backend state machine: offer_accepted → deposit_paid → in_progress.
-      // Collapse both transitions into one user action so the talent can start.
-      await projectsApi.advance(projId, {});                  // → deposit_paid
-      await projectsApi.advance(projId, {}).catch(() => {});  // → in_progress (best-effort)
+      await projectsApi.paymentSent(projId, { proofPath });
       await refreshProjects?.();
-      addNotification({
-        icon: 'money', title: 'Deposit paid!',
-        body: `${deposit.toLocaleString()} EGP held in escrow. Work can begin.`,
-        time: 'Just now', iconBg: '#dcfce7',
-      });
-    } catch (e) { toast.error(`Couldn't pay deposit: ${e.message}`); }
+      toast.success("Thanks — Lawnn will verify your transfer and confirm shortly.");
+    } catch (e) { toast.error(`Couldn't submit: ${e.message}`); }
   });
 
-  const approveDelivery = (projId) => runApprove(async () => {
-    const remaining = proj.budget - (proj.depositAmount || 0);
+  // Admin confirms a transfer was received. Advances the state machine:
+  // offer_accepted → in_progress (deposit) or delivered → completed (balance).
+  const adminConfirm = (projId) => runApprove(async () => {
     try {
       await projectsApi.advance(projId, {});
       await refreshProjects?.();
-      addNotification({
-        icon: 'money', title: `${remaining.toLocaleString()} EGP released to talent`,
-        body: `Full payment for "${proj.title}" has been released.`,
-        time: 'Just now', iconBg: '#dcfce7',
-      });
-    } catch (e) { toast.error(`Couldn't approve: ${e.message}`); }
+      toast.success('Confirmed.');
+    } catch (e) { toast.error(`Couldn't confirm: ${e.message}`); }
   });
 
   const submitReview = (projId) => runReview(async () => {
@@ -241,12 +293,12 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
               )}
               {['deposit_paid','in_progress'].includes(p.status) && (
                 <div className="mt-3 flex items-center gap-2 text-xs font-medium text-[#2563eb]">
-                  <Hourglass size={13} /> Student is working · {(p.depositAmount || 0).toLocaleString()} EGP held in escrow
+                  <Hourglass size={13} /> Student is working · {(p.depositAmount || 0).toLocaleString()} EGP deposit received
                 </div>
               )}
               {p.status === 'delivered' && (
                 <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#7c3aed]">
-                  <PackageCheck size={13} /> Delivery received — click to review and release payment
+                  <PackageCheck size={13} /> Delivery received — click to review and complete
                 </div>
               )}
             </div>
@@ -376,38 +428,71 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                 </div>
               )}
 
-              {/* ── STEP: offer_accepted — Pay deposit ── */}
+              {/* ── STEP: offer_accepted — Deposit (manual InstaPay) ── */}
               {proj.status === 'offer_accepted' && (() => {
                 const app = proj.applications.find(a => a.id === proj.acceptedApplicationId);
                 const talent = app ? talents.find(t => t.id === app.talentId) : null;
-                const deposit = Math.round(proj.budget * 0.5);
+                const deposit = Math.floor(proj.budget * 0.5);
+                const isOwnerClient = proj.clientId === currentUser?.id;
                 return (
                   <div className="space-y-4">
                     <div className="flex items-center gap-3 p-4 rounded-2xl" style={{ background: '#21326c08', border: '1px solid #21326c15' }}>
                       {talent && <Avatar initials={talent.initials} color={talent.avatarColor} size="md" />}
                       <div>
-                        <p className="font-semibold text-[#21326c] text-sm">{app?.talentName}</p>
-                        <p className="text-xs text-[#21326c]/60">Offer accepted — waiting for deposit</p>
+                        <p className="font-semibold text-[#21326c] text-sm">{proj.acceptedTalentName || app?.talentName || 'Student hired'}</p>
+                        <p className="text-xs text-[#21326c]/60">Offer accepted — deposit stage</p>
                       </div>
                     </div>
-                    <div className="rounded-2xl border-2 border-dashed border-[#21326c]/20 p-5 text-center space-y-3">
-                      <CreditCard size={32} className="text-[#21326c]/40 mx-auto" />
-                      <div>
-                        <p className="font-display text-2xl font-bold text-[#21326c]">{deposit.toLocaleString()} EGP</p>
-                        <p className="text-sm text-[#21326c]/60 mt-0.5">50% deposit · held in escrow by Lawnn</p>
+
+                    {isAdminRole ? (
+                      <div className="rounded-2xl border-2 border-dashed border-[#16a34a]/40 p-5 text-center space-y-3">
+                        <DollarSign size={32} className="text-[#16a34a] mx-auto" />
+                        <div>
+                          <p className="font-display text-2xl font-bold text-[#21326c]">{deposit.toLocaleString()} EGP</p>
+                          <p className="text-sm text-[#21326c]/60 mt-0.5">50% deposit · confirm once received via InstaPay</p>
+                        </div>
+                        <ProofView url={proj.depositProofUrl} label="deposit" />
+                        <button
+                          onClick={() => adminConfirm(proj.id)}
+                          disabled={approving}
+                          className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ background: '#16a34a' }}
+                        >
+                          {approving ? 'Confirming…' : 'Confirm Deposit Received'}
+                        </button>
                       </div>
-                      <p className="text-xs text-[#21326c]/50 leading-relaxed max-w-xs mx-auto">
-                        Your deposit is protected. It's released to the student only when you approve the final delivery.
-                      </p>
-                      <button
-                        onClick={() => payDeposit(proj.id)}
-                        disabled={paying}
-                        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{ background: '#ff9044' }}
-                      >
-                        {paying ? 'Processing…' : `Pay ${deposit.toLocaleString()} EGP Deposit`}
-                      </button>
-                    </div>
+                    ) : isOwnerClient ? (
+                      <div className="rounded-2xl border-2 border-dashed border-[#21326c]/20 p-5 text-center space-y-3">
+                        <CreditCard size={32} className="text-[#21326c]/40 mx-auto" />
+                        <div>
+                          <p className="font-display text-2xl font-bold text-[#21326c]">{deposit.toLocaleString()} EGP</p>
+                          <p className="text-sm text-[#21326c]/60 mt-0.5">50% deposit to start the project</p>
+                        </div>
+                        <p className="text-xs text-[#21326c]/60 leading-relaxed max-w-xs mx-auto">
+                          Pay the deposit by InstaPay transfer. Lawnn will send you the account details, then verify your screenshot and start the project. The balance is due after delivery.
+                        </p>
+                        {proj.depositProofUrl ? (
+                          <div className="space-y-2">
+                            <ProofView url={proj.depositProofUrl} label="deposit" />
+                            <p className="text-xs font-medium text-[#16a34a]">Screenshot uploaded — waiting for Lawnn to confirm.</p>
+                          </div>
+                        ) : (
+                          <ProofUploader
+                            busy={paying}
+                            sendLabel="I've Sent the Deposit"
+                            onSend={(path) => markPaymentSent(proj.id, path)}
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: '#fef3c7', border: '1px solid #f59e0b40' }}>
+                        <Hourglass size={20} className="text-amber-600 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-amber-800">Waiting for the deposit</p>
+                          <p className="text-xs text-amber-700 mt-0.5">You'll be notified once Lawnn confirms the client's deposit so you can start.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -433,7 +518,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                       // Talent view — submit delivery form
                       <div className="rounded-2xl p-4 border border-[#21326c]/10" style={{ background: '#fdf0d3' }}>
                         <p className="text-sm font-semibold text-[#21326c] mb-2">Submit your delivery</p>
-                        <p className="text-xs text-[#21326c]/60 mb-3">Once you submit, the client reviews and (on approval) the remaining {(proj.budget - (proj.depositAmount || 0)).toLocaleString()} EGP is released to your wallet.</p>
+                        <p className="text-xs text-[#21326c]/60 mb-3">Once you submit, the client transfers the remaining {(proj.budget - (proj.depositAmount || 0)).toLocaleString()} EGP. Lawnn confirms it and pays out your earnings.</p>
                         <textarea
                           rows={4}
                           value={deliveryNote}
@@ -462,12 +547,12 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                     )}
 
                     <div className="rounded-2xl p-4 border border-[#21326c]/10" style={{ background: '#21326c04' }}>
-                      <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Escrow Summary</p>
+                      <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Payment summary</p>
                       <div className="flex justify-between text-sm text-[#21326c] mb-1">
-                        <span>Deposit paid</span><span className="font-semibold text-green-600">{(proj.depositAmount||0).toLocaleString()} EGP ✓</span>
+                        <span>Deposit received</span><span className="font-semibold text-green-600">{(proj.depositAmount||0).toLocaleString()} EGP ✓</span>
                       </div>
                       <div className="flex justify-between text-sm text-[#21326c]">
-                        <span>On delivery approval</span><span className="font-semibold text-[#21326c]/50">{(proj.budget - (proj.depositAmount||0)).toLocaleString()} EGP</span>
+                        <span>Balance due on delivery</span><span className="font-semibold text-[#21326c]/50">{(proj.budget - (proj.depositAmount||0)).toLocaleString()} EGP</span>
                       </div>
                     </div>
                   </div>
@@ -501,22 +586,53 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                         <ChevronRight size={14} />
                       </button>
                     )}
-                    <div className="rounded-2xl border-2 border-dashed border-green-300 p-5 text-center space-y-3">
-                      <PartyPopper size={32} className="text-green-500 mx-auto" />
-                      <div>
-                        <p className="font-display text-xl font-bold text-[#21326c]">Happy with the work?</p>
-                        <p className="text-sm text-[#21326c]/60 mt-1">Approving releases <strong>{remaining.toLocaleString()} EGP</strong> to the student.</p>
+                    {isAdminRole ? (
+                      <div className="rounded-2xl border-2 border-dashed border-green-300 p-5 text-center space-y-3">
+                        <DollarSign size={32} className="text-[#16a34a] mx-auto" />
+                        <div>
+                          <p className="font-display text-xl font-bold text-[#21326c]">Final payment</p>
+                          <p className="text-sm text-[#21326c]/60 mt-1">Confirm the remaining <strong>{remaining.toLocaleString()} EGP</strong> was received via InstaPay to complete the project.</p>
+                        </div>
+                        <ProofView url={proj.finalPaymentProofUrl} label="final payment" />
+                        <button
+                          onClick={() => adminConfirm(proj.id)}
+                          disabled={approving}
+                          className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ background: '#16a34a' }}
+                        >
+                          {approving ? 'Confirming…' : 'Confirm Final Payment Received'}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => approveDelivery(proj.id)}
-                        disabled={approving}
-                        className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{ background: '#16a34a' }}
-                      >
-                        {approving ? 'Releasing…' : `Approve & Release ${remaining.toLocaleString()} EGP`}
-                      </button>
-                      <p className="text-xs text-[#21326c]/40">If you need revisions, message {app?.talentName?.split(' ')[0]} directly.</p>
-                    </div>
+                    ) : proj.clientId === currentUser?.id ? (
+                      <div className="rounded-2xl border-2 border-dashed border-green-300 p-5 text-center space-y-3">
+                        <PartyPopper size={32} className="text-green-500 mx-auto" />
+                        <div>
+                          <p className="font-display text-xl font-bold text-[#21326c]">Happy with the work?</p>
+                          <p className="text-sm text-[#21326c]/60 mt-1">Transfer the remaining <strong>{remaining.toLocaleString()} EGP</strong> by InstaPay (Lawnn will share the details), then upload your screenshot.</p>
+                        </div>
+                        {proj.finalPaymentProofUrl ? (
+                          <div className="space-y-2">
+                            <ProofView url={proj.finalPaymentProofUrl} label="final payment" />
+                            <p className="text-xs font-medium text-[#16a34a]">Screenshot uploaded — waiting for Lawnn to confirm.</p>
+                          </div>
+                        ) : (
+                          <ProofUploader
+                            busy={paying}
+                            sendLabel="I've Sent the Final Payment"
+                            onSend={(path) => markPaymentSent(proj.id, path)}
+                          />
+                        )}
+                        <p className="text-xs text-[#21326c]/40">Need revisions? Message {app?.talentName?.split(' ')[0] || 'the student'} directly before paying.</p>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: '#fef3c7', border: '1px solid #f59e0b40' }}>
+                        <Hourglass size={20} className="text-amber-600 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-amber-800">Delivery submitted</p>
+                          <p className="text-xs text-amber-700 mt-0.5">Waiting for the client's final payment and Lawnn's confirmation. Your earnings are paid out once confirmed.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -527,8 +643,8 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                   <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: '#dcfce7', border: '1px solid #22c55e40' }}>
                     <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-green-800">Payment released successfully</p>
-                      <p className="text-xs text-green-700 mt-0.5">Full {proj.budget.toLocaleString()} EGP paid · {proj.completedAt}</p>
+                      <p className="text-sm font-semibold text-green-800">Project complete</p>
+                      <p className="text-xs text-green-700 mt-0.5">Full {proj.budget.toLocaleString()} EGP confirmed · {proj.completedAt}</p>
                     </div>
                   </div>
                   {!reviewSubmitted ? (

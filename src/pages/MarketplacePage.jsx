@@ -376,7 +376,7 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
                               {offer.status === 'accepted' && (
                                 <div className="mt-2 flex items-center gap-1.5 text-xs font-medium" style={{ color: '#21326c' }}>
                                   <BadgeCheck size={13} />
-                                  Offer accepted — payment held in escrow by Lawnn until delivery is confirmed.
+                                  Offer accepted — Lawnn will be in touch to arrange payment and delivery.
                                 </div>
                               )}
                             </div>
@@ -493,7 +493,7 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
           </div>
           <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs text-[#21326c]" style={{ background: '#21326c08' }}>
             <Info size={13} className="flex-shrink-0 mt-0.5" />
-            If accepted, payment will be held in escrow by Lawnn until the seller confirms delivery.
+            If accepted, Lawnn will be in touch to arrange payment (by InstaPay transfer) and delivery.
           </div>
           <button
             onClick={submitOffer}

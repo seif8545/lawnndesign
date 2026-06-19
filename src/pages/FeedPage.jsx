@@ -1,11 +1,22 @@
 import { toast } from '../lib/toast.js';
-import { useState } from 'react';
-import { Camera, Clock, ExternalLink, GraduationCap, Hash, Heart, MoreHorizontal, Play, Share2, Shield, Trash2, Video, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Camera, Clock, ExternalLink, GraduationCap, Hash, Heart, MessageCircle, MoreHorizontal, Send, Share2, Shield, Trash2, X } from 'lucide-react';
 import { feed as feedApi, uploadFile } from '../lib/api.js';
 import { Avatar } from '../components/ui.jsx';
 import { useBusy } from '../hooks/useBusy.js';
 
-export function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPosts, currentUser, refreshFeed }) {
+export function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPendingFeedPosts, currentUser, refreshFeed, focusPost }) {
+  // Scroll to and highlight a post opened via a shared deep link.
+  useEffect(() => {
+    if (!focusPost) return;
+    const el = document.getElementById(`post-${focusPost}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('ring-2', 'ring-[#ff9044]');
+      const t = setTimeout(() => el.classList.remove('ring-2', 'ring-[#ff9044]'), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [focusPost, feedPosts]);
   const [newPost, setNewPost]         = useState('');
   const [submitBanner, setSubmitBanner] = useState(false); // pending success banner
   const [sharing, runShare]           = useBusy();         // guards spam-clicks on Submit
@@ -137,7 +148,6 @@ export function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPending
                   className="w-full text-[#21326c] text-sm resize-none border-0 focus:outline-none placeholder:text-[#21326c]/50 bg-transparent"
                 />
                 <input type="file" accept="image/*" id="feed-img-upload" className="hidden" onChange={e => { const f = e.target.files[0]; if (f) { if (imagePreview) URL.revokeObjectURL(imagePreview); setImageFile(f); setImagePreview(URL.createObjectURL(f)); } e.target.value = ''; }} />
-                <input type="file" accept="video/*" id="feed-vid-upload" className="hidden" onChange={e => { if (e.target.files[0]) setNewPost(p => p + ` [Video: ${e.target.files[0].name}]`); }} />
                 {imagePreview && (
                   <div className="relative mt-2 inline-block">
                     <img src={imagePreview} alt="Selected" className="max-h-48 rounded-xl border border-[#21326c]/10" />
@@ -149,7 +159,6 @@ export function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPending
                 <div className="flex items-center justify-between pt-3 border-t border-[#21326c]/10">
                   <div className="flex gap-2">
                     <button onClick={() => document.getElementById('feed-img-upload').click()} title="Attach image" className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors"><Camera size={16} /></button>
-                    <button onClick={() => document.getElementById('feed-vid-upload').click()} title="Attach video" className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors"><Video size={16} /></button>
                     <button onClick={() => setNewPost(p => p ? p + ' #' : '#')} title="Add hashtag" className="p-2 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] transition-colors"><Hash size={16} /></button>
                   </div>
                   <button
@@ -183,6 +192,7 @@ export function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPending
             post={post}
             onLike={() => toggleLike(post.id)}
             isAdmin={isAdmin}
+            currentUser={currentUser}
             onDelete={id => setFeedPosts(ps => ps.filter(p => p.id !== id))}
           />
         ))}
@@ -191,18 +201,45 @@ export function FeedPage({ feedPosts, setFeedPosts, pendingFeedPosts, setPending
   );
 }
 
-export function FeedPost({ post, onLike, isAdmin, onDelete }) {
+export function FeedPost({ post, onLike, isAdmin, onDelete, currentUser }) {
   const [copied, setCopied] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState(null);   // null = not loaded yet
+  const [newComment, setNewComment] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [count, setCount] = useState(post.commentCount || 0);
 
+  const shareUrl = `${window.location.origin}${window.location.pathname}?post=${post.id}`;
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href).catch(() => {});
+    navigator.clipboard.writeText(shareUrl).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const toggleComments = async () => {
+    const next = !showComments;
+    setShowComments(next);
+    if (next && comments === null) {
+      try { setComments(await feedApi.comments(post.id)); }
+      catch { setComments([]); }
+    }
+  };
+  const submitComment = async () => {
+    const text = newComment.trim();
+    if (!text) return;
+    setPosting(true);
+    try {
+      const c = await feedApi.addComment(post.id, text);
+      setComments(cs => [...(cs || []), c]);
+      setCount(n => n + 1);
+      setNewComment('');
+    } catch (e) { toast.error(`Couldn't comment: ${e.message}`); }
+    finally { setPosting(false); }
+  };
+
   return (
-    <div className="feed-card bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden">
+    <div id={`post-${post.id}`} className="feed-card bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden">
       {/* Header */}
       <div className="p-5 pb-3">
         <div className="flex items-start justify-between">
@@ -229,7 +266,7 @@ export function FeedPost({ post, onLike, isAdmin, onDelete }) {
               </button>
               {showMore && (
                 <div className="absolute right-0 top-9 bg-white rounded-xl border border-[#21326c]/10 shadow-lg w-40 overflow-hidden z-50 animate-fade-in">
-                  <button onClick={() => { navigator.clipboard.writeText(window.location.href).catch(()=>{}); setShowMore(false); }}
+                  <button onClick={() => { navigator.clipboard.writeText(shareUrl).catch(()=>{}); setShowMore(false); }}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors text-left">
                     <ExternalLink size={13} /> Copy link
                   </button>
@@ -252,28 +289,10 @@ export function FeedPost({ post, onLike, isAdmin, onDelete }) {
         </div>
       </div>
 
-      {/* Image / Video — only when the post actually has media */}
-      {(post.imageUrl || post.hasVideo) && (
+      {/* Image — only when the post actually has one */}
+      {post.imageUrl && (
         <div className="relative mx-5 mb-4 rounded-xl overflow-hidden">
-          {post.imageUrl ? (
-            <img src={post.imageUrl} alt="" className="w-full max-h-96 object-cover" />
-          ) : (
-            <div className="h-52 flex items-center justify-center" style={{ background: `linear-gradient(160deg, ${post.imageColor}aa, ${post.imageColor})` }}>
-              <span className="text-white font-medium text-sm bg-black/20 px-3 py-1.5 rounded-lg">{post.imageLabel}</span>
-            </div>
-          )}
-          {post.hasVideo && (
-            <button onClick={() => toast.info('Video playback requires a media server. Coming soon.')} className="absolute inset-0 flex items-center justify-center">
-              <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
-                <Play size={20} fill="#21326c" color="#21326c" />
-              </div>
-            </button>
-          )}
-          {post.hasVideo && (
-            <span className="absolute top-3 right-3 text-xs font-semibold bg-red-500 text-white px-2 py-0.5 rounded-full flex items-center gap-1">
-              <Play size={10} fill="white" /> Tutorial
-            </span>
-          )}
+          <img src={post.imageUrl} alt="" className="w-full max-h-96 object-cover" />
         </div>
       )}
 
@@ -296,10 +315,53 @@ export function FeedPost({ post, onLike, isAdmin, onDelete }) {
             <Heart size={16} fill={post.liked ? '#ef4444' : 'none'} />
             {post.liked ? 'Liked' : 'Like'}
           </button>
+          <button onClick={toggleComments} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-[#21326c] hover:bg-[#21326c]/5 transition-colors flex-1 justify-center">
+            <MessageCircle size={16} /> {count > 0 ? count : ''} {count === 1 ? 'Comment' : 'Comments'}
+          </button>
           <button onClick={handleShare} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-[#21326c] hover:bg-[#21326c]/5 transition-colors flex-1 justify-center">
             <Share2 size={16} /> {copied ? 'Copied!' : 'Share'}
           </button>
         </div>
+
+        {/* Comments */}
+        {showComments && (
+          <div className="mt-3 pt-3 border-t border-[#21326c]/10 space-y-3">
+            {comments === null ? (
+              <p className="text-xs text-[#21326c]/50 text-center py-2">Loading…</p>
+            ) : comments.length === 0 ? (
+              <p className="text-xs text-[#21326c]/50 text-center py-2">No comments yet. Be the first.</p>
+            ) : (
+              comments.map(c => (
+                <div key={c.id} className="flex items-start gap-2.5">
+                  <Avatar initials={c.initials} color={c.avatarColor} size="sm" />
+                  <div className="flex-1 bg-[#21326c]/5 rounded-2xl px-3 py-2">
+                    <p className="text-xs font-semibold text-[#21326c]">{c.author}</p>
+                    <p className="text-sm text-[#21326c] leading-relaxed">{c.content}</p>
+                  </div>
+                </div>
+              ))
+            )}
+
+            {currentUser ? (
+              <div className="flex items-center gap-2">
+                <input
+                  value={newComment}
+                  onChange={e => setNewComment(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') submitComment(); }}
+                  placeholder="Write a comment…"
+                  className="flex-1 px-3 py-2 rounded-full bg-[#21326c]/5 text-sm text-[#21326c] placeholder:text-[#21326c]/40 focus:outline-none focus:ring-2 focus:ring-[#21326c]"
+                />
+                <button onClick={submitComment} disabled={posting || !newComment.trim()}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-40 transition-opacity flex-shrink-0"
+                  style={{ background: '#ff9044' }}>
+                  <Send size={15} />
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-[#21326c]/50 text-center">Sign in to comment.</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

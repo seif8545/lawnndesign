@@ -168,7 +168,7 @@ export function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, 
                 </div>
                 <div className="rounded-xl p-3" style={{ background: '#21326c08' }}>
                   <p className="font-bold text-[#21326c] text-lg leading-tight">{(talent.walletBalance || 0).toLocaleString()}</p>
-                  <p className="text-xs text-[#21326c] mt-0.5">EGP Wallet</p>
+                  <p className="text-xs text-[#21326c] mt-0.5">EGP Earned</p>
                 </div>
               </div>
             </div>
@@ -265,12 +265,12 @@ export function AboutPage({ currentUser, talents, onUpdateTalent, aboutContent, 
             {
               title: 'For Students',
               body: 'Once accepted by the Lawnn team, you get a verified profile, access to live client briefs, and a platform to share your work-in-progress. Your portfolio — a curated collection of PDF projects — becomes your calling card.',
-              features: ['Verified student badge', 'Live job board access', 'PDF portfolio upload', 'Secure client messaging', 'Admin-managed acceptance'],
+              features: ['Verified student badge', 'Live projects board access', 'PDF portfolio upload', 'Secure client messaging', 'Admin-managed acceptance'],
             },
             {
               title: 'For Clients',
-              body: 'Browse verified student talent and post jobs to find the best match for your brief. Every student on Lawnn is verified by their faculty and reviewed by our team.',
-              features: ['Vetted creative talent', 'Post jobs & receive applications', 'Secure payments via escrow', 'Direct messaging'],
+              body: 'Browse verified student talent and post projects to find the best match for your brief. Every student on Lawnn is verified by their faculty and reviewed by our team.',
+              features: ['Vetted creative talent', 'Post projects & receive applications', 'Lawnn-coordinated payments', 'Direct messaging'],
             },
           ].map(card => (
             <div key={card.title} className="bg-white rounded-2xl border border-[#21326c]/10 p-8">

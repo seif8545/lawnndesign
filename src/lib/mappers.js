@@ -99,12 +99,8 @@ export function mapApiFeedPost(p) {
     content:     p.content,
     tags:        p.tags || [],
     imageUrl:    p.imageUrl || null,
-    imageColor:  p.avatarColor,            // visual fallback for the image block
-    imageLabel:  p.imageUrl ? 'Attached media' : '',
     likes:       p.likes || 0,
-    comments:    0,                        // not modelled yet
-    shares:      0,
-    hasVideo:    false,
+    commentCount: p._count?.comments ?? 0,
     liked:       Boolean(p.liked),
     status:      p.status,
   };
@@ -143,20 +139,33 @@ export function mapApiNews(n) {
 }
 
 export function mapApiProject(p) {
-  // The project page expects an `applications` array for the 'open' status
-  // (where the client picks an offer). The Project model in the DB doesn't
-  // model applications — those live under Job — so we surface an empty array
-  // for now. A "job → project" bridge is a future task.
   const clientReview = p.reviews?.find(r => r.authorId === p.clientId);
   const talentReview = p.reviews?.find(r => r.authorId === p.talentId);
+  const applications = (p.applications || []).map(a => ({
+    id:             a.id,
+    talentId:       a.user?.id,
+    talentName:     a.user?.name,
+    talentInitials: a.user?.initials,
+    talentColor:    a.user?.avatarColor,
+    note:           a.note,
+    status:         a.status,
+    submittedAt:    formatRelativeTime(a.createdAt),
+    files:          a.files || [],
+    proposedAmount: null,        // applications inherit the project budget
+  }));
   return {
     id:                     p.id,
     title:                  p.title,
     brief:                  p.brief,
     budget:                 p.budget,
+    budgetType:             p.budgetType || 'Fixed',
+    category:               p.category || 'Visuals & Branding',
     status:                 p.status,
     clientId:               p.clientId,
     clientName:             p.client?.name || '',
+    tags:                   (p.skills || []).map(s => s.skill),
+    attachments:            p.attachments || [],
+    applicants:             p._count?.applications ?? applications.length,
     acceptedTalentId:       p.talentId,
     acceptedTalentName:     p.talent?.name,
     acceptedTalentInitials: p.talent?.initials,
@@ -164,14 +173,16 @@ export function mapApiProject(p) {
     postedAt:               formatRelativeTime(p.createdAt),
     depositAmount:          p.depositAmount,
     depositPaidAt:          p.depositPaidAt ? formatRelativeTime(p.depositPaidAt) : null,
+    depositProofUrl:        p.depositProofUrl || null,
+    finalPaymentProofUrl:   p.finalPaymentProofUrl || null,
     deliveryNote:           p.deliveryNote,
     deliveredAt:            p.deliveredAt ? formatRelativeTime(p.deliveredAt) : null,
     clientApproved:         Boolean(p.clientApproved),
     completedAt:            p.completedAt ? formatRelativeTime(p.completedAt) : null,
     clientReview: clientReview ? { rating: clientReview.rating, text: clientReview.comment } : null,
     talentReview: talentReview ? { rating: talentReview.rating, text: talentReview.comment } : null,
-    applications: [],          // see comment above
-    acceptedApplicationId: p.talentId ? `t-${p.talentId}` : null,
+    applications,
+    acceptedApplicationId: applications.find(a => a.status === 'accepted')?.id || null,
   };
 }
 

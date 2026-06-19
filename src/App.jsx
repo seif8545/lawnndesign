@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { auth as authApi, clearToken, feed as feedApi, jobs as jobsApi, marketplace as marketplaceApi, news as newsApi, notifications as notifApi, profiles, projects as projectsApi } from './lib/api.js';
+import { auth as authApi, clearToken, feed as feedApi, marketplace as marketplaceApi, news as newsApi, notifications as notifApi, onUnauthorized, profiles, projects as projectsApi } from './lib/api.js';
+import { toast } from './lib/toast.js';
 import { connectSocket, disconnectSocket } from './lib/socket.js';
 import { TopNav } from './components/TopNav.jsx';
 import { AcceptInviteModal, LoginModal } from './components/auth.jsx';
@@ -31,10 +32,19 @@ export default function App() {
   // effect doesn't immediately reopen it after they dismiss without finishing.
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [inviteToken, setInviteToken] = useState(null);
+  const [focusPost, setFocusPost] = useState(null);
 
   // First-load: detect an invite token in the URL, otherwise hydrate from stored JWT.
   useEffect(() => {
     const url = new URL(window.location.href);
+    // Shared post deep link (?post=<id>) — open the feed at that post.
+    const sharedPost = url.searchParams.get('post');
+    if (sharedPost) {
+      setFocusPost(sharedPost);
+      setView('feed');
+      url.searchParams.delete('post');
+      window.history.replaceState({}, '', url.toString());
+    }
     const t = url.searchParams.get('token');
     if (t) {
       setInviteToken(t);
@@ -60,16 +70,16 @@ export default function App() {
       .catch(err => console.warn('[talents] failed to load:', err.message));
   }, []);
 
-  // Reusable jobs refresher — called on mount and after any mutation.
-  // Admin sees pending jobs via optionalAuth on the backend; split locally.
+  // Reusable Projects board refresher — open projects accepting applications.
+  // Admin sees pending ones via the board endpoint's visibility; split locally.
   const refreshJobs = useCallback(() => {
-    return jobsApi.list()
+    return projectsApi.board()
       .then(list => {
         const mapped = list.map(mapApiJob);
-        setJobs(mapped.filter(j => j.status === 'live'));
+        setJobs(mapped.filter(j => j.status === 'open'));
         setPendingJobs(mapped.filter(j => j.status === 'pending'));
       })
-      .catch(err => console.warn('[jobs] failed to load:', err.message));
+      .catch(err => console.warn('[board] failed to load:', err.message));
   }, []);
   useEffect(() => { refreshJobs(); }, [refreshJobs, currentUser]);
 
@@ -182,6 +192,17 @@ export default function App() {
     setOnboardingDismissed(false);
   };
 
+  // Auto-logout when the API reports an expired/invalid session (401 on an
+  // authenticated request). The token is already cleared in api.js; here we
+  // reset app state and tell the user. handleLogout only touches stable
+  // setters, so registering the first-render closure once is safe.
+  useEffect(() => {
+    onUnauthorized(() => {
+      handleLogout();
+      toast.error('Your session expired — please sign in again.');
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Prompt students to finish their profile whenever it's incomplete (no bio or
   // no skills). Runs once talent profiles have loaded; the session-dismissed flag
   // stops it from reopening immediately after the student closes it.
@@ -221,7 +242,7 @@ export default function App() {
       case 'home':
         return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       case 'jobs':
-        return <JobBoardPage setView={handleNavChange} jobs={jobs} setJobs={setJobs} pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} currentUser={currentUser} refreshJobs={refreshJobs} refreshProjects={refreshProjects} />;
+        return <JobBoardPage setView={handleNavChange} jobs={jobs} setJobs={setJobs} pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} currentUser={currentUser} talents={talents} refreshJobs={refreshJobs} refreshProjects={refreshProjects} />;
       case 'directory':
         return <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       case 'profile': {
@@ -240,7 +261,7 @@ export default function App() {
           : <DirectoryPage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       }
       case 'feed':
-        return <FeedPage feedPosts={feedPosts} setFeedPosts={setFeedPosts} pendingFeedPosts={pendingFeedPosts} setPendingFeedPosts={setPendingFeedPosts} currentUser={currentUser} refreshFeed={refreshFeed} />;
+        return <FeedPage feedPosts={feedPosts} setFeedPosts={setFeedPosts} pendingFeedPosts={pendingFeedPosts} setPendingFeedPosts={setPendingFeedPosts} currentUser={currentUser} refreshFeed={refreshFeed} focusPost={focusPost} />;
       case 'chat':
         return <ChatPage currentUser={currentUser} />;
       case 'about':
@@ -276,7 +297,7 @@ export default function App() {
               pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} setJobs={setJobs}
               pendingListings={pendingListings} setPendingListings={setPendingListings} setListings={setListings}
               projects={projects} talents={talents} currentUser={currentUser}
-              refreshJobs={refreshJobs} refreshFeed={refreshFeed} refreshMarketplace={refreshMarketplace}
+              refreshJobs={refreshJobs} refreshFeed={refreshFeed} refreshMarketplace={refreshMarketplace} refreshProjects={refreshProjects}
             />
           : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       default:

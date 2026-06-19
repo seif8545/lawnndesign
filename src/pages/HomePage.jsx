@@ -58,7 +58,7 @@ export function HomePage({ setView, setSelectedTalent, talents }) {
                 className="group flex items-center gap-2 px-7 py-3 rounded-md font-semibold text-white text-sm sm:text-base transition-all hover:brightness-105"
                 style={{ background: '#ff9044' }}
               >
-                Post a Job <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+                Post a Project <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
               </button>
               <button
                 onClick={() => setView('directory')}
@@ -230,7 +230,7 @@ export function TalentCard({ talent, onClick }) {
         </div>
 
         <div className="flex items-center justify-between pt-3 border-t border-[#21326c]/10">
-          <span className="text-xs text-[#21326c]">{talent.completedJobs} jobs done</span>
+          <span className="text-xs text-[#21326c]">{talent.completedJobs} projects done</span>
           <span className="text-xs text-[#21326c]">{talent.reviews} reviews</span>
         </div>
       </div>

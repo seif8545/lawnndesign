@@ -4,6 +4,11 @@ const url = process.env.SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!url || !serviceKey) {
+  // In production a missing Storage config means uploads silently break, so we
+  // refuse to boot. In dev we warn and fall back so the API still runs offline.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[supabase] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in production')
+  }
   console.warn('[supabase] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set — uploads will fail')
 }
 

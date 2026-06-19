@@ -25,8 +25,8 @@ The split was done mechanically (a script that sliced by declaration and auto-ge
 
 ---
 
-## Uncommitted work (IMPORTANT — review & commit)
-Two features were added AFTER the "ok" commit and are NOT yet committed:
+## Error boundary + toasts (committed)
+Two features were added after the initial split commit and are now committed too:
 
 1. **Error boundary**
    - `src/components/ErrorBoundary.jsx` (new) — branded fallback, `resetKey` auto-recovers on navigation.
@@ -38,7 +38,7 @@ Two features were added AFTER the "ok" commit and are NOT yet committed:
    - `src/components/Toaster.jsx` (new) — renders stack top-right, auto-dismiss, color-coded; rendered once in `App.jsx`.
    - 38 `alert()` → `toast.error` (36) / `toast.success` (1, "Hired!") / `toast.info` (1, video placeholder) across the 8 page files. The 4 `confirm()` dialogs were intentionally left as-is.
 
-Both verified: `vite build` passes (1554 modules) and jsdom runtime tests confirmed behavior.
+Both verified: `vite build` passes (1554 modules) and jsdom runtime tests confirmed behavior. **All of the above is committed — the working tree is clean.**
 
 ---
 

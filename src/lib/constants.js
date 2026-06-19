@@ -100,8 +100,8 @@ export const INFO_PAGES = {
     subtitle: "Egypt's home for creative student talent.",
     sections: [
       { heading: 'Our mission', body: ["Lawnn (لون) connects Egypt's most talented art and design students with the clients, studios, and brands who need their work. We believe the country's creative faculties produce world-class talent that too often goes unseen — and we're building the platform that changes that."] },
-      { heading: 'What we do', body: ["We verify students from Egypt's top creative institutions, surface them to real clients through a curated job board and talent directory, and protect both sides with secure, escrow-backed projects. From a first brief to final payment, the whole engagement lives in one place."] },
-      { heading: 'How it works', body: ["Clients post briefs and discover talent. Students build verified portfolios, apply to briefs, and grow a sustainable creative career while they study. When a client hires, the work becomes a managed project with milestones, messaging, and escrowed payments — so everyone can focus on the creative work."] },
+      { heading: 'What we do', body: ["We verify students from Egypt's top creative institutions, surface them to real clients through a curated projects board and talent directory, and guide both sides through managed projects. From a first brief to final payment, the whole engagement lives in one place."] },
+      { heading: 'How it works', body: ["Clients post briefs and discover talent. Students build verified portfolios, apply to briefs, and grow a sustainable creative career while they study. When a client hires, the work becomes a managed project with clear stages, messaging, and Lawnn-coordinated payments — so everyone can focus on the creative work."] },
       { heading: 'Why it matters', body: ["Freelancing as a student is hard: getting discovered, pricing fairly, and getting paid on time. Lawnn removes that friction so emerging Egyptian creatives can do their best work and be paid what it's worth."] },
     ],
   },
@@ -110,7 +110,7 @@ export const INFO_PAGES = {
     subtitle: 'How we collect, use, and protect your information.',
     sections: [
       { heading: 'Information we collect', body: ["We collect the information you provide when you create an account or profile — such as your name, email, university, portfolio, and the content you post — along with basic technical data needed to operate the service (e.g. authentication tokens and uploaded files)."] },
-      { heading: 'How we use it', body: ["We use your information to operate the platform: to authenticate you, show your profile and work to relevant clients, enable messaging and projects, and process the escrow lifecycle. We do not sell your personal data, and we do not show third-party advertising."] },
+      { heading: 'How we use it', body: ["We use your information to operate the platform: to authenticate you, show your profile and work to relevant clients, enable messaging and projects, and coordinate project payments. We do not sell your personal data, and we do not show third-party advertising."] },
       { heading: 'File storage', body: ["Uploaded files are stored in secured cloud storage. Public assets (portfolio images, feed media) are served via a public bucket; sensitive files such as job-application attachments are kept in a private bucket and only shared through short-lived signed links with authorised parties."] },
       { heading: 'Your choices', body: ["You can edit or remove most of your information from your profile at any time. To delete your account or request a copy of your data, contact us through the Contact page."] },
       { heading: 'Changes', body: ["We may update this policy as the product evolves. Material changes will be reflected here with an updated date."] },
@@ -122,7 +122,7 @@ export const INFO_PAGES = {
     sections: [
       { heading: 'Accounts', body: ["You're responsible for the activity on your account and for keeping your credentials secure. Student accounts are created via admin invitation; you agree to provide accurate information about yourself and your work."] },
       { heading: 'Conduct', body: ["Don't post content that is unlawful, infringing, misleading, or harmful. Don't misrepresent your skills or impersonate others. Clients must post genuine briefs; students must only submit work they have the right to share. Lawnn admins moderate posted content and may remove anything that breaks these rules."] },
-      { heading: 'Projects and payments', body: ["Hiring a student creates a project governed by Lawnn's escrow flow. Deposits and final payments move through the defined project stages. Both parties agree to engage in good faith — delivering work as briefed and releasing payment for accepted work."] },
+      { heading: 'Projects and payments', body: ["Hiring a student creates a project governed by Lawnn's payment flow: a 50% deposit to start and the balance on delivery, paid by InstaPay transfer and confirmed by Lawnn. Both parties agree to engage in good faith — delivering work as briefed and paying for accepted work."] },
       { heading: 'Intellectual property', body: ["Creators retain rights to their work until ownership transfers under the agreed terms of a project, typically on full payment. Posting work to Lawnn grants us a limited licence to display it on the platform for the purpose of operating the service."] },
       { heading: 'Liability', body: ["Lawnn is provided on an ‘as is’ basis during this research preview. We work hard to keep the service reliable but can't guarantee uninterrupted availability."] },
     ],
@@ -133,8 +133,8 @@ export const INFO_PAGES = {
     sections: [
       { heading: 'Get in touch', body: ["The fastest way to reach us is from inside the app: open Messages and tap ‘Contact support’ to start a direct conversation with a Lawnn admin. You can also email us at hello@lawnndesign.com."] },
       { heading: 'How do I join as a student?', body: ["Student accounts are created by invitation once your application is accepted. If you're a student from an Egyptian creative faculty and want to join, reach out and tell us about your work."] },
-      { heading: 'How do I hire someone?', body: ["Create a client account, post a brief on the Job Board (it goes live after a quick admin review), and review applications. When you hire, the engagement becomes a managed, escrow-backed project."] },
-      { heading: 'How do payments work?', body: ["Payments are handled through Lawnn's escrow flow: a deposit is collected when a project starts and the balance is released when the delivered work is approved."] },
+      { heading: 'How do I hire someone?', body: ["Create a client account, post a project (it goes live after a quick admin review), and review applications. When you hire an applicant, that same project moves into Lawnn's managed payment flow, coordinated end to end."] },
+      { heading: 'How do payments work?', body: ["Payments are made by InstaPay transfer, coordinated by Lawnn: a 50% deposit to start the project, and the balance once you approve the delivery. We confirm each transfer before the project moves forward."] },
       { heading: 'Is my work protected?', body: ["Yes — application files are kept private and shared only via secure signed links, and you keep the rights to your work until ownership transfers under your project's agreed terms."] },
     ],
   },

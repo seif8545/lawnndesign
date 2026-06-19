@@ -10,10 +10,11 @@ export function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, se
     ...pendingJobs.filter(j => j.clientId === currentUser?.id),
     ...jobs.filter(j => j.clientId === currentUser?.id),
   ];
-  // projectsApi.list already returns only the caller's projects.
-  const myProjects = projects || [];
+  // projectsApi.list returns all the caller's projects; the pending/open ones
+  // are shown under "Postings" above, so here we keep only active engagements.
+  const myProjects = (projects || []).filter(p => !['pending', 'open'].includes(p.status));
 
-  const statusLabel = s => s === 'pending' ? 'Pending admin review' : s === 'filled' ? 'Filled' : s === 'live' ? 'Live' : s;
+  const statusLabel = s => s === 'pending' ? 'Pending admin review' : s === 'open' ? 'Live' : s;
 
   // Editable client details (company, bio, website).
   const [cp, setCp]             = useState(null);
@@ -68,7 +69,7 @@ export function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, se
                 <Pen size={13} /> Edit
               </button>
               <button onClick={() => setView('jobs')} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all" style={{ background: '#ff9044' }}>
-                <Plus size={14} /> Post a Job
+                <Plus size={14} /> Post a Project
               </button>
               <button onClick={() => setView('projects')} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors">
                 <Package size={14} /> My Projects
@@ -79,7 +80,7 @@ export function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, se
           <div className="flex gap-6 mt-5">
             <div>
               <p className="font-display text-2xl font-bold text-[#21326c]">{myJobs.length}</p>
-              <p className="text-xs text-[#21326c]/60">Job postings</p>
+              <p className="text-xs text-[#21326c]/60">Postings</p>
             </div>
             <div>
               <p className="font-display text-2xl font-bold text-[#21326c]">{myProjects.length}</p>
@@ -89,12 +90,12 @@ export function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, se
         </div>
       </div>
 
-      {/* Job postings */}
-      <h2 className="font-display text-lg font-bold text-[#21326c] mb-3">My Job Postings</h2>
+      {/* Postings */}
+      <h2 className="font-display text-lg font-bold text-[#21326c] mb-3">My Postings</h2>
       {myJobs.length === 0 ? (
         <div className="bg-white rounded-2xl border border-[#21326c]/10 p-8 text-center text-[#21326c]/50 mb-8">
           <Briefcase size={28} className="mx-auto mb-2 opacity-30" />
-          <p className="text-sm">You haven't posted any jobs yet.</p>
+          <p className="text-sm">You haven't posted any projects yet.</p>
         </div>
       ) : (
         <div className="space-y-3 mb-8">
@@ -104,7 +105,7 @@ export function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, se
                 <p className="font-semibold text-[#21326c] text-sm truncate">{job.title}</p>
                 <p className="text-xs text-[#21326c]/50">{job.budget?.toLocaleString()} EGP · {job.applicants || 0} applicant{job.applicants === 1 ? '' : 's'}</p>
               </div>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: job.status === 'live' ? '#21326c12' : '#db963015', color: job.status === 'live' ? '#21326c' : '#db9630' }}>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: job.status === 'open' ? '#21326c12' : '#db963015', color: job.status === 'open' ? '#21326c' : '#db9630' }}>
                 {statusLabel(job.status)}
               </span>
             </div>
@@ -117,7 +118,7 @@ export function ClientProfilePage({ currentUser, jobs, pendingJobs, projects, se
       {myProjects.length === 0 ? (
         <div className="bg-white rounded-2xl border border-[#21326c]/10 p-8 text-center text-[#21326c]/50">
           <Package size={28} className="mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No projects yet. Hire a student from one of your job postings to start one.</p>
+          <p className="text-sm">No active projects yet. Hire a student from one of your postings to start one.</p>
         </div>
       ) : (
         <div className="space-y-3">

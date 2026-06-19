@@ -1,7 +1,7 @@
 import { toast } from '../lib/toast.js';
 import { useState, useEffect } from 'react';
-import { BadgeCheck, Briefcase, CheckCircle, GraduationCap, Grid, MessageSquareText, Plus, Search, Send, Shield, Tag, Trash2, UserCheck, Users } from 'lucide-react';
-import { admin as adminApi, conversations as convApi, feed as feedApi, jobs as jobsApi, marketplace as marketplaceApi } from '../lib/api.js';
+import { BadgeCheck, Briefcase, CheckCircle, DollarSign, GraduationCap, Grid, Hourglass, MessageSquareText, Plus, Search, Send, Shield, Tag, Trash2, UserCheck, Users } from 'lucide-react';
+import { admin as adminApi, conversations as convApi, feed as feedApi, marketplace as marketplaceApi, projects as projectsApi } from '../lib/api.js';
 import { Avatar, Modal } from '../components/ui.jsx';
 import { ChatPage } from './ChatPage.jsx';
 
@@ -433,7 +433,7 @@ export function AdminStartConversation({ onStarted }) {
   );
 }
 
-export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser, refreshJobs, refreshFeed, refreshMarketplace }) {
+export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser, refreshJobs, refreshFeed, refreshMarketplace, refreshProjects }) {
   const [adminTab, setAdminTab] = useState('content');
 
   const approveFeedPost = async post => {
@@ -447,8 +447,8 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
 
   const approveJob = async job => {
     try {
-      await jobsApi.setStatus(job.id, 'live');
-      // Server is source of truth — refetch splits live/pending again.
+      await projectsApi.setStatus(job.id, 'open');
+      // Server is source of truth — refetch splits open/pending again.
       await refreshJobs?.();
     } catch (e) {
       toast.error(`Couldn't approve: ${e.message}`);
@@ -456,7 +456,7 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
   };
   const rejectJob = async id => {
     try {
-      await jobsApi.delete(id);
+      await projectsApi.delete(id);
       await refreshJobs?.();
     } catch (e) {
       toast.error(`Couldn't reject: ${e.message}`);
@@ -474,8 +474,13 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
 
   const totalPending = pendingFeedPosts.length + pendingJobs.length + pendingListings.length;
 
+  // Projects awaiting a payment confirmation (deposit on offer_accepted, final
+  // balance on delivered). Drives the Payments tab and its count badge.
+  const paymentsAwaiting = (projects || []).filter(p => p.status === 'offer_accepted' || p.status === 'delivered');
+
   const ADMIN_TABS = [
     { id: 'content',       label: 'Content Queue', Icon: Shield },
+    { id: 'payments',      label: paymentsAwaiting.length ? `Payments (${paymentsAwaiting.length})` : 'Payments', Icon: DollarSign },
     { id: 'conversations', label: 'Conversations',  Icon: MessageSquareText },
     { id: 'users',         label: 'Users',          Icon: UserCheck },
   ];
@@ -508,7 +513,7 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
             {[
               { label: 'Pending Posts',    count: pendingFeedPosts.length, color: '#c4622d', Icon: Grid },
-              { label: 'Pending Jobs',     count: pendingJobs.length,      color: '#db9630', Icon: Briefcase },
+              { label: 'Pending Projects', count: pendingJobs.length,      color: '#db9630', Icon: Briefcase },
               { label: 'Pending Listings', count: pendingListings.length,  color: '#21326c', Icon: Tag },
             ].map(s => (
               <div key={s.label} className="bg-white rounded-2xl border border-[#21326c]/10 p-5 flex items-center gap-4">
@@ -552,7 +557,7 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
             />
 
             <PendingSection
-              title="Job Postings"
+              title="Project Postings"
               icon={Briefcase}
               color="#db9630"
               items={pendingJobs}
@@ -597,6 +602,11 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
         </>
       )}
 
+      {/* ── PAYMENTS TAB ── */}
+      {adminTab === 'payments' && (
+        <AdminPaymentsTab projects={projects} refreshProjects={refreshProjects} />
+      )}
+
       {/* ── CONVERSATIONS TAB ── (ChatPage hosts the New-message starter for admins) */}
       {adminTab === 'conversations' && (
         <ChatPage currentUser={currentUser} />
@@ -604,6 +614,83 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
 
       {/* ── USERS TAB ── */}
       {adminTab === 'users' && <AdminUsersTab />}
+    </div>
+  );
+}
+
+// ─── ADMIN PAYMENTS TAB ──────────────────────────────────────────────────────
+// Queue of projects awaiting a manual-InstaPay confirmation. Each shows the
+// client's uploaded transfer screenshot (signed read URL) and a Confirm button
+// that advances the project (deposit → in_progress, or final → completed).
+function AdminPaymentsTab({ projects, refreshProjects }) {
+  const [busyId, setBusyId] = useState(null);
+
+  const awaiting = (projects || []).filter(p => p.status === 'offer_accepted' || p.status === 'delivered');
+
+  const confirm = async (p) => {
+    setBusyId(p.id);
+    try {
+      await projectsApi.advance(p.id, {});
+      await refreshProjects?.();
+      toast.success('Payment confirmed.');
+    } catch (e) {
+      toast.error(`Couldn't confirm: ${e.message}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (awaiting.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-[#21326c]/10 p-10 text-center">
+        <DollarSign size={28} className="text-[#21326c]/30 mx-auto mb-3" />
+        <p className="text-[#21326c] font-semibold">No payments awaiting confirmation</p>
+        <p className="text-sm text-[#21326c]/50 mt-1">When a client marks a transfer as sent, it'll appear here with their screenshot.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {awaiting.map(p => {
+        const isDeposit = p.status === 'offer_accepted';
+        const stage     = isDeposit ? 'Deposit (50%)' : 'Final balance';
+        const amount    = isDeposit ? Math.floor(p.budget * 0.5) : (p.budget - (p.depositAmount || 0));
+        const proofUrl  = isDeposit ? p.depositProofUrl : p.finalPaymentProofUrl;
+        return (
+          <div key={p.id} className="bg-white rounded-2xl border border-[#21326c]/10 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="font-semibold text-[#21326c]">{p.title}</h3>
+                <p className="text-xs text-[#21326c]/60 mt-0.5">
+                  {p.clientName || 'Client'} → {p.acceptedTalentName || 'student'} · {p.budget.toLocaleString()} EGP total
+                </p>
+              </div>
+              <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: '#db963012', color: '#db9630' }}>
+                {stage} · {amount.toLocaleString()} EGP
+              </span>
+            </div>
+            {proofUrl ? (
+              <a href={proofUrl} target="_blank" rel="noopener noreferrer" className="block mb-3">
+                <img src={proofUrl} alt="Transfer screenshot" className="max-h-56 rounded-xl border border-[#21326c]/10 hover:opacity-90 transition-opacity" />
+                <span className="block mt-1 text-[11px] font-semibold text-[#2563eb]">Open full size ↗</span>
+              </a>
+            ) : (
+              <p className="text-xs text-amber-700 mb-3 flex items-center gap-1.5">
+                <Hourglass size={12} /> Waiting for the client to upload their transfer screenshot.
+              </p>
+            )}
+            <button
+              onClick={() => confirm(p)}
+              disabled={busyId === p.id || !proofUrl}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: '#16a34a' }}
+            >
+              {busyId === p.id ? 'Confirming…' : isDeposit ? 'Confirm Deposit & Start Project' : 'Confirm Final Payment & Complete'}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

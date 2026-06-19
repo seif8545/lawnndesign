@@ -1,12 +1,93 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { requireAuth, requireRole } from '../middleware/requireAuth.js'
+import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { notify } from '../lib/notify.js'
+import { signPrivateRead } from './uploads.js'
+import { safeUrl, nonNegativeInt } from '../lib/sanitize.js'
 
 const router = Router()
 
+// Payment-proof screenshots live in a private bucket; the DB stores the storage
+// path. Swap those paths for short-lived signed read URLs, but only for viewers
+// allowed to see them (an admin, or the client who made the payment). The talent
+// never sees the client's transfer screenshots.
+async function withSignedProofs(project, viewer) {
+  const canSee = viewer.role === 'admin' || project.clientId === viewer.id
+  return {
+    ...project,
+    depositProofUrl:      canSee ? await signPrivateRead(project.depositProofUrl) : null,
+    finalPaymentProofUrl: canSee ? await signPrivateRead(project.finalPaymentProofUrl) : null,
+  }
+}
+
+// Application files live in a private bucket — `file.url` stores the storage
+// path. Swap each one for a short-lived signed URL. Portfolio references are
+// public CDN URLs (start with http) and pass through untouched.
+async function signApplicationFiles(applications) {
+  return Promise.all(
+    applications.map(async a => ({
+      ...a,
+      files: await Promise.all(
+        (a.files || []).map(async f => {
+          if (!f.url || /^https?:\/\//i.test(f.url)) return f
+          return { ...f, url: await signPrivateRead(f.url) }
+        })
+      ),
+    }))
+  )
+}
+
+// Validate + clean an incoming files array (uploaded files or portfolio refs).
+function cleanFiles(files) {
+  const out = []
+  for (const f of Array.isArray(files) ? files : []) {
+    const url = safeUrl(f?.url)
+    if (!url) return { error: 'A file has an invalid URL' }
+    out.push({
+      name: String(f.name || 'file'),
+      url,
+      mimeType: f.mimeType || f.type || 'application/octet-stream',
+    })
+  }
+  return { files: out }
+}
+
+// ── GET /projects/board ────────────────────────────────────────────────────────
+// Public — browse open projects accepting applications. Admins also see pending
+// ones; a signed-in client/student additionally sees their OWN projects.
+router.get('/board', optionalAuth, async (req, res) => {
+  const { category, skill } = req.query
+  const userId  = req.user?.id
+  const isAdmin = req.user?.role === 'admin'
+
+  const visibility = isAdmin
+    ? {}
+    : userId
+      ? { OR: [{ status: 'open' }, { clientId: userId }] }
+      : { status: 'open' }
+
+  const projects = await prisma.project.findMany({
+    where: {
+      ...visibility,
+      ...(category && { category: { contains: category, mode: 'insensitive' } }),
+      ...(skill && { skills: { some: { skill: { contains: skill, mode: 'insensitive' } } } }),
+    },
+    include: {
+      client: { select: { id: true, name: true } },
+      skills: true,
+      attachments: true,
+      _count: { select: { applications: true } },
+    },
+    orderBy: [{ vip: 'desc' }, { createdAt: 'desc' }],
+  })
+
+  return res.json(projects)
+})
+
 // ── GET /projects ─────────────────────────────────────────────────────────────
-// Returns the current user's projects (client sees their own, student sees hired)
+// The current user's projects: a client sees the ones they posted, a student
+// sees the ones they were hired for, an admin sees all. Includes applications so
+// the client can review them in My Projects.
 router.get('/', requireAuth, async (req, res) => {
   const where =
     req.user.role === 'client'
@@ -20,106 +101,277 @@ router.get('/', requireAuth, async (req, res) => {
     include: {
       client: { select: { id: true, name: true, initials: true, avatarColor: true } },
       talent: { select: { id: true, name: true, initials: true, avatarColor: true } },
+      skills: true,
+      attachments: true,
+      applications: {
+        include: {
+          user:  { select: { id: true, name: true, initials: true, avatarColor: true } },
+          files: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      },
       reviews: true,
     },
     orderBy: { createdAt: 'desc' },
   })
 
-  return res.json(projects)
+  const signed = await Promise.all(
+    projects.map(async p => {
+      const withProofs = await withSignedProofs(p, req.user)
+      // Only the owner/admin should get signed application files.
+      const canSeeApps = req.user.role === 'admin' || p.clientId === req.user.id
+      withProofs.applications = canSeeApps ? await signApplicationFiles(p.applications) : []
+      return withProofs
+    })
+  )
+  return res.json(signed)
 })
 
 // ── GET /projects/:id ─────────────────────────────────────────────────────────
+// Participants and admins see everything; any signed-in user can read an `open`
+// project (to view it before applying).
 router.get('/:id', requireAuth, async (req, res) => {
   const project = await prisma.project.findUnique({
     where: { id: req.params.id },
     include: {
       client: { select: { id: true, name: true, initials: true, avatarColor: true } },
       talent: { select: { id: true, name: true, initials: true, avatarColor: true } },
-      reviews: {
-        include: {
-          author: { select: { id: true, name: true } },
-        },
-      },
+      skills: true,
+      attachments: true,
+      reviews: { include: { author: { select: { id: true, name: true } } } },
     },
   })
 
   if (!project) return res.status(404).json({ error: 'Project not found' })
 
-  // Only participants and admins can view
   const isParticipant = project.clientId === req.user.id || project.talentId === req.user.id
-  if (!isParticipant && req.user.role !== 'admin') {
+  const isAdmin = req.user.role === 'admin'
+  if (!isParticipant && !isAdmin && project.status !== 'open') {
     return res.status(403).json({ error: 'Forbidden' })
   }
 
-  return res.json(project)
+  return res.json(await withSignedProofs(project, req.user))
 })
 
 // ── POST /projects ────────────────────────────────────────────────────────────
-// Clients create projects (direct hire via profile page)
+// A client posts a project. It starts `pending` and goes live (`open`) after an
+// admin approves it. Admins posting on behalf go live immediately.
 router.post('/', requireAuth, requireRole('client', 'admin'), async (req, res) => {
-  const { title, brief, budget, talentId, vip } = req.body
+  const { title, brief, budget, budgetType, category, vip, skills = [], attachments = [] } = req.body
 
-  if (!title || !brief || !budget) {
+  if (!title || !brief || budget === undefined) {
     return res.status(400).json({ error: 'title, brief, and budget are required' })
   }
+  const budgetInt = nonNegativeInt(budget)
+  if (budgetInt === null) {
+    return res.status(400).json({ error: 'budget must be a non-negative number' })
+  }
+
+  const { files: cleanAttachments, error } = cleanFiles(attachments)
+  if (error) return res.status(400).json({ error: 'An attachment has an invalid URL' })
 
   const project = await prisma.project.create({
     data: {
       clientId: req.user.id,
-      talentId: talentId || null,
       title,
       brief,
-      budget: parseInt(budget),
+      budget: budgetInt,
+      budgetType: budgetType || 'Fixed',
+      category: category || 'Visuals & Branding',
       vip: Boolean(vip),
+      status: req.user.role === 'admin' ? 'open' : 'pending',
+      skills:      { create: (Array.isArray(skills) ? skills : []).map(skill => ({ skill: String(skill) })) },
+      attachments: { create: cleanAttachments },
     },
-    include: {
-      client: { select: { id: true, name: true } },
-      talent: { select: { id: true, name: true } },
-    },
+    include: { skills: true, attachments: true },
   })
 
   return res.status(201).json(project)
 })
 
+// ── PATCH /projects/:id/status ────────────────────────────────────────────────
+// Admin moderation — approve (pending → open) or close a project.
+router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) => {
+  const { status } = req.body
+  const valid = ['open', 'closed', 'pending']
+  if (!valid.includes(status)) {
+    return res.status(400).json({ error: `status must be one of: ${valid.join(', ')}` })
+  }
+
+  const project = await prisma.project.update({
+    where: { id: req.params.id },
+    data: { status },
+  })
+
+  if (status === 'open') {
+    await notify(project.clientId, {
+      type: 'check',
+      title: `Your project "${project.title}" is now live`,
+      body: 'Students can now see it and apply.',
+      link: 'projects',
+    })
+  }
+  return res.json(project)
+})
+
+// ── POST /projects/:id/applications ───────────────────────────────────────────
+// Students apply to an open project (note + selected portfolio items / uploads).
+router.post('/:id/applications', requireAuth, requireRole('student'), async (req, res) => {
+  const { note, files = [] } = req.body
+  if (!note) return res.status(400).json({ error: 'Application note is required' })
+
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } })
+  if (!project || project.status !== 'open') {
+    return res.status(404).json({ error: 'Project not found or not accepting applications' })
+  }
+
+  const existing = await prisma.application.findUnique({
+    where: { projectId_userId: { projectId: req.params.id, userId: req.user.id } },
+  })
+  if (existing) return res.status(409).json({ error: 'You have already applied to this project' })
+
+  const { files: cleanApplicationFiles, error } = cleanFiles(files)
+  if (error) return res.status(400).json({ error: 'An attached file has an invalid URL' })
+
+  const application = await prisma.application.create({
+    data: {
+      projectId: req.params.id,
+      userId: req.user.id,
+      note,
+      files: { create: cleanApplicationFiles },
+    },
+    include: { files: true },
+  })
+
+  await notify(project.clientId, {
+    type: 'check',
+    title: `New application on "${project.title}"`,
+    body: 'A student applied — review the applications.',
+    link: 'projects',
+  })
+
+  return res.status(201).json(application)
+})
+
+// ── GET /projects/:id/applications ────────────────────────────────────────────
+// Project owner (client) or admin can see all applications, with signed files.
+router.get('/:id/applications', requireAuth, async (req, res) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } })
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+  if (req.user.role !== 'admin' && project.clientId !== req.user.id) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+
+  const applications = await prisma.application.findMany({
+    where: { projectId: req.params.id },
+    include: {
+      user:  { select: { id: true, name: true, initials: true, avatarColor: true } },
+      files: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  return res.json(await signApplicationFiles(applications))
+})
+
+// ── POST /projects/:id/applications/:appId/accept ─────────────────────────────
+// Hire an applicant: set the talent, move the project to offer_accepted, accept
+// this application and reject the rest. The project itself is the engagement —
+// no separate record is created.
+router.post('/:id/applications/:appId/accept', requireAuth, async (req, res) => {
+  const { id: projectId, appId } = req.params
+
+  const [project, application] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId } }),
+    prisma.application.findUnique({ where: { id: appId } }),
+  ])
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+  if (!application || application.projectId !== projectId) {
+    return res.status(404).json({ error: 'Application not found for this project' })
+  }
+  if (req.user.role !== 'admin' && project.clientId !== req.user.id) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  if (project.status !== 'open') {
+    return res.status(409).json({ error: 'This project is no longer accepting applicants' })
+  }
+
+  const updated = await prisma.$transaction(async tx => {
+    await tx.application.update({ where: { id: application.id }, data: { status: 'accepted' } })
+    await tx.application.updateMany({
+      where: { projectId, id: { not: application.id }, status: 'pending' },
+      data:  { status: 'rejected' },
+    })
+    return tx.project.update({
+      where: { id: projectId },
+      data:  { talentId: application.userId, status: 'offer_accepted' },
+      include: { client: { select: { id: true, name: true } }, talent: { select: { id: true, name: true } } },
+    })
+  })
+
+  await notify(application.userId, {
+    type: 'bag',
+    title: `You were hired for "${project.title}"`,
+    body: 'Head to My Projects — the client will arrange the deposit to get started.',
+    link: 'projects',
+  })
+
+  return res.status(201).json(updated)
+})
+
+// ── POST /projects/:id/applications/:appId/reject ─────────────────────────────
+router.post('/:id/applications/:appId/reject', requireAuth, async (req, res) => {
+  const { id: projectId, appId } = req.params
+
+  const [project, application] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId } }),
+    prisma.application.findUnique({ where: { id: appId } }),
+  ])
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+  if (!application || application.projectId !== projectId) {
+    return res.status(404).json({ error: 'Application not found for this project' })
+  }
+  if (req.user.role !== 'admin' && project.clientId !== req.user.id) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  if (application.status !== 'pending') {
+    return res.status(409).json({ error: `Application is already ${application.status}` })
+  }
+
+  const updated = await prisma.application.update({ where: { id: appId }, data: { status: 'rejected' } })
+  return res.json(updated)
+})
+
 // ── POST /projects/:id/advance ────────────────────────────────────────────────
-// Drive the escrow state machine forward one step
+// Drive the payment/delivery lifecycle forward one step (offer_accepted onward).
+// Hiring (open → offer_accepted) happens via the accept-application endpoint.
 router.post('/:id/advance', requireAuth, async (req, res) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } })
   if (!project) return res.status(404).json({ error: 'Project not found' })
 
-  const isClient = project.clientId === req.user.id
   const isTalent = project.talentId === req.user.id
+  const isAdmin  = req.user.role === 'admin'
 
   let data = {}
   let nextStatus
 
+  // Payments are handled off-platform (manual InstaPay transfer to Lawnn). The
+  // two money steps — confirming the deposit and confirming the final balance —
+  // are gated to admins, who verify the transfer landed before advancing. The
+  // client signals "I've sent it" separately via POST /:id/payment-sent.
   switch (project.status) {
-    case 'open':
-      // Client accepts a talent's offer — talentId required in body
-      if (!isClient) return res.status(403).json({ error: 'Only the client can accept an offer' })
-      if (!req.body.talentId) return res.status(400).json({ error: 'talentId is required' })
-      nextStatus = 'offer_accepted'
-      data = { talentId: req.body.talentId }
-      break
-
     case 'offer_accepted':
-      // Client pays deposit (50%)
-      if (!isClient) return res.status(403).json({ error: 'Only the client can pay the deposit' })
-      nextStatus = 'deposit_paid'
-      data = {
-        depositAmount: Math.floor(project.budget * 0.5),
-        depositPaidAt: new Date(),
-      }
+      if (!isAdmin) return res.status(403).json({ error: 'Only Lawnn can confirm the deposit' })
+      nextStatus = 'in_progress'
+      data = { depositAmount: Math.floor(project.budget * 0.5), depositPaidAt: new Date() }
       break
 
     case 'deposit_paid':
-      // Automatically moves to in_progress once deposit is confirmed (client confirms)
-      if (!isClient) return res.status(403).json({ error: 'Only the client can confirm' })
+      if (!isAdmin) return res.status(403).json({ error: 'Only Lawnn can confirm the deposit' })
       nextStatus = 'in_progress'
       break
 
     case 'in_progress':
-      // Talent submits delivery
       if (!isTalent) return res.status(403).json({ error: 'Only the talent can submit delivery' })
       if (!req.body.deliveryNote) return res.status(400).json({ error: 'deliveryNote is required' })
       nextStatus = 'delivered'
@@ -127,25 +379,21 @@ router.post('/:id/advance', requireAuth, async (req, res) => {
       break
 
     case 'delivered':
-      // Client approves → releases payment and marks complete
-      if (!isClient) return res.status(403).json({ error: 'Only the client can approve delivery' })
+      if (!isAdmin) return res.status(403).json({ error: 'Only Lawnn can confirm the final payment' })
       nextStatus = 'completed'
       data = { clientApproved: true, completedAt: new Date() }
       break
 
     case 'completed':
-      // Move to reviewed once both parties submit reviews (handled in /reviews endpoint)
       return res.status(400).json({ error: 'Use POST /projects/:id/reviews to leave a review' })
 
     default:
       return res.status(400).json({ error: `Cannot advance from status: ${project.status}` })
   }
 
-  // Release escrow to the talent on completion. The deposit isn't credited
-  // earlier because it's notionally held in platform escrow until the client
-  // approves delivery. When Paymob is integrated, the deposit will be collected
-  // at `deposit_paid` and the remainder at `completed`; the wallet credit here
-  // represents the full released amount.
+  // Credit the talent's running earnings total on completion. Money moves
+  // off-platform (manual InstaPay): the client transfers to Lawnn, and Lawnn
+  // pays the talent out separately. walletBalance is a record of total earned.
   const updated = await prisma.$transaction(async tx => {
     if (nextStatus === 'completed' && project.talentId) {
       await tx.profile.updateMany({
@@ -156,24 +404,62 @@ router.post('/:id/advance', requireAuth, async (req, res) => {
     return tx.project.update({
       where: { id: req.params.id },
       data: { status: nextStatus, ...data },
-      include: {
-        client: { select: { id: true, name: true } },
-        talent: { select: { id: true, name: true } },
-      },
+      include: { client: { select: { id: true, name: true } }, talent: { select: { id: true, name: true } } },
     })
   })
 
-  // Notify the relevant counterparty about the transition.
   const t = updated.talentId
   const c = updated.clientId
   const title = updated.title
-  if (nextStatus === 'offer_accepted')   await notify(t, { type: 'check', title: `Your offer was accepted for "${title}"`, body: 'The client will pay the deposit next.', link: 'projects' })
-  else if (nextStatus === 'deposit_paid') await notify(t, { type: 'money', title: `Deposit received for "${title}"`, body: 'Funds are in escrow — you can start the work.', link: 'projects' })
-  else if (nextStatus === 'in_progress')  await notify(t, { type: 'bag',   title: `"${title}" is now in progress`, body: 'Submit your delivery when it\'s ready.', link: 'projects' })
-  else if (nextStatus === 'delivered')    await notify(c, { type: 'bag',   title: `Delivery submitted for "${title}"`, body: 'Review it and approve to release payment.', link: 'projects' })
-  else if (nextStatus === 'completed')    await notify(t, { type: 'money', title: `Payment released for "${title}"`, body: 'The client approved your delivery.', link: 'projects' })
+  if (nextStatus === 'in_progress') {
+    await notify(t, { type: 'money', title: `Deposit confirmed for "${title}"`, body: 'Lawnn confirmed the deposit — you can start the work.', link: 'projects' })
+    await notify(c, { type: 'check', title: `"${title}" has started`, body: 'We confirmed your deposit and notified the student.', link: 'projects' })
+  } else if (nextStatus === 'delivered') {
+    await notify(c, { type: 'bag', title: `Delivery submitted for "${title}"`, body: 'Review it and arrange the final payment.', link: 'projects' })
+  } else if (nextStatus === 'completed') {
+    await notify(t, { type: 'money', title: `Final payment confirmed for "${title}"`, body: 'Lawnn will pay out your earnings.', link: 'projects' })
+    await notify(c, { type: 'check', title: `"${title}" is complete`, body: 'Thanks — the project is now complete.', link: 'projects' })
+  }
 
   return res.json(updated)
+})
+
+// ── POST /projects/:id/payment-sent ───────────────────────────────────────────
+// The client signals they've made the manual InstaPay transfer (proof required).
+// This doesn't advance the project — it pings admins to verify and confirm.
+router.post('/:id/payment-sent', requireAuth, async (req, res) => {
+  const { proofPath } = req.body || {}
+  if (!proofPath || typeof proofPath !== 'string' || !proofPath.startsWith('payment-proof/')) {
+    return res.status(400).json({ error: 'A valid transfer screenshot is required' })
+  }
+
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } })
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+  if (project.clientId !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+
+  const isFinal = project.status === 'delivered'
+  const stage = isFinal ? 'final payment' : 'deposit'
+
+  await prisma.project.update({
+    where: { id: project.id },
+    data: isFinal ? { finalPaymentProofUrl: proofPath } : { depositProofUrl: proofPath },
+  })
+
+  const admins = await prisma.user.findMany({ where: { role: 'admin' }, select: { id: true } })
+  await Promise.all(
+    admins.map(a =>
+      notify(a.id, {
+        type: 'money',
+        title: `Client marked the ${stage} as sent — "${project.title}"`,
+        body: 'A transfer screenshot was uploaded. Verify it, then confirm in My Projects.',
+        link: 'projects',
+      })
+    )
+  )
+
+  return res.json({ ok: true })
 })
 
 // ── POST /projects/:id/reviews ────────────────────────────────────────────────
@@ -195,16 +481,9 @@ router.post('/:id/reviews', requireAuth, async (req, res) => {
   const recipientId = isClient ? project.talentId : project.clientId
 
   const review = await prisma.review.create({
-    data: {
-      projectId: project.id,
-      authorId: req.user.id,
-      recipientId,
-      rating: parseInt(rating),
-      comment,
-    },
+    data: { projectId: project.id, authorId: req.user.id, recipientId, rating: parseInt(rating), comment },
   })
 
-  // Recalculate recipient's average rating
   const reviews = await prisma.review.findMany({ where: { recipientId } })
   const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
   await prisma.profile.updateMany({
@@ -212,7 +491,6 @@ router.post('/:id/reviews', requireAuth, async (req, res) => {
     data: { rating: Math.round(avg * 10) / 10, reviewCount: reviews.length },
   })
 
-  // Mark project as reviewed when both parties have reviewed
   const reviewCount = await prisma.review.count({ where: { projectId: project.id } })
   if (reviewCount >= 2) {
     await prisma.project.update({ where: { id: project.id }, data: { status: 'reviewed' } })
@@ -229,11 +507,9 @@ router.post('/:id/reviews', requireAuth, async (req, res) => {
 })
 
 // ── DELETE /projects/:id ──────────────────────────────────────────────────────
-// Admin: unrestricted.
-// Client owner: only when status is still `open` — i.e. no talent has been
-// hired yet and nothing's been paid into escrow. Once a talent is on board,
-// cancellation needs a refund/notification flow and that's a separate
-// endpoint (TODO).
+// Admin: unrestricted. Owner: only before anyone is hired (pending/open/closed);
+// applications cascade-delete. Once offer_accepted+, deletion is blocked because
+// money/commitments are involved.
 router.delete('/:id', requireAuth, async (req, res) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } })
   if (!project) return res.status(404).json({ error: 'Project not found' })
@@ -241,9 +517,10 @@ router.delete('/:id', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin' && project.clientId !== req.user.id) {
     return res.status(403).json({ error: 'Forbidden' })
   }
-  if (req.user.role !== 'admin' && project.status !== 'open') {
+  const cancellable = ['pending', 'open', 'closed']
+  if (req.user.role !== 'admin' && !cancellable.includes(project.status)) {
     return res.status(409).json({
-      error: 'This project is already underway — cancellation needs the talent to be released and the deposit refunded.',
+      error: 'This project is already underway — cancellation needs the talent to be released and any deposit refunded.',
     })
   }
 

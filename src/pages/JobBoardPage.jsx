@@ -1,12 +1,12 @@
 import { toast } from '../lib/toast.js';
 import { useState } from 'react';
 import { CheckCircle, Clock, DollarSign, ExternalLink, File, Image as ImageIcon, Paperclip, Plus, Trash2, Upload, Users, X } from 'lucide-react';
-import { jobs as jobsApi, uploadFile } from '../lib/api.js';
+import { projects as projectsApi, uploadFile } from '../lib/api.js';
 import { Avatar, CategoryPill, Modal } from '../components/ui.jsx';
 import { useBusy } from '../hooks/useBusy.js';
 import { formatRelativeTime } from '../lib/mappers.js';
 
-export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, currentUser, refreshJobs, refreshProjects }) {
+export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJobs, currentUser, talents = [], refreshJobs, refreshProjects }) {
   const [showPostModal, setShowPostModal] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedJobForApply, setSelectedJobForApply] = useState(null);
@@ -14,6 +14,10 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
   const [applySuccess, setApplySuccess] = useState(false);
   const [postForm, setPostForm] = useState({ title: '', brief: '', budget: '', skills: [], attachments: [] });
   const [applyForm, setApplyForm] = useState({ note: '', uploadedFiles: [] });
+  // The applying student's own portfolio items (to attach to an application).
+  const myPortfolio = talents.find(t => t.userId === currentUser?.id)?.portfolio || [];
+  const [selectedPortfolio, setSelectedPortfolio] = useState([]); // portfolio item ids
+  const togglePortfolio = id => setSelectedPortfolio(ids => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
   const [filterCat, setFilterCat] = useState('all');
   const [postSuccess, setPostSuccess] = useState(false);
   const [posting,   runPost]    = useBusy();  // guards duplicate job-post submits
@@ -30,7 +34,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
     setReviewingJob(job);
     setReviewBusy(true);
     try {
-      const apps = await jobsApi.applications(job.id);
+      const apps = await projectsApi.applications(job.id);
       setReviewApps(apps);
     } catch (e) {
       toast.error(`Couldn't load applications: ${e.message}`);
@@ -38,12 +42,12 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
     } finally { setReviewBusy(false); }
   };
   const acceptApplication = (job, app) => runHire(async () => {
-    if (!confirm(`Hire ${app.user.name} for "${job.title}"? This creates a project and rejects other applicants.`)) return;
+    if (!confirm(`Hire ${app.user.name} for "${job.title}"? This starts the project and rejects other applicants.`)) return;
     try {
-      await jobsApi.acceptApplication(job.id, app.id);
+      await projectsApi.acceptApplication(job.id, app.id);
       await Promise.all([refreshJobs?.(), refreshProjects?.()]);
       setReviewingJob(null);
-      toast.success('Hired! The project is now in your Projects tab.');
+      toast.success('Hired! Manage it in My Projects.');
     } catch (e) { toast.error(`Couldn't hire: ${e.message}`); }
   });
 
@@ -52,7 +56,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
   const rejectApplication = (job, app) => runReject(async () => {
     if (!confirm(`Reject ${app.user.name}'s application?`)) return;
     try {
-      await jobsApi.rejectApplication(job.id, app.id);
+      await projectsApi.rejectApplication(job.id, app.id);
       // Reflect locally so the modal updates without a full refetch.
       setReviewApps(apps => apps.map(a => a.id === app.id ? { ...a, status: 'rejected' } : a));
       // Refresh job list so applicant counts stay accurate.
@@ -112,7 +116,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
 
   const handlePost = () => runPost(async () => {
     try {
-      await jobsApi.create({
+      await projectsApi.create({
         title:      postForm.title,
         brief:      postForm.brief,
         budget:     parseInt(postForm.budget, 10) || 0,
@@ -135,7 +139,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
         setPostForm({ title: '', brief: '', budget: '', skills: [], attachments: [] });
       }, 2500);
     } catch (e) {
-      toast.error(`Couldn't post job: ${e.message}`);
+      toast.error(`Couldn't post project: ${e.message}`);
     }
   });
 
@@ -152,12 +156,12 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c]">Job Board</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#21326c]">Projects</h1>
           <p className="text-sm text-[#21326c] mt-1">
             {currentUser?.role === 'client'
-              ? 'Post a brief and review applicants. When you hire someone, it becomes a managed project with escrow.'
+              ? 'Post a brief and review applicants. When you hire someone, it becomes a managed project with Lawnn-coordinated payments.'
               : currentUser?.role === 'student'
-              ? 'Browse live briefs and apply. Once a client hires you, the work is managed as a project with secure payments.'
+              ? 'Browse live briefs and apply. Once a client hires you, the work is managed as a project, with payments coordinated by Lawnn.'
               : "Live creative briefs from Egypt's top brands and agencies"}
           </p>
         </div>
@@ -168,7 +172,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
             className="flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-white shadow-md hover:opacity-90 transition-all text-sm flex-shrink-0"
             style={{ background: '#ff9044' }}
           >
-            <Plus size={16} /> Post a Job
+            <Plus size={16} /> Post a Project
           </button>
         )}
       </div>
@@ -176,7 +180,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
       {/* Filters */}
       <div className="flex gap-2 overflow-x-auto pb-3 mb-6">
         {[
-          { id: 'all', label: 'All Jobs' },
+          { id: 'all', label: 'All Projects' },
           { id: 'architecture', label: 'Architecture & Interiors' },
           { id: 'visuals', label: 'Visuals & Branding' },
           { id: 'fine arts', label: 'Fine Arts' },
@@ -197,9 +201,9 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap mb-2">
                   <h3 className="font-semibold text-[#21326c] text-lg leading-tight">{job.title}</h3>
-                  {job.status && job.status !== 'live' && (
+                  {job.status && job.status !== 'open' && (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#db963015', color: '#db9630' }}>
-                      <Clock size={10} /> {job.status === 'pending' ? 'Pending admin review' : job.status === 'filled' ? 'Filled' : job.status}
+                      <Clock size={10} /> {job.status === 'pending' ? 'Pending admin review' : job.status}
                     </span>
                   )}
                 </div>
@@ -216,7 +220,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
                   <div className="text-xl sm:text-2xl font-bold text-[#21326c]">{job.budget} EGP</div>
                   <div className="text-xs text-[#21326c]">{job.budgetType === 'Fixed' ? 'Fixed price' : 'Hourly rate'} · {job.applicants} applicants</div>
                 </div>
-                {currentUser?.role === 'student' && job.status === 'live' && (
+                {currentUser?.role === 'student' && job.status === 'open' && (
                   <button
                     className="mt-2 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90"
                     style={{ background: '#ff9044' }}
@@ -239,7 +243,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
                       e.stopPropagation();
                       if (!confirm(`Delete "${job.title}"? This can't be undone.`)) return;
                       try {
-                        await jobsApi.delete(job.id);
+                        await projectsApi.delete(job.id);
                         setJobs(js => js.filter(j => j.id !== job.id));
                       } catch (err) {
                         // Backend returns a clear message for owner-side guardrails
@@ -258,26 +262,26 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
         ))}
       </div>
 
-      {/* POST A JOB MODAL */}
-      <Modal open={showPostModal} onClose={() => setShowPostModal(false)} title="Post a Creative Job" wide>
+      {/* POST A PROJECT MODAL */}
+      <Modal open={showPostModal} onClose={() => setShowPostModal(false)} title="Post a Creative Project" wide>
         {postSuccess ? (
           <div className="text-center py-8">
             <div className="w-16 h-16 rounded-full bg-[#21326c]/10 flex items-center justify-center mx-auto mb-4">
               <Clock size={32} className="text-[#21326c]" />
             </div>
             <h3 className="font-display text-xl font-bold text-[#21326c] mb-2">
-              {currentUser?.role === 'admin' ? 'Job Posted!' : 'Pending Review'}
+              {currentUser?.role === 'admin' ? 'Project Posted!' : 'Pending Review'}
             </h3>
             <p className="text-[#21326c] text-sm leading-relaxed">
               {currentUser?.role === 'admin'
-                ? 'Your brief is now live on the Lawnn job board.'
-                : 'Your job posting has been submitted and is awaiting admin approval before going live.'}
+                ? 'Your brief is now live on the Lawnn Projects board.'
+                : 'Your project has been submitted and is awaiting admin approval before going live.'}
             </p>
           </div>
         ) : (
           <div className="space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Job Title *</label>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Project Title *</label>
               <input
                 type="text"
                 placeholder="e.g. Logo & brand identity for a café"
@@ -369,7 +373,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
               className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: '#ff9044' }}
             >
-              {posting ? 'Posting…' : 'Post Job'}
+              {posting ? 'Posting…' : 'Post Project'}
             </button>
           </div>
         )}
@@ -378,7 +382,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
       {/* APPLY MODAL */}
       <Modal
         open={showApplyModal}
-        onClose={() => { setShowApplyModal(false); setApplyForm({ note: '', uploadedFiles: [] }); }}
+        onClose={() => { setShowApplyModal(false); setApplyForm({ note: '', uploadedFiles: [] }); setSelectedPortfolio([]); }}
         title={`Apply: ${selectedJobForApply?.title || ''}`}
         wide
       >
@@ -401,7 +405,31 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
 
           <div>
             <label className="block text-sm font-semibold text-[#21326c] mb-1">Portfolio Samples</label>
-            <p className="text-xs text-[#21326c] mb-3">Upload your work (images / PDFs) — up to 3 files</p>
+            <p className="text-xs text-[#21326c] mb-3">Pick from your portfolio and/or upload new work (images / PDFs).</p>
+
+            {/* Select from existing portfolio */}
+            {myPortfolio.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-3">
+                {myPortfolio.map(item => {
+                  const sel = selectedPortfolio.includes(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => togglePortfolio(item.id)}
+                      className={`relative rounded-xl overflow-hidden border-2 aspect-square transition-all ${sel ? 'border-[#ff9044]' : 'border-[#21326c]/10 hover:border-[#21326c]/30'}`}
+                      style={item.imageUrl ? {} : { background: item.color || '#21326c' }}
+                      title={item.label}
+                    >
+                      {item.imageUrl
+                        ? <img src={item.imageUrl} alt={item.label} className="w-full h-full object-cover" />
+                        : <span className="absolute inset-0 flex items-center justify-center text-white text-[10px] font-semibold px-1 text-center">{item.pdfName || item.label || 'PDF'}</span>}
+                      {sel && <span className="absolute top-1 right-1 bg-[#ff9044] text-white rounded-full w-4 h-4 flex items-center justify-center"><CheckCircle size={11} /></span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Uploaded files */}
             {applyForm.uploadedFiles.length > 0 && (
@@ -426,7 +454,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
               </label>
             )}
 
-            <p className="text-xs text-[#21326c] mt-2">{applyForm.uploadedFiles.length}/3 uploaded</p>
+            <p className="text-xs text-[#21326c] mt-2">{selectedPortfolio.length} selected · {applyForm.uploadedFiles.length}/3 uploaded</p>
           </div>
 
           {applySuccess ? (
@@ -441,14 +469,22 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
             <button
               onClick={() => runApply(async () => {
                 if (!selectedJobForApply) return;
+                // Selected portfolio items are public URLs; uploaded files are
+                // private storage paths. Both are sent as application files.
+                const portfolioFiles = myPortfolio
+                  .filter(p => selectedPortfolio.includes(p.id) && (p.imageUrl || p.pdfUrl))
+                  .map(p => ({
+                    name: p.label || p.pdfName || 'Portfolio item',
+                    url:  p.imageUrl || p.pdfUrl,
+                    mimeType: p.imageUrl ? 'image/jpeg' : 'application/pdf',
+                  }));
                 try {
-                  await jobsApi.apply(selectedJobForApply.id, {
+                  await projectsApi.apply(selectedJobForApply.id, {
                     note: applyForm.note,
-                    // Uploaded files (Supabase Storage paths/URLs). Sample-portfolio
-                    // refs are local IDs; backend ignores them for now.
-                    files: applyForm.uploadedFiles.map(uf => ({
-                      name: uf.name, url: uf.url, mimeType: uf.type,
-                    })),
+                    files: [
+                      ...portfolioFiles,
+                      ...applyForm.uploadedFiles.map(uf => ({ name: uf.name, url: uf.url, mimeType: uf.type })),
+                    ],
                   });
                   setApplySuccess(true);
                   await refreshJobs?.();  // bump applicant count
@@ -456,12 +492,13 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
                     setShowApplyModal(false);
                     setApplySuccess(false);
                     setApplyForm({ note: '', uploadedFiles: [] });
+                    setSelectedPortfolio([]);
                   }, 2500);
                 } catch (err) {
                   toast.error(`Couldn't submit: ${err.message}`);
                 }
               })}
-              disabled={applying || !applyForm.note || applyForm.uploadedFiles.length === 0}
+              disabled={applying || !applyForm.note || (applyForm.uploadedFiles.length === 0 && selectedPortfolio.length === 0)}
               className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: '#ff9044' }}
             >
@@ -498,6 +535,22 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
                 )}
               </div>
               <p className="text-sm text-[#21326c] italic mb-3">"{app.note}"</p>
+              {app.files?.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {app.files.map((f, i) => (
+                    f.url ? (
+                      <a key={i} href={f.url} target="_blank" rel="noopener noreferrer" title={f.name}
+                        className="block w-16 h-16 rounded-lg overflow-hidden border border-[#21326c]/10 hover:opacity-90 transition-opacity bg-[#21326c]/5">
+                        {f.mimeType?.startsWith('image/')
+                          ? <img src={f.url} alt={f.name} className="w-full h-full object-cover" />
+                          : <span className="w-full h-full flex items-center justify-center"><File size={18} className="text-[#21326c]/50" /></span>}
+                      </a>
+                    ) : (
+                      <span key={i} className="w-16 h-16 rounded-lg border border-dashed border-[#21326c]/20 flex items-center justify-center text-[10px] text-[#21326c]/40 text-center px-1">unavailable</span>
+                    )
+                  ))}
+                </div>
+              )}
               {app.status === 'pending' && (
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -526,7 +579,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
       </Modal>
 
       {/* JOB DETAIL MODAL */}
-      <Modal open={!!selectedJob} onClose={() => setSelectedJob(null)} title="Job Details" wide>
+      <Modal open={!!selectedJob} onClose={() => setSelectedJob(null)} title="Project Details" wide>
         {selectedJob && (
           <div className="space-y-5">
             <div>
@@ -588,7 +641,7 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
                 className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all"
                 style={{ background: '#ff9044' }}
               >
-                Apply for This Job
+                Apply for This Project
               </button>
             )}
             {!currentUser && (

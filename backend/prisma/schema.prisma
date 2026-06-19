@@ -25,13 +25,6 @@ enum Availability {
   away
 }
 
-enum JobStatus {
-  pending   // awaiting admin approval
-  live      // visible on job board
-  closed    // no longer accepting applications
-  filled    // talent hired
-}
-
 enum ApplicationStatus {
   pending
   accepted
@@ -39,13 +32,15 @@ enum ApplicationStatus {
 }
 
 enum ProjectStatus {
-  open
-  offer_accepted
+  pending        // posted by a client, awaiting admin approval
+  open           // approved & visible on the Projects board, accepting applications
+  offer_accepted // an applicant was hired
   deposit_paid
   in_progress
   delivered
   completed
   reviewed
+  closed         // no longer accepting applications (admin/owner closed it)
 }
 
 enum ListingStatus {
@@ -77,13 +72,13 @@ model User {
   // Relations
   profile          Profile?
   clientProfile    ClientProfile?
-  postedJobs       Job[]           @relation("ClientJobs")
   applications     Application[]
   clientProjects   Project[]       @relation("ClientProjects")
   talentProjects   Project[]       @relation("TalentProjects")
   reviewsGiven          Review[]        @relation("ReviewsGiven")
   reviewsReceived       Review[]        @relation("ReviewsReceived")
   feedPosts             FeedPost[]
+  feedComments          Comment[]
   feedLikes             FeedLike[]
   notifications         Notification[]
   listings              MarketplaceListing[]
@@ -212,69 +207,45 @@ model Experience {
   @@map("experience")
 }
 
-// ─── Jobs ─────────────────────────────────────────────────────────────────────
+// ─── Project skills & attachments ─────────────────────────────────────────────
 
-model Job {
-  id         String    @id @default(cuid())
-  clientId   String
-  client     User      @relation("ClientJobs", fields: [clientId], references: [id])
+model ProjectSkill {
+  projectId String
+  skill     String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  title      String
-  brief      String    @db.Text
-  budget     Int       // EGP
-  budgetType String    @default("Fixed") // Fixed | Hourly
-  category   String    @default("Visuals & Branding")
-  vip        Boolean   @default(false)
-  status     JobStatus @default(pending)
-
-  // Relations
-  skills      JobSkill[]
-  attachments JobAttachment[]
-  applications Application[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("jobs")
+  @@id([projectId, skill])
+  @@map("project_skills")
 }
 
-model JobSkill {
-  jobId String
-  skill String
-  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  @@id([jobId, skill])
-  @@map("job_skills")
-}
-
-model JobAttachment {
-  id       String @id @default(cuid())
-  jobId    String
-  job      Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+model ProjectAttachment {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   name     String
   url      String
   mimeType String
 
-  @@map("job_attachments")
+  @@map("project_attachments")
 }
 
 // ─── Applications ─────────────────────────────────────────────────────────────
 
 model Application {
-  id       String            @id @default(cuid())
-  jobId    String
-  job      Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  userId   String
-  user     User              @relation(fields: [userId], references: [id])
-  status   ApplicationStatus @default(pending)
-  note     String            @db.Text
+  id        String            @id @default(cuid())
+  projectId String
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation(fields: [userId], references: [id])
+  status    ApplicationStatus @default(pending)
+  note      String            @db.Text
 
   files    ApplicationFile[]
 
   createdAt DateTime @default(now())
 
-  @@unique([jobId, userId]) // one application per user per job
+  @@unique([projectId, userId]) // one application per user per project
   @@map("applications")
 }
 
@@ -299,21 +270,28 @@ model Project {
   talentId  String?
   talent    User?         @relation("TalentProjects", fields: [talentId], references: [id])
 
-  title     String
-  brief     String        @db.Text
-  budget    Int           // EGP total
-  vip       Boolean       @default(false)
-  status    ProjectStatus @default(open)
+  title      String
+  brief      String        @db.Text
+  budget     Int           // EGP total
+  budgetType String        @default("Fixed") // Fixed | Hourly
+  category   String        @default("Visuals & Branding")
+  vip        Boolean       @default(false)
+  status     ProjectStatus @default(pending)
 
-  // Escrow tracking
-  depositAmount   Int?
-  depositPaidAt   DateTime?
-  deliveryNote    String?   @db.Text
-  deliveredAt     DateTime?
-  clientApproved  Boolean   @default(false)
-  completedAt     DateTime?
+  // Payment tracking (manual InstaPay, admin-confirmed)
+  depositAmount        Int?
+  depositPaidAt        DateTime?
+  depositProofUrl      String?   // private storage path — client's InstaPay screenshot
+  finalPaymentProofUrl String?   // private storage path — client's InstaPay screenshot
+  deliveryNote         String?   @db.Text
+  deliveredAt          DateTime?
+  clientApproved       Boolean   @default(false)
+  completedAt          DateTime?
 
   // Relations
+  skills        ProjectSkill[]
+  attachments   ProjectAttachment[]
+  applications  Application[]
   reviews       Review[]
   conversations Conversation[]
 
@@ -356,10 +334,25 @@ model FeedPost {
   status   FeedPostStatus @default(pending)
 
   likedBy  FeedLike[]
+  comments Comment[]
 
   createdAt DateTime @default(now())
 
   @@map("feed_posts")
+}
+
+// A user comment on a feed post.
+model Comment {
+  id         String   @id @default(cuid())
+  feedPostId String
+  post       FeedPost @relation(fields: [feedPostId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([feedPostId])
+  @@map("feed_comments")
 }
 
 // In-app notifications surfaced in the bell menu.
