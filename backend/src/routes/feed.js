@@ -27,7 +27,7 @@ router.get('/', optionalAuth, async (req, res) => {
   const isAdmin = req.user?.role === 'admin'
   const userId  = req.user?.id
   const posts = await prisma.feedPost.findMany({
-    where: isAdmin ? undefined : { status: 'approved' },
+    where: isAdmin ? undefined : { status: 'approved', user: { suspended: false } },
     include: {
       user: {
         select: {

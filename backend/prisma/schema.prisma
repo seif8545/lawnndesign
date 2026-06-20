@@ -66,6 +66,7 @@ model User {
   name        String
   initials    String   @db.VarChar(4)
   avatarColor String   @default("#21326c")
+  suspended   Boolean  @default(false) // admin suspension: blocks login + hides public content
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -440,6 +441,8 @@ model MarketplaceListing {
   description String        @db.Text
   price       Int           // EGP
   category    String
+  location    String?       // seller-entered location text
+  imageUrl    String?       // photo of the item
   fileUrl     String?
   status      ListingStatus @default(pending)
 

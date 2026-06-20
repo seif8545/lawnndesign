@@ -101,8 +101,11 @@ router.post('/', async (req, res) => {
     return res.json(conversation)
   }
 
-  // Conversations are strictly client ↔ student. Decide which is which from
-  // the actual DB roles, not anything the client sent.
+  // Client ↔ student threads put the client in clientId and the student in
+  // talentId (deterministic by role). Any other pair — e.g. a marketplace
+  // buyer ↔ seller of the same role — is assigned deterministically by id so the
+  // pair always dedupes to a single conversation. The slots are just user
+  // references; the chat UI renders participants by their actual identity.
   let clientId, actualTalentId
   if (role === 'client' && other.role === 'student') {
     clientId = userId
@@ -111,7 +114,9 @@ router.post('/', async (req, res) => {
     clientId = other.id
     actualTalentId = userId
   } else {
-    return res.status(400).json({ error: 'Conversations must be between a client and a student' })
+    const [a, b] = [userId, other.id].sort()
+    clientId = a
+    actualTalentId = b
   }
 
   // Upsert: find existing or create new

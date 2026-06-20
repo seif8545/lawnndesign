@@ -62,9 +62,12 @@ router.get('/board', optionalAuth, async (req, res) => {
 
   const visibility = isAdmin
     ? {}
-    : userId
-      ? { OR: [{ status: 'open' }, { clientId: userId }] }
-      : { status: 'open' }
+    : {
+        client: { suspended: false },
+        ...(userId
+          ? { OR: [{ status: 'open' }, { clientId: userId }] }
+          : { status: 'open' }),
+      }
 
   const projects = await prisma.project.findMany({
     where: {

@@ -126,7 +126,7 @@ router.get('/students', async (req, res) => {
 router.get('/users', async (req, res) => {
   const users = await prisma.user.findMany({
     where: { id: { not: req.user.id } },
-    select: { id: true, name: true, initials: true, avatarColor: true, role: true },
+    select: { id: true, name: true, initials: true, avatarColor: true, role: true, suspended: true },
     orderBy: { createdAt: 'desc' },
   })
   return res.json(users)
@@ -157,6 +157,29 @@ router.post('/clients', async (req, res) => {
 
   const { password: _pw, ...safeUser } = user
   return res.status(201).json(safeUser)
+})
+
+// ── PATCH /admin/users/:id/suspend ────────────────────────────────────────────
+// Suspend or reinstate a user. A suspended user can't log in, is kicked from any
+// active session on their next request, and disappears from all public views
+// (their data is retained for admins). Reversible.
+router.patch('/users/:id/suspend', async (req, res) => {
+  const { suspended } = req.body
+  if (req.params.id === req.user.id) {
+    return res.status(400).json({ error: 'You cannot suspend your own account.' })
+  }
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } })
+  if (!user) return res.status(404).json({ error: 'User not found' })
+  if (user.role === 'admin') {
+    return res.status(400).json({ error: 'Admin accounts cannot be suspended.' })
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: req.params.id },
+    data:  { suspended: Boolean(suspended) },
+  })
+  const { password: _pw, ...safe } = updated
+  return res.json(safe)
 })
 
 // ── DELETE /admin/users/:id ───────────────────────────────────────────────────

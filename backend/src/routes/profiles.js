@@ -1,14 +1,15 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
-import { requireAuth, requireRole } from '../middleware/requireAuth.js'
+import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { safeUrl } from '../lib/sanitize.js'
 
 const router = Router()
 
 // ── GET /profiles ─────────────────────────────────────────────────────────────
 // Public — list all student profiles (talent directory)
-router.get('/', async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   const { skill, availability, search } = req.query
+  const isAdmin = req.user?.role === 'admin'
 
   const profiles = await prisma.profile.findMany({
     where: {
@@ -16,9 +17,11 @@ router.get('/', async (req, res) => {
       ...(skill && {
         skills: { some: { skill: { contains: skill, mode: 'insensitive' } } },
       }),
-      ...(search && {
-        user: { name: { contains: search, mode: 'insensitive' } },
-      }),
+      // Hide suspended students from everyone but admins; keep the name search.
+      user: {
+        ...(isAdmin ? {} : { suspended: false }),
+        ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
+      },
     },
     include: {
       user: { select: { id: true, name: true, initials: true, avatarColor: true } },
@@ -59,11 +62,11 @@ router.patch('/client/me', requireAuth, requireRole('client', 'admin'), async (r
 
 // ── GET /profiles/:id ─────────────────────────────────────────────────────────
 // Public — single profile with full details
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuth, async (req, res) => {
   const profile = await prisma.profile.findUnique({
     where: { id: req.params.id },
     include: {
-      user: { select: { id: true, name: true, initials: true, avatarColor: true } },
+      user: { select: { id: true, name: true, initials: true, avatarColor: true, suspended: true } },
       skills: true,
       portfolio: { orderBy: { sortOrder: 'asc' } },
       education: true,
@@ -72,6 +75,10 @@ router.get('/:id', async (req, res) => {
   })
 
   if (!profile) return res.status(404).json({ error: 'Profile not found' })
+  // A suspended student's profile is hidden from everyone but admins.
+  if (profile.user?.suspended && req.user?.role !== 'admin') {
+    return res.status(404).json({ error: 'Profile not found' })
+  }
   return res.json(profile)
 })
 

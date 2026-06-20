@@ -113,12 +113,14 @@ export function mapApiListing(l) {
     description: l.description,
     price:       l.price,
     category:    l.category,
+    location:    l.location || '',
+    imageUrl:    l.imageUrl || null,
     fileUrl:     l.fileUrl,
     status:      l.status,
     color:       l.seller?.avatarColor || '#21326c',
     postedAt:    formatRelativeTime(l.createdAt),
     seller:      l.seller,           // { userId, name, initials, avatarColor }
-    offers:      l.offers || [],     // not modelled in DB yet
+    offers:      l.offers || [],
   };
 }
 

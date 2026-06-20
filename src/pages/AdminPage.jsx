@@ -129,6 +129,35 @@ export function AdminUsersTab() {
     }
   };
 
+  // Suspend = block login + kick active sessions + hide their public content.
+  // Reversible. Students and clients both.
+  const handleSuspend = async (id, name, suspend, isStudent) => {
+    const msg = suspend
+      ? `Suspend ${name}? They'll be logged out, unable to sign in, and hidden from public view.`
+      : `Reinstate ${name}? They'll be able to sign in again and become visible.`;
+    if (!window.confirm(msg)) return;
+    try {
+      const updated = await adminApi.suspendUser(id, suspend);
+      const apply = list => list.map(u => u.id === id ? { ...u, suspended: updated.suspended } : u);
+      if (isStudent) setStudents(apply); else setClients(apply);
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const SuspendButton = ({ user, isStudent }) => (
+    <button
+      onClick={() => handleSuspend(user.id, user.name, !user.suspended, isStudent)}
+      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+        user.suspended
+          ? 'border-[#16a34a]/30 text-[#16a34a] hover:bg-[#16a34a]/5'
+          : 'border-[#db9630]/40 text-[#db9630] hover:bg-[#db9630]/5'
+      }`}
+    >
+      {user.suspended ? 'Reinstate' : 'Suspend'}
+    </button>
+  );
+
   return (
     <div className="space-y-4">
       {/* Section toggle */}
@@ -240,9 +269,14 @@ export function AdminUsersTab() {
               <p className="text-xs text-[#21326c]/60 truncate">{user.email}</p>
               {user.profile?.university && <p className="text-xs text-[#21326c]/40 truncate">{user.profile.university} · {user.profile.dept}</p>}
             </div>
-            <span className="flex items-center gap-1 text-xs text-[#21326c]/50 flex-shrink-0">
-              <BadgeCheck size={13} className="text-[#21326c]" /> Verified Student
-            </span>
+            {user.suspended ? (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#db963015', color: '#db9630' }}>Suspended</span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs text-[#21326c]/50 flex-shrink-0">
+                <BadgeCheck size={13} className="text-[#21326c]" /> Verified Student
+              </span>
+            )}
+            <SuspendButton user={user} isStudent={true} />
             <button onClick={() => handleDelete(user.id, user.name)}
               className="flex-shrink-0 text-[#21326c]/20 hover:text-red-400 transition-colors">
               <Trash2 size={15} />
@@ -326,6 +360,10 @@ export function AdminUsersTab() {
               <p className="font-semibold text-[#21326c] text-sm">{user.name}</p>
               <p className="text-xs text-[#21326c]/50">Client</p>
             </div>
+            {user.suspended && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#db963015', color: '#db9630' }}>Suspended</span>
+            )}
+            <SuspendButton user={user} isStudent={false} />
             <button onClick={() => handleDeleteClient(user.id, user.name)}
               className="flex-shrink-0 text-[#21326c]/20 hover:text-red-400 transition-colors">
               <Trash2 size={15} />

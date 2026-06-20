@@ -285,7 +285,7 @@ export default function App() {
       case 'contact':
         return <InfoPage slug="contact" setView={handleNavChange} />;
       case 'marketplace':
-        return <MarketplacePage listings={listings} setListings={setListings} pendingListings={pendingListings} setPendingListings={setPendingListings} currentUser={currentUser} refreshMarketplace={refreshMarketplace} />;
+        return <MarketplacePage listings={listings} setListings={setListings} pendingListings={pendingListings} setPendingListings={setPendingListings} currentUser={currentUser} refreshMarketplace={refreshMarketplace} setView={handleNavChange} />;
       case 'projects':
         return currentUser
           ? <ProjectsPage projects={projects} setProjects={setProjects} currentUser={currentUser} setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} addNotification={addNotification} refreshProjects={refreshProjects} refreshJobs={refreshJobs} />

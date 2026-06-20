@@ -10,7 +10,7 @@ export const LISTING_COLORS = PALETTE_COLORS;
 
 export const EMPTY_NEWS_FORM = { title: '', excerpt: '', bodyText: '', category: 'Career Advice', readTime: '5 min read', color: PRIMARY_COLOR };
 
-export const EMPTY_LISTING_FORM = { title: '', description: '', price: '', color: PRIMARY_COLOR };
+export const EMPTY_LISTING_FORM = { title: '', description: '', price: '', location: '', imageUrl: '', color: PRIMARY_COLOR };
 
 // ─── DATE/TIME FORMATS ────────────────────────────────────────────────────────────
 

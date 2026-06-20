@@ -44,11 +44,16 @@ const offerInclude = {
 // Public — active listings only. Admins also see pending. Authed sellers see
 // their own listings regardless of status.
 router.get('/', optionalAuth, async (req, res) => {
+  // Admins see everything; everyone else only sees listings from active (non-
+  // suspended) sellers.
   const where = req.user?.role === 'admin'
     ? {}
-    : req.user
-      ? { OR: [{ status: 'active' }, { status: 'sold' }, { sellerId: req.user.id }] }
-      : { OR: [{ status: 'active' }, { status: 'sold' }] }
+    : {
+        seller: { suspended: false },
+        ...(req.user
+          ? { OR: [{ status: 'active' }, { status: 'sold' }, { sellerId: req.user.id }] }
+          : { OR: [{ status: 'active' }, { status: 'sold' }] }),
+      }
 
   const listings = await prisma.marketplaceListing.findMany({
     where,
@@ -65,7 +70,7 @@ router.get('/', optionalAuth, async (req, res) => {
 // ── POST /marketplace ─────────────────────────────────────────────────────────
 // Auth required. Sellers post pending; admins post active.
 router.post('/', requireAuth, async (req, res) => {
-  const { title, description, price, category, fileUrl } = req.body
+  const { title, description, price, category, fileUrl, imageUrl, location } = req.body
   if (!title || !description || price === undefined) {
     return res.status(400).json({ error: 'title, description, and price are required' })
   }
@@ -80,6 +85,8 @@ router.post('/', requireAuth, async (req, res) => {
       description,
       price:       priceInt,
       category:    category || 'Other',
+      location:    location ? String(location).slice(0, 200) : null,
+      imageUrl:    safeUrl(imageUrl),
       fileUrl:     safeUrl(fileUrl),
       status:      req.user.role === 'admin' ? 'active' : 'pending',
     },
@@ -98,12 +105,14 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (listing.sellerId !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden' })
   }
-  const { title, description } = req.body
+  const { title, description, location, imageUrl } = req.body
   const updated = await prisma.marketplaceListing.update({
     where: { id: req.params.id },
     data:  {
       ...(title       !== undefined && { title }),
       ...(description !== undefined && { description }),
+      ...(location    !== undefined && { location: location ? String(location).slice(0, 200) : null }),
+      ...(imageUrl    !== undefined && { imageUrl: safeUrl(imageUrl) }),
     },
     include: {
       seller: { select: { id: true, name: true, initials: true, avatarColor: true } },
@@ -124,9 +133,16 @@ router.patch('/:id/status', requireAuth, async (req, res) => {
 
   const isAdmin  = req.user.role === 'admin'
   const isSeller = listing.sellerId === req.user.id
-  // Only admins can approve/reject (pending → active/removed).
-  // Sellers can only mark their own listing as sold.
-  if (!isAdmin && !(isSeller && status === 'sold')) {
+  // Admins can set any status. A seller can manage their own listing: mark it
+  // sold, deactivate it (→ removed), or reactivate a previously-live one
+  // (removed → active). They cannot self-approve a pending listing.
+  const sellerAllowed =
+    isSeller && (
+      status === 'sold' ||
+      status === 'removed' ||
+      (status === 'active' && listing.status === 'removed')
+    )
+  if (!isAdmin && !sellerAllowed) {
     return res.status(403).json({ error: 'Forbidden' })
   }
 

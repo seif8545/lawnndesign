@@ -89,6 +89,10 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' })
   }
 
+  if (user.suspended) {
+    return res.status(403).json({ error: 'Your account has been suspended. Please contact Lawnn support.' })
+  }
+
   const token = signToken(user)
   return res.json({ token, user: safeUser(user) })
 })

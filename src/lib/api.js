@@ -90,6 +90,7 @@ export const admin = {
   createClient:   (body) => request('/admin/clients',                  { method: 'POST', body }),
   deleteStudent:  (id)   => request(`/admin/students/${id}`,            { method: 'DELETE' }),
   deleteUser:     (id)   => request(`/admin/users/${id}`,              { method: 'DELETE' }),
+  suspendUser:    (id, suspended) => request(`/admin/users/${id}/suspend`, { method: 'PATCH', body: { suspended } }),
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────────

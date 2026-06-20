@@ -1,12 +1,12 @@
 import { toast } from '../lib/toast.js';
 import { useState } from 'react';
-import { BadgeCheck, CheckCircle, ChevronRight, DollarSign, Info, MessageCircle, Package, Pen, Plus, Send, ShoppingBag, Trash2, X } from 'lucide-react';
-import { marketplace as marketplaceApi } from '../lib/api.js';
+import { BadgeCheck, CheckCircle, ChevronRight, DollarSign, Info, MapPin, MessageCircle, Package, Pen, Plus, Send, ShoppingBag, Trash2, Upload, X } from 'lucide-react';
+import { marketplace as marketplaceApi, conversations as convApi, uploadFile } from '../lib/api.js';
 import { Avatar, Modal } from '../components/ui.jsx';
 import { useBusy } from '../hooks/useBusy.js';
 import { EMPTY_LISTING_FORM, LISTING_COLORS } from '../lib/constants.js';
 
-export function MarketplacePage({ listings, setListings, pendingListings, setPendingListings, currentUser, refreshMarketplace }) {
+export function MarketplacePage({ listings, setListings, pendingListings, setPendingListings, currentUser, refreshMarketplace, setView }) {
   const isStudent = currentUser?.role === 'student';
   const isClient  = currentUser?.role === 'client';
   const isAdmin   = currentUser?.role === 'admin';
@@ -24,9 +24,9 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
   const [listingForm, setListingForm] = useState(EMPTY_LISTING_FORM);
   const [savingListing, runSaveListing] = useBusy();   // guards spam-clicks on Save/Submit
 
-  // The current user's own listings (pending + active/sold). Sellers are
-  // students or admins. Match by real user id.
-  const canSell = isStudent || isAdmin;
+  // The current user's own listings (pending + active/sold). Anyone signed in
+  // (student, client, or admin) can sell. Match by real user id.
+  const canSell = isStudent || isClient || isAdmin;
   const myListings = canSell
     ? [
         ...pendingListings.filter(l => l.seller?.userId === currentUser?.id).map(l => ({ ...l, isPending: true })),
@@ -46,19 +46,34 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
   };
 
   const openEdit = listing => {
-    setListingForm({ title: listing.title, description: listing.description, price: listing.price, color: listing.color });
+    setListingForm({ title: listing.title, description: listing.description, price: listing.price, location: listing.location || '', imageUrl: listing.imageUrl || '', color: listing.color });
     setEditingListing(listing);
     setShowListingModal(true);
+  };
+
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const uploadListingPhoto = async (file) => {
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const r = await uploadFile(file, 'marketplace');
+      setListingForm(f => ({ ...f, imageUrl: r.url }));
+    } catch (e) {
+      toast.error(`Photo upload failed: ${e.message}`);
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const saveListing = () => runSaveListing(async () => {
     if (!listingForm.title.trim()) return;
     try {
       if (editingListing) {
-        // Price is locked once posted — only title/description editable via API.
         await marketplaceApi.update(editingListing.id, {
           title:       listingForm.title,
           description: listingForm.description,
+          location:    listingForm.location,
+          imageUrl:    listingForm.imageUrl || null,
         });
       } else {
         await marketplaceApi.create({
@@ -66,6 +81,8 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
           description: listingForm.description,
           price:       Number(listingForm.price) || 0,
           category:    'Other',
+          location:    listingForm.location,
+          imageUrl:    listingForm.imageUrl || null,
         });
       }
       await refreshMarketplace?.();
@@ -81,6 +98,27 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
       await refreshMarketplace?.();
     } catch (e) {
       toast.error(`Couldn't delete: ${e.message}`);
+    }
+  };
+
+  // Deactivate (take off the marketplace) or reactivate a listing.
+  const setListingStatus = async (listing, status) => {
+    try {
+      await marketplaceApi.setStatus(listing.id, status);
+      await refreshMarketplace?.();
+    } catch (e) {
+      toast.error(`Couldn't update listing: ${e.message}`);
+    }
+  };
+
+  // Start (or reuse) a chat with the seller, then jump to Messages.
+  const messageSeller = async (listing) => {
+    if (!currentUser) { toast.error('Sign in to message the seller.'); return; }
+    try {
+      await convApi.create({ otherUserId: listing.seller.userId });
+      setView?.('chat');
+    } catch (e) {
+      toast.error(`Couldn't start chat: ${e.message}`);
     }
   };
 
@@ -129,6 +167,7 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
       active:  { label: 'Active',          bg: '#21326c15', color: '#21326c' },
       sold:    { label: 'Sold',            bg: '#c4622d15', color: '#c4622d' },
       pending: { label: 'Pending Review',  bg: '#db963015', color: '#db9630' },
+      removed: { label: 'Inactive',        bg: '#6b728015', color: '#6b7280' },
     };
     const s = map[status] || map.pending;
     return (
@@ -189,16 +228,25 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {activeListings.map(listing => (
               <div key={listing.id} className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden group">
-                {/* Image placeholder */}
-                <div
-                  className="h-40 flex items-center justify-center"
-                  style={{ background: `linear-gradient(135deg, ${listing.color}33, ${listing.color}88)` }}
-                >
-                  <Package size={32} style={{ color: listing.color }} className="opacity-30" />
-                </div>
+                {/* Item photo (or a colored placeholder) */}
+                {listing.imageUrl ? (
+                  <div className="h-40 overflow-hidden">
+                    <img src={listing.imageUrl} alt={listing.title} className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div
+                    className="h-40 flex items-center justify-center"
+                    style={{ background: `linear-gradient(135deg, ${listing.color}33, ${listing.color}88)` }}
+                  >
+                    <Package size={32} style={{ color: listing.color }} className="opacity-30" />
+                  </div>
+                )}
                 <div className="p-4">
                   <h3 className="font-semibold text-[#21326c] mb-1 leading-snug">{listing.title}</h3>
-                  <p className="text-xs text-[#21326c]/60 mb-3 line-clamp-2">{listing.description}</p>
+                  <p className="text-xs text-[#21326c]/60 mb-2 line-clamp-2">{listing.description}</p>
+                  {listing.location && (
+                    <p className="text-xs text-[#21326c]/50 mb-3 flex items-center gap-1"><MapPin size={11} /> {listing.location}</p>
+                  )}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <Avatar initials={listing.seller.initials} color={listing.seller.avatarColor} size="sm" />
@@ -212,36 +260,37 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
                       <CheckCircle size={12} className="inline mr-1" /> Offer sent!
                     </div>
                   )}
-                  {/* CTA */}
-                  {isClient && offerSent !== listing.id && (
-                    <button
-                      onClick={() => { setTargetListing(listing); setShowOfferModal(true); }}
-                      className="w-full py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-all"
-                      style={{ background: '#ff9044' }}
-                    >
-                      Make an Offer
-                    </button>
-                  )}
-                  {isAdmin && (
+                  {/* CTA — anyone signed in (except the seller) can message; clients/admins can also offer */}
+                  {currentUser && listing.seller?.userId !== currentUser.id && (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => { setTargetListing(listing); setShowOfferModal(true); }}
-                        className="flex-1 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-all"
-                        style={{ background: '#ff9044' }}
+                        onClick={() => messageSeller(listing)}
+                        className="flex-1 py-2 rounded-xl text-sm font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors flex items-center justify-center gap-1.5"
                       >
-                        Make Offer
+                        <MessageCircle size={14} /> Message Seller
                       </button>
-                      <button
-                        onClick={() => setListings(ls => ls.filter(l => l.id !== listing.id))}
-                        className="p-2 rounded-xl border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                        title="Delete listing"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {(isClient || isAdmin) && offerSent !== listing.id && (
+                        <button
+                          onClick={() => { setTargetListing(listing); setShowOfferModal(true); }}
+                          className="flex-1 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-all"
+                          style={{ background: '#ff9044' }}
+                        >
+                          Make Offer
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button
+                          onClick={() => setListingStatus(listing, 'removed')}
+                          className="p-2 rounded-xl border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                          title="Deactivate listing"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   )}
                   {!currentUser && (
-                    <p className="text-xs text-center text-[#21326c]/50 py-1">Sign in to make an offer</p>
+                    <p className="text-xs text-center text-[#21326c]/50 py-1">Sign in to contact the seller</p>
                   )}
                 </div>
               </div>
@@ -284,6 +333,22 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
                         {/* Actions */}
                         {listing.status !== 'sold' && (
                           <div className="flex gap-2 flex-shrink-0">
+                            {!listing.isPending && listing.status === 'active' && (
+                              <button
+                                onClick={() => setListingStatus(listing, 'removed')}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
+                              >
+                                Deactivate
+                              </button>
+                            )}
+                            {listing.status === 'removed' && (
+                              <button
+                                onClick={() => setListingStatus(listing, 'active')}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#16a34a]/30 text-[#16a34a] hover:bg-[#16a34a]/5 transition-colors"
+                              >
+                                Reactivate
+                              </button>
+                            )}
                             <button
                               onClick={() => openEdit(listing)}
                               className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors flex items-center gap-1"
@@ -414,6 +479,33 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
               onChange={e => setListingForm(f => ({ ...f, description: e.target.value }))}
               className="w-full px-3 py-2.5 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all resize-none placeholder:text-[#21326c]/40"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1">Photo</label>
+            {listingForm.imageUrl ? (
+              <div className="relative inline-block">
+                <img src={listingForm.imageUrl} alt="Item" className="max-h-32 rounded-xl border border-[#21326c]/10" />
+                <button onClick={() => setListingForm(f => ({ ...f, imageUrl: '' }))} className="absolute top-1 right-1 bg-white/90 rounded-full p-1 text-[#21326c] hover:bg-white shadow-sm"><X size={13} /></button>
+              </div>
+            ) : (
+              <label className="cursor-pointer flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border-2 border-dashed border-[#21326c]/25 text-sm font-semibold text-[#21326c] hover:bg-[#21326c]/5 transition-colors">
+                <Upload size={14} /> {uploadingPhoto ? 'Uploading…' : 'Upload a photo'}
+                <input type="file" accept="image/*" className="hidden" onChange={e => uploadListingPhoto(e.target.files?.[0])} />
+              </label>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1">Location</label>
+            <div className="relative">
+              <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#21326c]/40" />
+              <input
+                type="text"
+                placeholder="e.g. Maadi, Cairo"
+                value={listingForm.location}
+                onChange={e => setListingForm(f => ({ ...f, location: e.target.value }))}
+                className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1">
