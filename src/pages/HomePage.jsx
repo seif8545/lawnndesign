@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowRight, Building2, CheckCircle, ChevronRight, GraduationCap, Grid, Info, Palette, Pen, Sparkles } from 'lucide-react';
 import { AvailabilityBadge, Avatar, CategoryPill, StarRating, VerifiedBadge } from '../components/ui.jsx';
 
-export function HomePage({ setView, setSelectedTalent, talents }) {
+export function HomePage({ setView, setSelectedTalent, talents, heroImageUrl }) {
   const [activeCategory, setActiveCategory] = useState('all');
 
   const categories = [
@@ -27,9 +27,11 @@ export function HomePage({ setView, setSelectedTalent, talents }) {
     ? (ratedTalents.reduce((s, t) => s + t.rating, 0) / ratedTalents.length).toFixed(1)
     : null;
 
-  // Hero feature image, pulled from a real talent's portfolio (no hardcoded art).
-  // Falls back to a typographic gallery card when no portfolio image exists yet.
+  // Hero feature image. An admin-chosen image (Admin → Homepage) takes priority;
+  // otherwise it's pulled from a real talent's portfolio; otherwise a
+  // typographic gallery card is shown.
   const heroFeature = (() => {
+    if (heroImageUrl) return { imageUrl: heroImageUrl, admin: true };
     const t = talents.find(t => t.portfolio?.some(p => p.imageUrl));
     if (!t) return null;
     const item = t.portfolio.find(p => p.imageUrl);
@@ -96,7 +98,11 @@ export function HomePage({ setView, setSelectedTalent, talents }) {
               <figcaption className="mt-3 flex items-center justify-between">
                 <span className="kicker">{heroFeature ? 'Featured work' : 'A curated gallery'}</span>
                 <span className="font-body text-xs text-[#21326c]/70">
-                  {heroFeature ? `${heroFeature.name}${heroFeature.university ? ' · ' + heroFeature.university : ''}` : (facultyCount > 0 ? `${facultyCount} faculties` : 'Lawnn')}
+                  {heroFeature?.admin
+                    ? 'Lawnn'
+                    : heroFeature
+                      ? `${heroFeature.name}${heroFeature.university ? ' · ' + heroFeature.university : ''}`
+                      : (facultyCount > 0 ? `${facultyCount} faculties` : 'Lawnn')}
                 </span>
               </figcaption>
             </figure>

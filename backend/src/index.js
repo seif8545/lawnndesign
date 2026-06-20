@@ -15,6 +15,7 @@ import marketplaceRoutes   from './routes/marketplace.js'
 import newsRoutes          from './routes/news.js'
 import notificationRoutes  from './routes/notifications.js'
 import uploadRoutes        from './routes/uploads.js'
+import settingsRoutes      from './routes/settings.js'
 import { initSocket }      from './socket.js'
 
 // Fail fast on misconfiguration: a missing/weak JWT secret silently breaks auth
@@ -86,6 +87,7 @@ app.use('/marketplace',   marketplaceRoutes)
 app.use('/news',          newsRoutes)
 app.use('/notifications', notificationRoutes)
 app.use('/uploads',       uploadRoutes)
+app.use('/settings',      settingsRoutes)
 
 // ── Health check ───────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }))

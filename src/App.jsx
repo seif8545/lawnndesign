@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { auth as authApi, clearToken, feed as feedApi, marketplace as marketplaceApi, news as newsApi, notifications as notifApi, onUnauthorized, profiles, projects as projectsApi } from './lib/api.js';
+import { auth as authApi, clearToken, feed as feedApi, marketplace as marketplaceApi, news as newsApi, notifications as notifApi, onUnauthorized, profiles, projects as projectsApi, settings as settingsApi } from './lib/api.js';
 import { toast } from './lib/toast.js';
 import { connectSocket, disconnectSocket } from './lib/socket.js';
 import { TopNav } from './components/TopNav.jsx';
@@ -122,6 +122,14 @@ export default function App() {
       .catch(err => console.warn('[news] failed to load:', err.message));
   }, []);
   useEffect(() => { refreshNews(); }, [refreshNews]);
+  // Editable site settings (e.g. homepage feature image).
+  const [siteSettings, setSiteSettings]         = useState({});
+  const refreshSettings = useCallback(() => {
+    return settingsApi.get()
+      .then(setSiteSettings)
+      .catch(err => console.warn('[settings] failed to load:', err.message));
+  }, []);
+  useEffect(() => { refreshSettings(); }, [refreshSettings]);
   const [newsPosts, setNewsPosts]               = useState([]);
   const [feedPosts, setFeedPosts]                       = useState([]);
   const [pendingFeedPosts, setPendingFeedPosts]         = useState([]);
@@ -240,7 +248,7 @@ export default function App() {
   const renderView = () => {
     switch (view) {
       case 'home':
-        return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
+        return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} heroImageUrl={siteSettings.homeHeroImageUrl} />;
       case 'jobs':
         return <JobBoardPage setView={handleNavChange} jobs={jobs} setJobs={setJobs} pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} currentUser={currentUser} talents={talents} refreshJobs={refreshJobs} refreshProjects={refreshProjects} />;
       case 'directory':
@@ -298,10 +306,11 @@ export default function App() {
               pendingListings={pendingListings} setPendingListings={setPendingListings} setListings={setListings}
               projects={projects} talents={talents} currentUser={currentUser}
               refreshJobs={refreshJobs} refreshFeed={refreshFeed} refreshMarketplace={refreshMarketplace} refreshProjects={refreshProjects}
+              siteSettings={siteSettings} refreshSettings={refreshSettings}
             />
           : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       default:
-        return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
+        return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} heroImageUrl={siteSettings.homeHeroImageUrl} />;
     }
   };
 

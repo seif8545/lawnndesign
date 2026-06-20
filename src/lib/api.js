@@ -159,6 +159,13 @@ export const notifications = {
   readAll: ()   => request('/notifications/read-all',   { method: 'POST' }),
 }
 
+// ── Site settings ─────────────────────────────────────────────────────────────
+
+export const settings = {
+  get:    ()     => request('/settings'),
+  update: (body) => request('/settings', { method: 'PATCH', body }),
+}
+
 // ── Uploads ───────────────────────────────────────────────────────────────────
 // Two-step upload: ask backend for a signed PUT URL, then PUT the file directly
 // to Supabase Storage. Returns the URL/path to persist via the normal create/

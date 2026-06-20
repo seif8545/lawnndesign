@@ -1,7 +1,7 @@
 import { toast } from '../lib/toast.js';
 import { useState, useEffect } from 'react';
-import { BadgeCheck, Briefcase, CheckCircle, DollarSign, GraduationCap, Grid, Hourglass, MessageSquareText, Plus, Search, Send, Shield, Tag, Trash2, UserCheck, Users } from 'lucide-react';
-import { admin as adminApi, conversations as convApi, feed as feedApi, marketplace as marketplaceApi, projects as projectsApi } from '../lib/api.js';
+import { BadgeCheck, Briefcase, CheckCircle, DollarSign, GraduationCap, Grid, Hourglass, Image as ImageIcon, MessageSquareText, Plus, Search, Send, Shield, Tag, Trash2, Upload, UserCheck, Users } from 'lucide-react';
+import { admin as adminApi, conversations as convApi, feed as feedApi, marketplace as marketplaceApi, projects as projectsApi, settings as settingsApi, uploadFile } from '../lib/api.js';
 import { Avatar, Modal } from '../components/ui.jsx';
 import { ChatPage } from './ChatPage.jsx';
 
@@ -471,7 +471,7 @@ export function AdminStartConversation({ onStarted }) {
   );
 }
 
-export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser, refreshJobs, refreshFeed, refreshMarketplace, refreshProjects }) {
+export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts, pendingJobs, setPendingJobs, setJobs, pendingListings, setPendingListings, setListings, projects, talents, currentUser, refreshJobs, refreshFeed, refreshMarketplace, refreshProjects, siteSettings, refreshSettings }) {
   const [adminTab, setAdminTab] = useState('content');
 
   const approveFeedPost = async post => {
@@ -547,6 +547,9 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
       {/* ── CONTENT QUEUE TAB ── */}
       {adminTab === 'content' && (
         <>
+          {/* Homepage feature image control */}
+          <HomepageImageCard current={siteSettings?.homeHeroImageUrl} refresh={refreshSettings} />
+
           {/* Stats row */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
             {[
@@ -652,6 +655,61 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
 
       {/* ── USERS TAB ── */}
       {adminTab === 'users' && <AdminUsersTab />}
+    </div>
+  );
+}
+
+// ─── HOMEPAGE FEATURE IMAGE (admin) ──────────────────────────────────────────
+// Upload/replace/clear the image shown in the framed panel next to the homepage
+// headline. Empty = fall back to auto-pulling a student portfolio image.
+function HomepageImageCard({ current, refresh }) {
+  const [busy, setBusy] = useState(false);
+
+  const onPick = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const r = await uploadFile(file, 'site');
+      await settingsApi.update({ homeHeroImageUrl: r.url });
+      await refresh?.();
+      toast.success('Homepage image updated.');
+    } catch (e) { toast.error(`Couldn't update: ${e.message}`); }
+    finally { setBusy(false); }
+  };
+
+  const clear = async () => {
+    setBusy(true);
+    try {
+      await settingsApi.update({ homeHeroImageUrl: '' });
+      await refresh?.();
+      toast.success('Reverted to the automatic image.');
+    } catch (e) { toast.error(`Couldn't clear: ${e.message}`); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#21326c]/10 p-5 mb-6">
+      <div className="flex items-center gap-2 mb-1">
+        <ImageIcon size={16} className="text-[#21326c]" />
+        <h3 className="font-semibold text-[#21326c]">Homepage feature image</h3>
+      </div>
+      <p className="text-xs text-[#21326c]/60 mb-3">Shown in the framed panel next to the homepage headline. Leave empty to auto-pick from student portfolios.</p>
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="w-28 h-36 rounded-xl overflow-hidden border border-[#21326c]/10 bg-[#21326c]/5 flex items-center justify-center flex-shrink-0">
+          {current ? <img src={current} alt="Homepage feature" className="w-full h-full object-cover" /> : <ImageIcon size={22} className="text-[#21326c]/25" />}
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-all" style={{ background: '#ff9044' }}>
+            <Upload size={14} /> {busy ? 'Working…' : (current ? 'Replace image' : 'Upload image')}
+            <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={e => onPick(e.target.files?.[0])} />
+          </label>
+          {current && (
+            <button onClick={clear} disabled={busy} className="text-xs font-semibold text-[#21326c]/60 hover:text-red-500 transition-colors text-left">
+              Remove (use automatic)
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

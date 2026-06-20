@@ -472,6 +472,16 @@ model Offer {
   @@map("offers")
 }
 
+// ─── Site settings (admin-editable key/value config, e.g. homepage image) ─────
+
+model SiteSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
 // ─── News / Insights (admin-authored articles) ───────────────────────────────
 
 model News {

@@ -20,6 +20,7 @@ const KINDS = {
   avatar:           { bucket: PUBLIC_BUCKET,  folder: 'avatar',         types: IMAGE_TYPES },
   'job-attachment': { bucket: PUBLIC_BUCKET,  folder: 'job-attachment', types: [...IMAGE_TYPES, ...DOC_TYPES] },
   marketplace:      { bucket: PUBLIC_BUCKET,  folder: 'marketplace',    types: IMAGE_TYPES },
+  site:             { bucket: PUBLIC_BUCKET,  folder: 'site',           types: IMAGE_TYPES },
   application:      { bucket: PRIVATE_BUCKET, folder: 'application',    types: [...IMAGE_TYPES, ...DOC_TYPES] },
   // InstaPay transfer screenshots — private (financial), images or PDF.
   'payment-proof':  { bucket: PRIVATE_BUCKET, folder: 'payment-proof',  types: [...IMAGE_TYPES, ...DOC_TYPES] },
