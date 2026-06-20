@@ -288,7 +288,7 @@ export default function App() {
         return <MarketplacePage listings={listings} setListings={setListings} pendingListings={pendingListings} setPendingListings={setPendingListings} currentUser={currentUser} refreshMarketplace={refreshMarketplace} />;
       case 'projects':
         return currentUser
-          ? <ProjectsPage projects={projects} setProjects={setProjects} currentUser={currentUser} setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} addNotification={addNotification} refreshProjects={refreshProjects} />
+          ? <ProjectsPage projects={projects} setProjects={setProjects} currentUser={currentUser} setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} addNotification={addNotification} refreshProjects={refreshProjects} refreshJobs={refreshJobs} />
           : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
       case 'admin':
         return currentUser?.role === 'admin'

@@ -78,6 +78,7 @@ router.get('/:id/comments', async (req, res) => {
     where: { feedPostId: req.params.id },
     include: { user: { select: { id: true, name: true, initials: true, avatarColor: true } } },
     orderBy: { createdAt: 'asc' },
+    take: 200,
   })
   res.json(comments.map(c => ({
     id:          c.id,

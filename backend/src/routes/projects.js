@@ -79,6 +79,7 @@ router.get('/board', optionalAuth, async (req, res) => {
       _count: { select: { applications: true } },
     },
     orderBy: [{ vip: 'desc' }, { createdAt: 'desc' }],
+    take: 100,
   })
 
   return res.json(projects)
@@ -113,6 +114,7 @@ router.get('/', requireAuth, async (req, res) => {
       reviews: true,
     },
     orderBy: { createdAt: 'desc' },
+    take: 200,
   })
 
   const signed = await Promise.all(
@@ -429,7 +431,13 @@ router.post('/:id/advance', requireAuth, async (req, res) => {
 // This doesn't advance the project — it pings admins to verify and confirm.
 router.post('/:id/payment-sent', requireAuth, async (req, res) => {
   const { proofPath } = req.body || {}
-  if (!proofPath || typeof proofPath !== 'string' || !proofPath.startsWith('payment-proof/')) {
+  // Must be a payment-proof storage path with no traversal or scheme — it's
+  // later signed for the admin/owner to view.
+  if (
+    !proofPath || typeof proofPath !== 'string' ||
+    !/^payment-proof\/[A-Za-z0-9_][A-Za-z0-9_\-/.]*$/.test(proofPath) ||
+    proofPath.includes('..')
+  ) {
     return res.status(400).json({ error: 'A valid transfer screenshot is required' })
   }
 

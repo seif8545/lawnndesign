@@ -120,7 +120,7 @@ function ProofView({ url, label }) {
   );
 }
 
-export function ProjectsPage({ projects, setProjects, currentUser, setView, setSelectedTalent, talents, addNotification, refreshProjects }) {
+export function ProjectsPage({ projects, setProjects, currentUser, setView, setSelectedTalent, talents, addNotification, refreshProjects, refreshJobs }) {
   const [selected, setSelected] = useState(null);
   const [showPostModal, setShowPostModal] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 0, text: '' });
@@ -205,7 +205,8 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
     try {
       await projectsApi.delete(projId);
       setSelected(null);
-      await refreshProjects?.();
+      // Refresh both lists — an open project also lives on the Projects board.
+      await Promise.all([refreshProjects?.(), refreshJobs?.()]);
     } catch (e) {
       // 409 from backend means project is past 'open'; surface verbatim.
       toast.error(e.message);
@@ -378,7 +379,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                   ) : (
                     <div className="space-y-3">
                       {proj.applications.map(app => {
-                        const talent = talents.find(t => t.id === app.talentId);
+                        const talent = talents.find(t => t.userId === app.talentId);
                         return (
                           <div key={app.id} className="rounded-2xl border border-[#21326c]/10 p-4">
                             <div className="flex items-start justify-between gap-3 mb-3">
@@ -431,7 +432,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
               {/* ── STEP: offer_accepted — Deposit (manual InstaPay) ── */}
               {proj.status === 'offer_accepted' && (() => {
                 const app = proj.applications.find(a => a.id === proj.acceptedApplicationId);
-                const talent = app ? talents.find(t => t.id === app.talentId) : null;
+                const talent = app ? talents.find(t => t.userId === app.talentId) : null;
                 const deposit = Math.floor(proj.budget * 0.5);
                 const isOwnerClient = proj.clientId === currentUser?.id;
                 return (
@@ -562,7 +563,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
               {/* ── STEP: delivered — Approve delivery ── */}
               {proj.status === 'delivered' && (() => {
                 const app = proj.applications.find(a => a.id === proj.acceptedApplicationId);
-                const talent = app ? talents.find(t => t.id === app.talentId) : null;
+                const talent = app ? talents.find(t => t.userId === app.talentId) : null;
                 const remaining = proj.budget - (proj.depositAmount || 0);
                 return (
                   <div className="space-y-4">

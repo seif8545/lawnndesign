@@ -157,13 +157,15 @@ router.get('/:id/messages', async (req, res) => {
 
   if (!isParticipant(conv, userId) && role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
 
+  // Cap the page size so a caller can't request an unbounded message dump.
+  const pageSize = Math.min(Math.max(parseInt(limit) || 50, 1), 100)
   const messages = await prisma.message.findMany({
     where: {
       conversationId,
       ...(before ? { createdAt: { lt: new Date(before) } } : {}),
     },
     orderBy: { createdAt: 'desc' },
-    take: parseInt(limit),
+    take: pageSize,
     include: {
       sender: { select: { id: true, name: true, initials: true, avatarColor: true, profile: { select: { avatar: true } } } },
     },

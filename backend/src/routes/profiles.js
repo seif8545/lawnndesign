@@ -26,6 +26,7 @@ router.get('/', async (req, res) => {
       portfolio: { orderBy: { sortOrder: 'asc' } },
     },
     orderBy: { rating: 'desc' },
+    take: 200,
   })
 
   return res.json(profiles)
@@ -134,22 +135,34 @@ router.patch('/:id', requireAuth, requireRole('student', 'admin'), async (req, r
     }
   }
 
-  // Replace education if provided
+  // Replace education if provided. Pick explicit fields only — never spread the
+  // raw body object, or a caller could override `profileId` and write rows into
+  // another user's profile (mass-assignment IDOR).
   if (Array.isArray(education)) {
     await prisma.education.deleteMany({ where: { profileId: req.params.id } })
     if (education.length) {
       await prisma.education.createMany({
-        data: education.map(e => ({ profileId: req.params.id, ...e })),
+        data: education.map(e => ({
+          profileId: req.params.id,
+          degree: String(e.degree || ''),
+          school: String(e.school || ''),
+          years:  String(e.years  || ''),
+        })),
       })
     }
   }
 
-  // Replace experience if provided
+  // Replace experience if provided (same explicit-field rule as above).
   if (Array.isArray(experience)) {
     await prisma.experience.deleteMany({ where: { profileId: req.params.id } })
     if (experience.length) {
       await prisma.experience.createMany({
-        data: experience.map(e => ({ profileId: req.params.id, ...e })),
+        data: experience.map(e => ({
+          profileId: req.params.id,
+          role:    String(e.role    || ''),
+          company: String(e.company || ''),
+          years:   String(e.years   || ''),
+        })),
       })
     }
   }

@@ -245,9 +245,11 @@ export function JobBoardPage({ setView, jobs, setJobs, pendingJobs, setPendingJo
                       try {
                         await projectsApi.delete(job.id);
                         setJobs(js => js.filter(j => j.id !== job.id));
+                        // Also drop it from My Projects, which keeps its own copy.
+                        await refreshProjects?.();
                       } catch (err) {
-                        // Backend returns a clear message for owner-side guardrails
-                        // (pending apps, filled job). Surface it verbatim.
+                        // Backend returns a clear message for owner-side guardrails.
+                        // Surface it verbatim.
                         toast.error(err.message);
                       }
                     }}
