@@ -33,6 +33,7 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, not
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'directory',   label: 'Talent',      icon: Users },
       { id: 'jobs',        label: 'Projects',    icon: Briefcase },
+      { id: 'projects',    label: 'My Projects', icon: Package },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
       { id: 'news',        label: 'News',        icon: BookOpen },
     ];
