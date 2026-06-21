@@ -4,8 +4,14 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { normalizeEmail } from '../lib/sanitize.js'
 
 const router = Router()
+
+// A throwaway bcrypt hash used to equalise login response time when the email
+// isn't found, so attackers can't distinguish "no such user" from "wrong
+// password" by timing. Generated once at startup.
+const DUMMY_HASH = bcrypt.hashSync('lawnn-timing-equalizer', 12)
 
 function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex')
@@ -21,7 +27,8 @@ function signToken(user) {
 
 // ── POST /auth/register ───────────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
-  const { email, password, name, role = 'student', university, dept, year } = req.body
+  const { password, name, role = 'student', university, dept, year } = req.body
+  const email = normalizeEmail(req.body.email)
 
   if (!email || !password || !name) {
     return res.status(400).json({ error: 'email, password, and name are required' })
@@ -71,7 +78,8 @@ router.post('/register', async (req, res) => {
 
 // ── POST /auth/login ──────────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body
+  const { password } = req.body
+  const email = normalizeEmail(req.body.email)
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password are required' })
   }
@@ -80,12 +88,11 @@ router.post('/login', async (req, res) => {
     where: { email },
     include: { profile: true },
   })
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid email or password' })
-  }
 
-  const valid = await bcrypt.compare(password, user.password)
-  if (!valid) {
+  // Always run a bcrypt comparison (against a dummy hash when the user doesn't
+  // exist) so the response time doesn't reveal whether the email is registered.
+  const valid = await bcrypt.compare(password, user?.password || DUMMY_HASH)
+  if (!user || !valid) {
     return res.status(401).json({ error: 'Invalid email or password' })
   }
 

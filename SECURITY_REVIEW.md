@@ -37,11 +37,11 @@ Fix: the path must now match `^payment-proof/[A-Za-z0-9_][A-Za-z0-9_\-/.]*$` and
 - **Messaging & notifications:** conversation reads enforce participant/admin checks; notification read/read-all are scoped by `userId` (no IDOR). (`conversations.js`, `notifications.js`)
 - **Admin routes:** all under `requireAuth + requireRole('admin')`; invites use SHA-256-hashed tokens with a 7-day TTL; deletion guards against self-deletion and surfaces FK conflicts instead of 500s. (`admin.js`)
 
-## Lower-priority items (recommended, not yet applied)
+## Lower-priority items — RESOLVED (2026-06-20)
 
-- **Email normalization.** Emails are stored/looked up as-is (case-sensitive), which allows near-duplicate accounts (`A@x.com` vs `a@x.com`) and case-sensitive login. Normalize with `.trim().toLowerCase()` at register/login/admin-create — but do it carefully and migrate any existing mixed-case rows first, so current users can still log in.
-- **Login user-enumeration via timing.** Login returns immediately when the email doesn't exist but runs bcrypt when it does, a measurable timing oracle. Run a dummy `bcrypt.compare` on the not-found path to equalize timing.
-- **Password-length inconsistency.** `/admin/clients` requires 6 characters vs 8 for self-register and invite acceptance. Align to 8.
+- **Email normalization.** ✅ Added `normalizeEmail()` (trim + lowercase), applied at register, login, and admin create-student/create-client. Existing rows were backfilled to lowercase in the DB (no case-collisions found). Prevents near-duplicate accounts and case-sensitive login.
+- **Login user-enumeration via timing.** ✅ Login now always runs a `bcrypt.compare` — against a dummy hash when the email isn't found — so response time no longer reveals whether an email is registered.
+- **Password-length inconsistency.** ✅ `/admin/clients` now requires 8 characters, matching self-register and invite acceptance.
 
 ## Action items for you (need DB access / shell / hosting config)
 

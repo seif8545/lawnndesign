@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
+import { normalizeEmail } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -27,7 +28,8 @@ function buildInviteUrl(token) {
 // Invite a new student. Admin does NOT set the password — the student does,
 // via the one-time setup link returned in the response.
 router.post('/students', async (req, res) => {
-  const { name, email, university, dept, year, isGrad = false } = req.body
+  const { name, university, dept, year, isGrad = false } = req.body
+  const email = normalizeEmail(req.body.email)
 
   if (!name || !email) {
     return res.status(400).json({ error: 'name and email are required' })
@@ -136,12 +138,13 @@ router.get('/users', async (req, res) => {
 // Create a client account directly. Unlike students (invite flow), the admin
 // sets the password and shares the credentials with the client.
 router.post('/clients', async (req, res) => {
-  const { name, email, password } = req.body
+  const { name, password } = req.body
+  const email = normalizeEmail(req.body.email)
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'name, email and password are required' })
   }
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'Password must be at least 6 characters' })
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' })
   }
 
   const existing = await prisma.user.findUnique({ where: { email } })

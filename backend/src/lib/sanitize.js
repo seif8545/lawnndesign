@@ -26,6 +26,13 @@ export function safeUrl(value) {
   return null
 }
 
+// Normalise an email for storage and lookup: trim + lowercase. Keeps a single
+// canonical form so `A@x.com` and `a@x.com` can't become two accounts and login
+// isn't case-sensitive. Returns '' for nullish input.
+export function normalizeEmail(value) {
+  return value == null ? '' : String(value).trim().toLowerCase()
+}
+
 // Coerce a body value into a non-negative integer, or null if it isn't a valid
 // number. Guards against negative budgets/prices (which flow into wallet
 // increments) and NaN (which crashes Prisma Int columns with a 500).
