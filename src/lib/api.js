@@ -66,6 +66,7 @@ export const auth = {
   // token logs out silently on load rather than flashing a "session expired"
   // toast before the user has done anything.
   me:            ()                 => request('/auth/me', { skipAuthHandler: true }),
+  changePassword:(body)             => request('/auth/change-password', { method: 'POST', body }),
 }
 
 // ── Profiles ──────────────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export const profiles = {
 export const admin = {
   // Returns { user, inviteUrl, expiresAt }. Admin shares inviteUrl with the student.
   createStudent:  (body) => request('/admin/students',                  { method: 'POST', body }),
+  bulkAddStudents:(emails) => request('/admin/students/bulk',           { method: 'POST', body: { emails } }),
   reinviteStudent:(id)   => request(`/admin/students/${id}/reinvite`,   { method: 'POST' }),
   listStudents:   ()     => request('/admin/students'),
   listUsers:      ()     => request('/admin/users'),

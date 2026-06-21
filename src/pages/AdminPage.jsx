@@ -67,6 +67,11 @@ export function AdminUsersTab() {
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
 
+  // Bulk / individual add-by-email
+  const [bulkEmails, setBulkEmails]   = useState('');
+  const [bulkBusy, setBulkBusy]       = useState(false);
+  const [bulkResult, setBulkResult]   = useState(null); // { created:[{email,password}], skipped:[{email,reason}] }
+
   // Client create flow
   const [showCreateClient, setShowCreateClient] = useState(false);
   const [clientForm, setClientForm]   = useState({ name: '', email: '', password: '' });
@@ -94,6 +99,23 @@ export function AdminUsersTab() {
       setCreateError(e.message);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleBulkAdd = async () => {
+    if (!bulkEmails.trim()) return;
+    setBulkBusy(true); setBulkResult(null);
+    try {
+      const result = await adminApi.bulkAddStudents(bulkEmails);
+      setBulkResult(result);
+      if (result.created?.length) {
+        adminApi.listStudents().then(setStudents).catch(() => {});
+        setBulkEmails('');
+      }
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -184,6 +206,51 @@ export function AdminUsersTab() {
         >
           <Plus size={14} /> Create Student Account
         </button>
+      </div>
+
+      {/* Quick add accepted students by email (bulk or individual) */}
+      <div className="bg-white rounded-2xl border border-[#21326c]/10 p-5">
+        <h3 className="font-semibold text-[#21326c] mb-1">Add accepted students by email</h3>
+        <p className="text-xs text-[#21326c]/60 mb-3">Paste one or many emails (comma, space, or new-line separated). Each gets a temporary password and must set their name + a new password on first login.</p>
+        <textarea
+          rows={3}
+          value={bulkEmails}
+          onChange={e => setBulkEmails(e.target.value)}
+          placeholder="ahmed@uni.edu.eg, mona@uni.edu.eg…"
+          className="w-full px-3 py-2.5 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all resize-none placeholder:text-[#21326c]/40"
+        />
+        <button
+          onClick={handleBulkAdd}
+          disabled={bulkBusy || !bulkEmails.trim()}
+          className="mt-2 px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: '#ff9044' }}
+        >
+          {bulkBusy ? 'Adding…' : 'Add Students'}
+        </button>
+
+        {bulkResult && (
+          <div className="mt-4 space-y-3">
+            {bulkResult.created?.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-[#16a34a] mb-1">{bulkResult.created.length} added — share these credentials:</p>
+                <div className="text-xs bg-[#21326c]/5 rounded-xl p-3 font-mono leading-relaxed text-[#21326c] break-all whitespace-pre-wrap">
+                  {bulkResult.created.map(c => `${c.email}  /  ${c.password}`).join('\n')}
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(bulkResult.created.map(c => `${c.email} / ${c.password}`).join('\n')).catch(() => {}); toast.success('Copied'); }}
+                  className="mt-1 text-xs font-semibold text-[#2563eb] hover:underline"
+                >
+                  Copy all
+                </button>
+              </div>
+            )}
+            {bulkResult.skipped?.length > 0 && (
+              <p className="text-xs text-[#21326c]/50">
+                Skipped {bulkResult.skipped.length}: {bulkResult.skipped.map(s => `${s.email} (${s.reason})`).join(', ')}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Create modal */}

@@ -149,6 +149,32 @@ router.get('/me', requireAuth, async (req, res) => {
   return res.json({ user: safeUser(user) })
 })
 
+// ── POST /auth/change-password ────────────────────────────────────────────────
+// Set a new password (and optionally a name) for the logged-in user. Clears the
+// mustChangePassword flag, so it also powers the forced first-login setup for
+// students added by email.
+router.post('/change-password', requireAuth, async (req, res) => {
+  const { newPassword, name } = req.body
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' })
+  }
+
+  const hash = await bcrypt.hash(newPassword, 12)
+  const data = { password: hash, mustChangePassword: false }
+  if (typeof name === 'string' && name.trim()) {
+    const clean = name.trim()
+    data.name = clean
+    data.initials = clean.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.user.id },
+    data,
+    include: { profile: true },
+  })
+  return res.json({ user: safeUser(user) })
+})
+
 // Strip password before sending user data to the client
 function safeUser(user) {
   const { password, ...rest } = user

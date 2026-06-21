@@ -67,6 +67,7 @@ model User {
   initials    String   @db.VarChar(4)
   avatarColor String   @default("#21326c")
   suspended   Boolean  @default(false) // admin suspension: blocks login + hides public content
+  mustChangePassword Boolean @default(false) // force a password reset on next login
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

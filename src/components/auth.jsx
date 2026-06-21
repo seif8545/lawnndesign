@@ -188,4 +188,71 @@ export function AcceptInviteModal({ token, onAccept, onClose }) {
   );
 }
 
+// ─── FIRST-LOGIN SETUP ───────────────────────────────────────────────────────
+// Forced on students added by email: set a real name and a new password before
+// entering the app. Not dismissable.
+
+export function FirstLoginSetup({ user, onDone }) {
+  const [name, setName]         = useState(user?.name || '');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm]   = useState('');
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
+
+  const submit = async () => {
+    if (!name.trim()) { setError('Please enter your name.'); return; }
+    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (password !== confirm) { setError('Passwords do not match.'); return; }
+    setError(''); setLoading(true);
+    try {
+      const { user: updated } = await authApi.changePassword({ name: name.trim(), newPassword: password });
+      onDone(updated);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal open={true} onClose={() => {}} title="Welcome to Lawnn — finish setting up">
+      <div className="space-y-4">
+        <p className="text-sm text-[#21326c]/70 leading-relaxed">
+          Your account was created by the Lawnn team. Set your name and a new password to continue.
+        </p>
+        <div>
+          <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Your Full Name</label>
+          <input type="text" placeholder="e.g. Ahmed Hassan" value={name}
+            onChange={e => { setName(e.target.value); setError(''); }}
+            className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-[#21326c] mb-1.5">New Password</label>
+          <input type="password" placeholder="At least 8 characters" value={password}
+            onChange={e => { setPassword(e.target.value); setError(''); }}
+            className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Confirm Password</label>
+          <input type="password" placeholder="Re-enter your password" value={confirm}
+            onChange={e => { setConfirm(e.target.value); setError(''); }}
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+        </div>
+        {error && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 leading-relaxed">{error}</p>
+        )}
+        <button
+          onClick={submit}
+          disabled={loading}
+          className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: '#ff9044' }}
+        >
+          {loading ? 'Saving…' : 'Save & Continue'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── NAVIGATION / HEADER ──────────────────────────────────────────────────────

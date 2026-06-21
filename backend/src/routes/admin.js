@@ -79,6 +79,61 @@ router.post('/students', async (req, res) => {
   })
 })
 
+// ── POST /admin/students/bulk ─────────────────────────────────────────────────
+// Enlist accepted students by email — one or many. Each gets a generated
+// password and must change it on first login. Names are placeholders derived
+// from the email; the student sets their real name during first-login setup.
+// Body: { emails: string[] | "a@x.com, b@y.com" }
+// Returns: { created: [{ email, password }], skipped: [{ email, reason }] }
+router.post('/students/bulk', async (req, res) => {
+  const raw = req.body?.emails
+  const list = Array.isArray(raw) ? raw : String(raw || '').split(/[\s,;]+/)
+  const emails = [...new Set(list.map(normalizeEmail).filter(Boolean))]
+
+  if (emails.length === 0) {
+    return res.status(400).json({ error: 'Provide at least one email address.' })
+  }
+  if (emails.length > 200) {
+    return res.status(400).json({ error: 'Too many at once — add up to 200 emails per batch.' })
+  }
+
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const created = []
+  const skipped = []
+
+  for (const email of emails) {
+    if (!emailRe.test(email)) { skipped.push({ email, reason: 'invalid email' }); continue }
+    try {
+      const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+      if (existing) { skipped.push({ email, reason: 'already exists' }); continue }
+
+      const password = crypto.randomBytes(6).toString('base64url') // ~8 chars, temporary
+      const hash     = await bcrypt.hash(password, 12)
+      // Placeholder name from the email's local part; the student fixes it at setup.
+      const local    = email.split('@')[0].replace(/[._-]+/g, ' ').trim()
+      const name     = local ? local.replace(/\b\w/g, c => c.toUpperCase()) : 'New Student'
+      const initials = name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase() || 'NS'
+
+      await prisma.user.create({
+        data: {
+          email,
+          password: hash,
+          name,
+          role: 'student',
+          initials,
+          mustChangePassword: true,
+          profile: { create: {} },
+        },
+      })
+      created.push({ email, password })
+    } catch {
+      skipped.push({ email, reason: 'could not create' })
+    }
+  }
+
+  return res.status(201).json({ created, skipped })
+})
+
 // ── POST /admin/students/:id/reinvite ─────────────────────────────────────────
 // Regenerate a setup link for a student who hasn't accepted yet (or whose
 // link expired). Returns a fresh invite URL.

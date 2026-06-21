@@ -3,7 +3,7 @@ import { auth as authApi, clearToken, feed as feedApi, marketplace as marketplac
 import { toast } from './lib/toast.js';
 import { connectSocket, disconnectSocket } from './lib/socket.js';
 import { TopNav } from './components/TopNav.jsx';
-import { AcceptInviteModal, LoginModal } from './components/auth.jsx';
+import { AcceptInviteModal, FirstLoginSetup, LoginModal } from './components/auth.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import { Toaster } from './components/Toaster.jsx';
 import { mapApiFeedPost, mapApiJob, mapApiListing, mapApiNews, mapApiProfile, mapApiProject, mapNotification, talentToApiBody } from './lib/mappers.js';
@@ -339,6 +339,14 @@ export default function App() {
           token={inviteToken}
           onAccept={user => { handleLogin(user); setInviteToken(null); }}
           onClose={() => setInviteToken(null)}
+        />
+      )}
+
+      {/* Forced first-login setup for students added by email */}
+      {currentUser?.mustChangePassword && (
+        <FirstLoginSetup
+          user={currentUser}
+          onDone={updated => setCurrentUser(updated)}
         />
       )}
 
