@@ -164,10 +164,14 @@ router.get('/:id/messages', async (req, res) => {
 
   // Cap the page size so a caller can't request an unbounded message dump.
   const pageSize = Math.min(Math.max(parseInt(limit) || 50, 1), 100)
+  // Ignore an unparseable `before` cursor rather than passing an Invalid Date
+  // into Prisma (which throws → 500).
+  const beforeDate = before ? new Date(before) : null
+  const validBefore = beforeDate && !Number.isNaN(beforeDate.getTime()) ? beforeDate : null
   const messages = await prisma.message.findMany({
     where: {
       conversationId,
-      ...(before ? { createdAt: { lt: new Date(before) } } : {}),
+      ...(validBefore ? { createdAt: { lt: validBefore } } : {}),
     },
     orderBy: { createdAt: 'desc' },
     take: pageSize,

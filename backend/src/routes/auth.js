@@ -154,9 +154,27 @@ router.get('/me', requireAuth, async (req, res) => {
 // mustChangePassword flag, so it also powers the forced first-login setup for
 // students added by email.
 router.post('/change-password', requireAuth, async (req, res) => {
-  const { newPassword, name } = req.body
+  const { newPassword, name, currentPassword } = req.body
   if (!newPassword || newPassword.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' })
+  }
+
+  // For an established account, require the current password — so a leaked or
+  // borrowed token can't silently change the password (and lock the owner out)
+  // without knowing the existing one. The forced first-login flow is exempt:
+  // those users (mustChangePassword) are setting their password for the first
+  // time and have only the temporary one.
+  const current = await prisma.user.findUnique({
+    where:  { id: req.user.id },
+    select: { password: true, mustChangePassword: true },
+  })
+  if (!current) return res.status(404).json({ error: 'User not found' })
+  if (!current.mustChangePassword) {
+    if (!currentPassword) {
+      return res.status(400).json({ error: 'Your current password is required' })
+    }
+    const ok = await bcrypt.compare(currentPassword, current.password)
+    if (!ok) return res.status(401).json({ error: 'Current password is incorrect' })
   }
 
   const hash = await bcrypt.hash(newPassword, 12)

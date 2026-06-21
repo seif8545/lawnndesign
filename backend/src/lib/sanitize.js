@@ -33,6 +33,15 @@ export function normalizeEmail(value) {
   return value == null ? '' : String(value).trim().toLowerCase()
 }
 
+// Trim a free-text field and hard-cap its length before it's stored. The global
+// express.json({ limit: '1mb' }) bounds a single request, but without per-field
+// caps a user could still persist many near-1MB rows (storage abuse) or oversized
+// strings that bloat every list response. Returns a string (never null).
+export function clampText(value, max = 5000) {
+  if (value == null) return ''
+  return String(value).trim().slice(0, max)
+}
+
 // Coerce a body value into a non-negative integer, or null if it isn't a valid
 // number. Guards against negative budgets/prices (which flow into wallet
 // increments) and NaN (which crashes Prisma Int columns with a 500).

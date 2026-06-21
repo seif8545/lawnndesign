@@ -2,7 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { notify } from '../lib/notify.js'
-import { safeUrl, nonNegativeInt } from '../lib/sanitize.js'
+import { safeUrl, nonNegativeInt, clampText } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -70,7 +70,9 @@ router.get('/', optionalAuth, async (req, res) => {
 // ── POST /marketplace ─────────────────────────────────────────────────────────
 // Auth required. Sellers post pending; admins post active.
 router.post('/', requireAuth, async (req, res) => {
-  const { title, description, price, category, fileUrl, imageUrl, location } = req.body
+  const { price, category, fileUrl, imageUrl, location } = req.body
+  const title       = clampText(req.body.title, 200)
+  const description = clampText(req.body.description, 5000)
   if (!title || !description || price === undefined) {
     return res.status(400).json({ error: 'title, description, and price are required' })
   }
@@ -84,7 +86,7 @@ router.post('/', requireAuth, async (req, res) => {
       title,
       description,
       price:       priceInt,
-      category:    category || 'Other',
+      category:    clampText(category, 80) || 'Other',
       location:    location ? String(location).slice(0, 200) : null,
       imageUrl:    safeUrl(imageUrl),
       fileUrl:     safeUrl(fileUrl),
@@ -109,8 +111,8 @@ router.patch('/:id', requireAuth, async (req, res) => {
   const updated = await prisma.marketplaceListing.update({
     where: { id: req.params.id },
     data:  {
-      ...(title       !== undefined && { title }),
-      ...(description !== undefined && { description }),
+      ...(title       !== undefined && { title: clampText(title, 200) }),
+      ...(description !== undefined && { description: clampText(description, 5000) }),
       ...(location    !== undefined && { location: location ? String(location).slice(0, 200) : null }),
       ...(imageUrl    !== undefined && { imageUrl: safeUrl(imageUrl) }),
     },
@@ -168,17 +170,28 @@ router.patch('/:id/status', requireAuth, async (req, res) => {
 // ── POST /marketplace/:id/offers ──────────────────────────────────────────────
 // A buyer makes an offer on a listing.
 router.post('/:id/offers', requireAuth, async (req, res) => {
-  const { amount, message } = req.body
-  if (amount === undefined || amount === null || Number(amount) <= 0) {
+  const { amount } = req.body
+  const amountInt = nonNegativeInt(amount)
+  // Reject zero/negative/NaN and absurd values that would overflow the Int column.
+  if (amountInt === null || amountInt <= 0 || amountInt > 1_000_000_000) {
     return res.status(400).json({ error: 'A valid offer amount is required' })
   }
+  const message = clampText(req.body.message, 1000) || null
   const listing = await prisma.marketplaceListing.findUnique({ where: { id: req.params.id } })
   if (!listing) return res.status(404).json({ error: 'Listing not found' })
   if (listing.sellerId === req.user.id) return res.status(400).json({ error: 'You cannot make an offer on your own listing' })
   if (listing.status !== 'active') return res.status(409).json({ error: 'This listing is not accepting offers' })
 
+  // Block stacking offers: one open (pending) offer per buyer per listing, so a
+  // buyer can't spam the seller with notifications.
+  const openOffer = await prisma.offer.findFirst({
+    where: { listingId: listing.id, buyerId: req.user.id, status: 'pending' },
+    select: { id: true },
+  })
+  if (openOffer) return res.status(409).json({ error: 'You already have a pending offer on this listing' })
+
   const offer = await prisma.offer.create({
-    data: { listingId: listing.id, buyerId: req.user.id, amount: parseInt(amount, 10), message: message || null },
+    data: { listingId: listing.id, buyerId: req.user.id, amount: amountInt, message },
     include: offerInclude,
   })
 

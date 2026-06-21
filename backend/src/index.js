@@ -75,6 +75,23 @@ const authLimiter = rateLimit({
 app.use('/auth/login', authLimiter)
 app.use('/auth/register', authLimiter)
 app.use('/auth/accept-invite', authLimiter)
+app.use('/auth/change-password', authLimiter)
+
+// Stricter cap on content-creating writes (posts, comments, applications,
+// offers, listings, signed-upload requests). Reads (GET/HEAD) are exempt and
+// stay under the global limiter, so browsing is unaffected while automated
+// spam/flooding of these endpoints is throttled.
+const writeLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD',
+  message: { error: 'You are doing that too often. Please slow down.' },
+})
+for (const path of ['/feed', '/marketplace', '/projects', '/conversations', '/uploads']) {
+  app.use(path, writeLimiter)
+}
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
 app.use('/auth',          authRoutes)

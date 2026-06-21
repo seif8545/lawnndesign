@@ -2,7 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { notify } from '../lib/notify.js'
-import { safeUrl } from '../lib/sanitize.js'
+import { safeUrl, clampText } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -94,14 +94,14 @@ router.get('/:id/comments', async (req, res) => {
 // ── POST /feed/:id/comments ─────────────────────────────────────────────────
 // Any signed-in user can comment on an approved post.
 router.post('/:id/comments', requireAuth, async (req, res) => {
-  const { content } = req.body
-  if (!content || !content.trim()) return res.status(400).json({ error: 'content is required' })
+  const content = clampText(req.body.content, 2000)
+  if (!content) return res.status(400).json({ error: 'content is required' })
 
   const post = await prisma.feedPost.findUnique({ where: { id: req.params.id }, select: { id: true, userId: true, status: true } })
   if (!post || post.status !== 'approved') return res.status(404).json({ error: 'Post not found' })
 
   const comment = await prisma.comment.create({
-    data: { feedPostId: post.id, userId: req.user.id, content: content.trim() },
+    data: { feedPostId: post.id, userId: req.user.id, content },
     include: { user: { select: { id: true, name: true, initials: true, avatarColor: true } } },
   })
 
@@ -129,16 +129,17 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
 // ── POST /feed ────────────────────────────────────────────────────────────────
 // Auth required. Admins post live; everyone else goes to pending.
 router.post('/', requireAuth, async (req, res) => {
-  const { content, imageUrl, tags = [] } = req.body
-  if (!content || !content.trim()) {
+  const { imageUrl, tags = [] } = req.body
+  const content = clampText(req.body.content, 5000)
+  if (!content) {
     return res.status(400).json({ error: 'content is required' })
   }
   const post = await prisma.feedPost.create({
     data: {
       userId:   req.user.id,
-      content:  content.trim(),
+      content,
       imageUrl: safeUrl(imageUrl),
-      tags:     Array.isArray(tags) ? tags : [],
+      tags:     (Array.isArray(tags) ? tags : []).slice(0, 20).map(t => clampText(t, 40)).filter(Boolean),
       status:   req.user.role === 'admin' ? 'approved' : 'pending',
     },
     include: {

@@ -19,16 +19,30 @@ export function initSocket(httpServer) {
   })
 
   // ── Auth middleware ──────────────────────────────────────────────────────────
-  // Every connecting socket must provide a valid JWT in handshake.auth.token
-  io.use((socket, next) => {
+  // Every connecting socket must provide a valid JWT in handshake.auth.token.
+  // Mirror the REST `requireAuth`: a valid signature isn't enough — the account
+  // must still exist and not be suspended. Otherwise a banned/deleted user with
+  // an unexpired 7-day token keeps full realtime chat access (sending messages,
+  // observing rooms), defeating the instant-ban guarantee the HTTP layer gives.
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token
     if (!token) return next(new Error('Unauthorized'))
+    let payload
     try {
-      socket.user = jwt.verify(token, process.env.JWT_SECRET)
-      next()
+      payload = jwt.verify(token, process.env.JWT_SECRET)
     } catch {
-      next(new Error('Token invalid or expired'))
+      return next(new Error('Token invalid or expired'))
     }
+    if (!payload?.id) return next(new Error('Unauthorized'))
+    // Look up the live account so role + active-status come from the DB, never
+    // from the (possibly stale) token claims.
+    const user = await prisma.user.findUnique({
+      where:  { id: payload.id },
+      select: { id: true, role: true, suspended: true },
+    }).catch(() => null)
+    if (!user || user.suspended) return next(new Error('Account is no longer active'))
+    socket.user = { id: user.id, role: user.role }
+    next()
   })
 
   // ── Connection handler ───────────────────────────────────────────────────────
@@ -51,6 +65,9 @@ export function initSocket(httpServer) {
     // ── send_message ────────────────────────────────────────────────────────
     socket.on('send_message', async ({ conversationId, content, fileUrl, fileName, fileMime }) => {
       if (!conversationId || !content?.trim()) return
+      // Cap message length. Socket payloads bypass the REST express.json('1mb')
+      // limit, so without this a client could persist arbitrarily large strings.
+      const body = content.trim().slice(0, 5000)
 
       // Verify sender is a participant (client, student, or the admin on an
       // admin-initiated thread). Admins observing others' threads can't send.
@@ -62,7 +79,7 @@ export function initSocket(httpServer) {
         data: {
           conversationId,
           senderId: userId,
-          content:  content.trim(),
+          content:  body,
           fileUrl:  safeUrl(fileUrl),
           fileName: fileName || null,
           fileMime: fileMime || null,
@@ -90,6 +107,14 @@ export function initSocket(httpServer) {
 
     // ── mark_read ───────────────────────────────────────────────────────────
     socket.on('mark_read', async ({ conversationId }) => {
+      if (!conversationId) return
+      // Only a participant may clear unread state on a thread. (Admins observing
+      // others' threads shouldn't flip read receipts on conversations they're
+      // merely watching.)
+      const conv = await prisma.conversation.findUnique({ where: { id: conversationId } })
+      if (!conv) return
+      if (conv.clientId !== userId && conv.talentId !== userId && conv.adminId !== userId) return
+
       // Mark all messages in this conversation not sent by this user as read
       await prisma.message.updateMany({
         where: {

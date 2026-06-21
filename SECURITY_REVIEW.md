@@ -43,6 +43,57 @@ Fix: the path must now match `^payment-proof/[A-Za-z0-9_][A-Za-z0-9_\-/.]*$` and
 - **Login user-enumeration via timing.** ✅ Login now always runs a `bcrypt.compare` — against a dummy hash when the email isn't found — so response time no longer reveals whether an email is registered.
 - **Password-length inconsistency.** ✅ `/admin/clients` now requires 8 characters, matching self-register and invite acceptance.
 
+## Findings and fixes (applied 2026-06-21 — realtime & auth pass)
+
+This pass re-read the whole backend against the documented June 19 fixes (all confirmed present) and focused on the Socket.io layer and the password-change endpoint, which the prior review hadn't covered in depth.
+
+### MEDIUM — Suspended/deleted users keep full realtime (Socket.io) access
+`requireAuth` does a per-request DB lookup so a ban/delete kicks the offender on their next HTTP call. The socket handshake did **not**: `io.use` only ran `jwt.verify`, so a suspended or deleted user holding an unexpired 7-day token could still open a socket, join their conversation rooms, send messages, and flip read receipts — the realtime layer ignored the instant-ban guarantee the HTTP layer enforces. Role was also read from the (stale) token rather than the DB.
+
+Fix: the socket auth middleware is now async and looks up the live account (`findUnique` → reject if missing or `suspended`), and derives `socket.user.role` from the DB row, not the token. (`socket.js`)
+
+### LOW — `mark_read` had no participant check
+The `mark_read` socket handler ran `message.updateMany` scoped only by `conversationId`, so any authenticated socket could clear unread state on a conversation it isn't part of (and emit a read receipt into that room).
+
+Fix: `mark_read` now loads the conversation and returns unless the caller is the client, talent, or admin participant. (`socket.js`)
+
+### LOW — Unbounded socket message length (DoS / storage)
+`send_message` trimmed `content` but applied no length cap. Socket payloads bypass the REST `express.json({ limit: '1mb' })` guard, so a client could persist arbitrarily large message strings.
+
+Fix: message content is now capped at 5000 chars (`content.trim().slice(0, 5000)`). (`socket.js`)
+
+### LOW — Password change required no re-authentication
+`POST /auth/change-password` accepted a new password on a valid token alone. A leaked/borrowed token could change the password (locking out the real owner) with no knowledge of the existing one.
+
+Fix: an established account must now supply a correct `currentPassword` (verified with `bcrypt.compare`). The forced first-login flow (`mustChangePassword`) is exempt, since those students are setting a password for the first time — so the existing `FirstLoginSetup` UI is unaffected. A future "change password" settings form must send `currentPassword`. (`auth.js`)
+
+## Findings and fixes (applied 2026-06-21 — abuse-hardening pass)
+
+A follow-up pass focused on tampering, spam/DoS, and unbounded input on the write endpoints. Verified clean first: the React frontend has **no** `dangerouslySetInnerHTML`/`innerHTML`/`eval` sinks; `.env` is gitignored (only `.env.example` is tracked); deps are current (`jsonwebtoken@9`, `helmet@7`, `express@4.19`); `notify()` can't throw. Confirmed the schema already enforces `@@unique([projectId, authorId])` on `Review` and `@@unique([projectId, userId])` on `Application`, so rating/application stuffing is constraint-blocked — but the review route surfaced the violation as a 500.
+
+### LOW — Unbounded user-generated text (storage abuse / response bloat)
+Free-text fields were stored untrimmed and uncapped. `express.json({ limit: '1mb' })` bounds one request, but a user could still persist many ~1MB rows or oversized strings that bloat every list payload.
+
+Fix: added `clampText(value, max)` to `sanitize.js` and applied per-field caps on write — feed posts (5000) and tags (20×40), comments (2000), project title (200)/brief (5000)/category/skills, application notes (5000), review comments (2000), marketplace title (200)/description (5000)/category, and offer messages (1000). Socket messages were already capped (5000) in the prior pass. (`sanitize.js`, `feed.js`, `projects.js`, `marketplace.js`)
+
+### LOW — Marketplace offer spam + integer-overflow amount
+A buyer could stack unlimited pending offers on one listing (a seller-notification flood), and the offer amount was `parseInt`'d with only a `> 0` check, so a value beyond the 32-bit `Int` column would throw a 500.
+
+Fix: offer amounts now go through `nonNegativeInt` and are bounded to `1_000_000_000`; a buyer is limited to one pending offer per listing (409 otherwise). (`marketplace.js`)
+
+### LOW — Duplicate review returned a 500
+The one-review-per-project constraint threw an uncaught `P2002`.
+
+Fix: the review create is wrapped to return a clean 409 ("You have already reviewed this project"). (`projects.js`)
+
+### LOW — Unparseable `before` cursor threw a 500
+`GET /conversations/:id/messages?before=` passed `new Date(before)` straight to Prisma; a garbage value became `Invalid Date` and threw.
+
+Fix: an unparseable `before` is now ignored rather than queried. (`conversations.js`)
+
+### Hardening — targeted write rate limiting
+The global limiter (600 / 15 min) is generous for content creation. Added a `writeLimiter` (100 writes / 10 min, GET/HEAD exempt) on `/feed`, `/marketplace`, `/projects`, `/conversations`, and `/uploads`, plus the auth limiter on `/auth/change-password`. Browsing is unaffected; automated flooding of the create/sign endpoints is throttled. (`index.js`)
+
 ## Action items for you (need DB access / shell / hosting config)
 
 1. **Rotate any leaked credential.** The prior review flagged a `yomna@lawnndesign.com` credential committed in history (GitGuardian). Rotate/delete it in the DB; optionally scrub git history.

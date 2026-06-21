@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { notify } from '../lib/notify.js'
 import { signPrivateRead } from './uploads.js'
-import { safeUrl, nonNegativeInt } from '../lib/sanitize.js'
+import { safeUrl, nonNegativeInt, clampText } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -162,7 +162,9 @@ router.get('/:id', requireAuth, async (req, res) => {
 // A client posts a project. It starts `pending` and goes live (`open`) after an
 // admin approves it. Admins posting on behalf go live immediately.
 router.post('/', requireAuth, requireRole('client', 'admin'), async (req, res) => {
-  const { title, brief, budget, budgetType, category, vip, skills = [], attachments = [] } = req.body
+  const { budget, budgetType, category, vip, skills = [], attachments = [] } = req.body
+  const title = clampText(req.body.title, 200)
+  const brief = clampText(req.body.brief, 5000)
 
   if (!title || !brief || budget === undefined) {
     return res.status(400).json({ error: 'title, brief, and budget are required' })
@@ -181,11 +183,11 @@ router.post('/', requireAuth, requireRole('client', 'admin'), async (req, res) =
       title,
       brief,
       budget: budgetInt,
-      budgetType: budgetType || 'Fixed',
-      category: category || 'Visuals & Branding',
+      budgetType: clampText(budgetType, 40) || 'Fixed',
+      category: clampText(category, 80) || 'Visuals & Branding',
       vip: Boolean(vip),
       status: req.user.role === 'admin' ? 'open' : 'pending',
-      skills:      { create: (Array.isArray(skills) ? skills : []).map(skill => ({ skill: String(skill) })) },
+      skills:      { create: (Array.isArray(skills) ? skills : []).slice(0, 30).map(skill => ({ skill: clampText(skill, 60) })).filter(s => s.skill) },
       attachments: { create: cleanAttachments },
     },
     include: { skills: true, attachments: true },
@@ -222,7 +224,8 @@ router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) 
 // ── POST /projects/:id/applications ───────────────────────────────────────────
 // Students apply to an open project (note + selected portfolio items / uploads).
 router.post('/:id/applications', requireAuth, requireRole('student'), async (req, res) => {
-  const { note, files = [] } = req.body
+  const { files = [] } = req.body
+  const note = clampText(req.body.note, 5000)
   if (!note) return res.status(400).json({ error: 'Application note is required' })
 
   const project = await prisma.project.findUnique({ where: { id: req.params.id } })
@@ -475,7 +478,8 @@ router.post('/:id/payment-sent', requireAuth, async (req, res) => {
 
 // ── POST /projects/:id/reviews ────────────────────────────────────────────────
 router.post('/:id/reviews', requireAuth, async (req, res) => {
-  const { rating, comment } = req.body
+  const { rating } = req.body
+  const comment = clampText(req.body.comment, 2000)
   if (!rating || !comment) return res.status(400).json({ error: 'rating and comment are required' })
   if (rating < 1 || rating > 5) return res.status(400).json({ error: 'rating must be 1–5' })
 
@@ -491,9 +495,16 @@ router.post('/:id/reviews', requireAuth, async (req, res) => {
 
   const recipientId = isClient ? project.talentId : project.clientId
 
-  const review = await prisma.review.create({
-    data: { projectId: project.id, authorId: req.user.id, recipientId, rating: parseInt(rating), comment },
-  })
+  let review
+  try {
+    review = await prisma.review.create({
+      data: { projectId: project.id, authorId: req.user.id, recipientId, rating: parseInt(rating), comment },
+    })
+  } catch (err) {
+    // @@unique([projectId, authorId]) — one review per person per project.
+    if (err.code === 'P2002') return res.status(409).json({ error: 'You have already reviewed this project' })
+    throw err
+  }
 
   const reviews = await prisma.review.findMany({ where: { recipientId } })
   const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
