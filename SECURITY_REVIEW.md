@@ -2,6 +2,14 @@
 
 _Last updated: 2026-06-19 · Scope: full pre-launch review of the Express/Prisma backend, Socket.io, and React/Vite frontend, including the Jobs→Projects merge, the manual-InstaPay payment flow, private file signing, and feed comments. Changes applied locally only — not committed or pushed._
 
+## Database-layer hardening — RLS enabled (2026-06-21)
+
+**HIGH (defense-in-depth) — Row-Level Security was OFF on all 24 public tables**, including `users` (password hashes), `messages`, `notifications`, etc., with zero policies. Supabase exposes a direct PostgREST API alongside the Express backend; with RLS off, anyone holding the project's public `anon` key could read/write those tables directly, bypassing every backend control. The app doesn't ship the anon key, so it wasn't actively exposed — but that's obscurity, not a control.
+
+Fix (migration `enable_rls_deny_by_default_all_app_tables`): **RLS enabled on every application table, no policies = deny-by-default.** The backend is unaffected — it uses the Supabase **service-role** key (bypasses RLS) and Prisma connects as the table **owner** (also bypasses RLS, since we did not `FORCE` RLS). The security advisor now reports only INFO-level `rls_enabled_no_policy` notices, which are the intended sealed state (policies would only be needed to *grant* direct API access, which this architecture doesn't use).
+
+Operational notes: this persists across Prisma migrations (Prisma doesn't manage RLS). **If you add a new table via Prisma later, enable RLS on it too** (`ALTER TABLE public.<name> ENABLE ROW LEVEL SECURITY;`). Re-run the Supabase security advisor periodically. Storage buckets are a separate layer — `lawnn-private` must remain non-public (backend signs URLs); confirm in Dashboard → Storage.
+
 ## Final sweep — 2026-06-21
 
 End-to-end re-read of all auth-critical code in its post-session state. **Verdict: no new vulnerabilities.** Verified: login ordering (throttle → CAPTCHA → verify → reset/upgrade → notify → token) with no enumeration on unknown emails and a self-healing (non-lockout) throttle; `tokenVersion` session-invalidation applied consistently in `requireAuth` and socket auth, with pre-existing tokens (no `tv` → 0) staying valid so deploy doesn't mass-log-out; Argon2id hashing with bcrypt isolated to legacy verification + upgrade-on-login; the password policy enforced on every set-password path; rate limiting (global + auth incl. change-password + write limiter), CORS allowlist, helmet, and JWT-secret fail-fast all intact; cookie/CSRF support correct and gated off by default; CSP updated for Turnstile; no frontend XSS sinks. Test suite: 53 passing.

@@ -62,6 +62,10 @@ export function ChatPage({ currentUser }) {
   // ── Load messages when active convo changes ───────────────────────────────
   useEffect(() => {
     if (!activeConvo) return;
+    // Join this conversation's realtime room on open — covers conversations
+    // created after the socket connected (e.g. started from a marketplace
+    // listing), which otherwise wouldn't receive live messages.
+    getSocket()?.emit('join_conversation', { conversationId: activeConvo.id });
     setLoadingMsgs(true);
     convApi.messages(activeConvo.id).then(msgs => {
       setMessages(msgs);

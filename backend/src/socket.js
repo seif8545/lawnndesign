@@ -87,6 +87,11 @@ export function initSocket(httpServer) {
       if (!conv) return
       if (conv.clientId !== userId && conv.talentId !== userId && conv.adminId !== userId) return
 
+      // Ensure the sender is subscribed to this room before broadcasting, so a
+      // conversation created after they connected (e.g. started from a
+      // marketplace listing) still echoes their own message back to them.
+      socket.join(`conv:${conversationId}`)
+
       const message = await prisma.message.create({
         data: {
           conversationId,

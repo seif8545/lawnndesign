@@ -385,7 +385,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                             <div className="flex items-start justify-between gap-3 mb-3">
                               <div className="flex items-center gap-3">
                                 <button
-                                  onClick={() => { setSelected(null); setSelectedTalent(talent); setView('profile'); }}
+                                  onClick={() => { setSelected(null); setView('profile', talent); }}
                                   className="flex-shrink-0"
                                 >
                                   <Avatar initials={app.talentInitials} color={app.talentColor} size="md" />
@@ -415,7 +415,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                                 <CheckCircle size={14} /> Accept This Offer
                               </button>
                               <button
-                                onClick={() => { setSelected(null); setSelectedTalent(talent); setView('profile'); }}
+                                onClick={() => { setSelected(null); setView('profile', talent); }}
                                 className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
                               >
                                 View Profile
@@ -579,7 +579,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                     </div>
                     {talent && (
                       <button
-                        onClick={() => { setSelected(null); setSelectedTalent(talent); setView('profile'); }}
+                        onClick={() => { setSelected(null); setView('profile', talent); }}
                         className="flex items-center gap-2 text-sm font-semibold text-[#21326c] hover:opacity-70 transition-opacity"
                       >
                         <Avatar initials={talent.initials} color={talent.avatarColor} size="sm" />

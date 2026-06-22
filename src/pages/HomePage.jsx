@@ -175,7 +175,7 @@ export function HomePage({ setView, setSelectedTalent, talents, heroImageUrl }) 
             <TalentCard
               key={talent.id}
               talent={talent}
-              onClick={() => { setSelectedTalent(talent); setView('profile'); }}
+              onClick={() => setView('profile', talent)}
             />
           ))}
         </div>

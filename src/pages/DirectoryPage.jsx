@@ -16,7 +16,7 @@ export function DirectoryPage({ setView, setSelectedTalent, talents }) {
           <DirectoryCard
             key={talent.id}
             talent={talent}
-            onClick={() => { setSelectedTalent(talent); setView('profile'); }}
+            onClick={() => setView('profile', talent)}
           />
         ))}
       </div>

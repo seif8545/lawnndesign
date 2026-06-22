@@ -234,14 +234,20 @@ export default function App() {
     }
   };
 
-  const handleNavChange = v => {
-    if (v === 'profile' && currentUser?.role === 'student') {
-      // Real students: their profile is the one whose userId matches.
-      const talent = talents.find(t => t.userId === currentUser.id);
-      if (talent) setSelectedTalent(talent);
-    } else if (v === 'profile' && currentUser?.role === 'client') {
-      // Clients have their own profile view — clear any talent we were viewing.
-      setSelectedTalent(null);
+  // Navigation. For 'profile', an optional `talent` means "view THAT person's
+  // profile"; without it, go to the current user's OWN profile (clearing any
+  // talent we were viewing). Keeping these two intents distinct is what stops a
+  // person-click (which passes a talent) from being clobbered by the my-profile
+  // reset — the bug where opening someone else's profile showed your own.
+  const handleNavChange = (v, talent) => {
+    if (v === 'profile') {
+      if (talent) {
+        setSelectedTalent(talent);
+      } else if (currentUser?.role === 'student') {
+        setSelectedTalent(talents.find(t => t.userId === currentUser.id) || null);
+      } else {
+        setSelectedTalent(null);
+      }
     }
     setView(v);
   };

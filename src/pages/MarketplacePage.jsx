@@ -4,7 +4,7 @@ import { BadgeCheck, CheckCircle, ChevronRight, DollarSign, Info, MapPin, Messag
 import { marketplace as marketplaceApi, conversations as convApi, uploadFile } from '../lib/api.js';
 import { Avatar, Modal } from '../components/ui.jsx';
 import { useBusy } from '../hooks/useBusy.js';
-import { EMPTY_LISTING_FORM, LISTING_COLORS } from '../lib/constants.js';
+import { EMPTY_LISTING_FORM } from '../lib/constants.js';
 
 export function MarketplacePage({ listings, setListings, pendingListings, setPendingListings, currentUser, refreshMarketplace, setView }) {
   const isStudent = currentUser?.role === 'student';
@@ -524,19 +524,6 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
               />
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1">Card Colour</label>
-            <div className="flex gap-2">
-              {LISTING_COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={() => setListingForm(f => ({ ...f, color: c }))}
-                  className="w-7 h-7 rounded-lg transition-transform hover:scale-110"
-                  style={{ background: c, outline: listingForm.color === c ? `3px solid ${c}` : 'none', outlineOffset: '2px' }}
-                />
-              ))}
-            </div>
-          </div>
           <button
             onClick={saveListing}
             disabled={savingListing || !listingForm.title.trim() || (!editingListing && !listingForm.price)}
@@ -545,9 +532,10 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
           >
             {savingListing
               ? (editingListing ? 'Saving…' : 'Submitting…')
-              : (editingListing ? 'Save Changes' : 'Submit for Review')}
+              : (editingListing ? 'Save Changes' : (isAdmin ? 'Publish Listing' : 'Submit for Review'))}
           </button>
-          {!editingListing && (
+          {/* Admin listings go live immediately; only non-admins await review. */}
+          {!editingListing && !isAdmin && (
             <p className="text-xs text-center text-[#21326c]/50">Goes live once approved by Lawnn admin.</p>
           )}
         </div>
