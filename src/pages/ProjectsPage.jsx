@@ -1,7 +1,7 @@
 import { toast } from '../lib/toast.js';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Briefcase, CheckCircle, ChevronRight, CreditCard, DollarSign, Hourglass, PackageCheck, PartyPopper, Plus, Star, Trash2, Upload, Users, X } from 'lucide-react';
+import { Briefcase, CheckCircle, ChevronRight, CreditCard, DollarSign, Download, File as FileIcon, Hourglass, PackageCheck, PartyPopper, Plus, Star, Trash2, Upload, Users, X } from 'lucide-react';
 import { projects as projectsApi, uploadFile } from '../lib/api.js';
 import { AvailabilityBadge, Avatar, Modal, SkillPicker, StarPicker } from '../components/ui.jsx';
 import { useBusy } from '../hooks/useBusy.js';
@@ -117,6 +117,99 @@ function ProofView({ url, label }) {
       <img src={url} alt={`${label} screenshot`} className="max-h-48 rounded-xl mx-auto border border-[#21326c]/10 hover:opacity-90 transition-opacity" />
       <span className="block mt-1 text-[11px] font-semibold text-[#2563eb]">Open full size ↗</span>
     </a>
+  );
+}
+
+// Shared project files — a running stream the client and talent both add to,
+// from hire through completion. Files are private; the API returns short-lived
+// signed URLs for viewing/downloading.
+function ProjectFiles({ proj, currentUser, refreshProjects }) {
+  const [uploading, setUploading] = useState(false);
+  const [note, setNote] = useState('');
+  const files = proj.files || [];
+  const canUpload = currentUser && (proj.clientId === currentUser.id || proj.acceptedTalentId === currentUser.id);
+
+  const addFiles = async (fileList) => {
+    const picked = Array.from(fileList || []).slice(0, 10);
+    if (picked.length === 0) return;
+    setUploading(true);
+    try {
+      const uploaded = [];
+      for (const f of picked) {
+        const r = await uploadFile(f, 'project-file');
+        uploaded.push({ name: f.name, url: r.path, mimeType: f.type });
+      }
+      await projectsApi.addFiles(proj.id, { files: uploaded, note: note.trim() || undefined });
+      setNote('');
+      await refreshProjects?.();
+    } catch (e) {
+      toast.error(`Upload failed: ${e.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeFile = async (fileId) => {
+    try {
+      await projectsApi.deleteFile(proj.id, fileId);
+      await refreshProjects?.();
+    } catch (e) {
+      toast.error(`Couldn't remove file: ${e.message}`);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl p-4 border border-[#21326c]/10" style={{ background: '#21326c04' }}>
+      <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-3">Shared files</p>
+
+      {files.length === 0 && (
+        <p className="text-xs text-[#21326c]/50 mb-3">No files shared yet. Drafts, assets, and deliverables you both add will appear here.</p>
+      )}
+
+      <div className="space-y-2 mb-3">
+        {files.map(f => {
+          const isImage = (f.mimeType || '').startsWith('image/');
+          const mine = f.uploaderId === currentUser?.id;
+          return (
+            <div key={f.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-white border border-[#21326c]/10">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#21326c10' }}>
+                {isImage ? <FileIcon size={15} className="text-[#21326c]" /> : <FileIcon size={15} className="text-[#21326c]" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-[#21326c] font-medium truncate">{f.name}</p>
+                <p className="text-[11px] text-[#21326c]/50">{f.uploaderName} · {f.createdAt}{f.note ? ` · ${f.note}` : ''}</p>
+              </div>
+              <a href={f.url} target="_blank" rel="noopener noreferrer" title="Download" className="p-1.5 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] flex-shrink-0">
+                <Download size={15} />
+              </a>
+              {(mine || currentUser?.role === 'admin') && (
+                <button onClick={() => removeFile(f.id)} title="Remove" className="p-1.5 rounded-lg hover:bg-red-50 text-[#21326c]/40 hover:text-red-500 flex-shrink-0">
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {canUpload && (
+        <div className="space-y-2">
+          <input
+            type="text"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="Optional note (e.g. 'v2 of the logo')"
+            className="w-full px-3 py-2 rounded-xl border border-[#21326c]/20 text-sm text-[#21326c] focus:ring-2 focus:ring-[#21326c] placeholder:text-[#21326c]/40"
+          />
+          <label className="block">
+            <input type="file" accept="image/*,application/pdf" multiple className="hidden" disabled={uploading} onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
+            <span className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border-2 border-dashed border-[#21326c]/25 text-sm font-semibold text-[#21326c] cursor-pointer hover:bg-[#21326c]/5 transition-colors">
+              <Upload size={15} /> {uploading ? 'Uploading…' : 'Share files (images / PDF)'}
+            </span>
+          </label>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -524,7 +617,7 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                           rows={4}
                           value={deliveryNote}
                           onChange={e => setDeliveryNote(e.target.value)}
-                          placeholder="Summarise what you've delivered, where the files are, and any notes the client needs..."
+                          placeholder="Summarise what you've delivered and any notes for the client. Attach the actual files in 'Shared files' below."
                           className="w-full px-3 py-2 rounded-xl border border-[#21326c]/20 text-sm text-[#21326c] resize-none focus:ring-2 focus:ring-[#21326c] placeholder:text-[#21326c]/40"
                         />
                         <button
@@ -708,6 +801,11 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Shared file stream — available from hire through completion. */}
+              {['offer_accepted', 'deposit_paid', 'in_progress', 'delivered', 'completed'].includes(proj.status) && (
+                <ProjectFiles proj={proj} currentUser={currentUser} refreshProjects={refreshProjects} />
               )}
             </div>
           </div>

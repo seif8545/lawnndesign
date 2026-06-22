@@ -185,6 +185,18 @@ export function mapApiProject(p) {
     talentReview: talentReview ? { rating: talentReview.rating, text: talentReview.comment } : null,
     applications,
     acceptedApplicationId: applications.find(a => a.status === 'accepted')?.id || null,
+    files: (p.files || []).map(f => ({
+      id:               f.id,
+      name:             f.name,
+      url:              f.url,
+      mimeType:         f.mimeType,
+      note:             f.note,
+      createdAt:        formatRelativeTime(f.createdAt),
+      uploaderId:       f.uploader?.id,
+      uploaderName:     f.uploader?.name || 'Someone',
+      uploaderInitials: f.uploader?.initials || '??',
+      uploaderColor:    f.uploader?.avatarColor || '#21326c',
+    })),
   };
 }
 

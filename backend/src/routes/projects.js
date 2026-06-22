@@ -40,6 +40,17 @@ async function signApplicationFiles(applications) {
   )
 }
 
+// Shared project files live in a private bucket — swap each stored path for a
+// short-lived signed read URL before sending to a participant/admin.
+async function signProjectFiles(files) {
+  return Promise.all(
+    (files || []).map(async f => {
+      if (!f.url || /^https?:\/\//i.test(f.url)) return f
+      return { ...f, url: await signPrivateRead(f.url) }
+    })
+  )
+}
+
 // Validate + clean an incoming files array (uploaded files or portfolio refs).
 function cleanFiles(files) {
   const out = []
@@ -117,6 +128,10 @@ router.get('/', requireAuth, async (req, res) => {
         },
         orderBy: { createdAt: 'desc' },
       },
+      files: {
+        include: { uploader: { select: { id: true, name: true, initials: true, avatarColor: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
       reviews: true,
     },
     orderBy: { createdAt: 'desc' },
@@ -129,6 +144,8 @@ router.get('/', requireAuth, async (req, res) => {
       // Only the owner/admin should get signed application files.
       const canSeeApps = req.user.role === 'admin' || p.clientId === req.user.id
       withProofs.applications = canSeeApps ? await signApplicationFiles(p.applications) : []
+      // All viewers here are a participant or admin, so sign the shared files.
+      withProofs.files = await signProjectFiles(p.files)
       return withProofs
     })
   )
@@ -146,6 +163,10 @@ router.get('/:id', requireAuth, async (req, res) => {
       talent: { select: { id: true, name: true, initials: true, avatarColor: true } },
       skills: true,
       attachments: true,
+      files: {
+        include: { uploader: { select: { id: true, name: true, initials: true, avatarColor: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
       reviews: { include: { author: { select: { id: true, name: true } } } },
     },
   })
@@ -158,7 +179,66 @@ router.get('/:id', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' })
   }
 
-  return res.json(await withSignedProofs(project, req.user))
+  const result = await withSignedProofs(project, req.user)
+  // Shared files are only for participants/admin (an `open`-project viewer isn't one).
+  result.files = (isParticipant || isAdmin) ? await signProjectFiles(project.files) : []
+  return res.json(result)
+})
+
+// ── POST /projects/:id/files ──────────────────────────────────────────────────
+// Shared project files: the client or talent can add files at any point from
+// hire (offer_accepted) through completion. Both parties + admins can view.
+const FILE_SHARING_STATUSES = ['offer_accepted', 'deposit_paid', 'in_progress', 'delivered', 'completed']
+router.post('/:id/files', requireAuth, async (req, res) => {
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } })
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+
+  const isClient = project.clientId === req.user.id
+  const isTalent = project.talentId === req.user.id
+  if (!isClient && !isTalent) return res.status(403).json({ error: 'Only the project participants can share files' })
+  if (!FILE_SHARING_STATUSES.includes(project.status)) {
+    return res.status(409).json({ error: 'File sharing is available once the project is underway' })
+  }
+
+  const { files: cleaned, error } = cleanFiles(req.body.files)
+  if (error) return res.status(400).json({ error: 'A file has an invalid URL' })
+  if (cleaned.length === 0) return res.status(400).json({ error: 'Attach at least one file' })
+  const note = clampText(req.body.note, 1000) || null
+
+  await prisma.projectFile.createMany({
+    data: cleaned.map(f => ({
+      projectId: project.id, uploaderId: req.user.id, name: f.name, url: f.url, mimeType: f.mimeType, note,
+    })),
+  })
+
+  const recipientId = isClient ? project.talentId : project.clientId
+  if (recipientId) {
+    await notify(recipientId, {
+      type: 'bag',
+      title: `New file${cleaned.length > 1 ? 's' : ''} shared on "${project.title}"`,
+      body: `${cleaned.length} file${cleaned.length > 1 ? 's' : ''} added to your project.`,
+      link: 'projects',
+    })
+  }
+
+  const files = await prisma.projectFile.findMany({
+    where: { projectId: project.id },
+    include: { uploader: { select: { id: true, name: true, initials: true, avatarColor: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+  return res.status(201).json(await signProjectFiles(files))
+})
+
+// ── DELETE /projects/:id/files/:fileId ────────────────────────────────────────
+// The uploader (or an admin) can remove a shared file.
+router.delete('/:id/files/:fileId', requireAuth, async (req, res) => {
+  const file = await prisma.projectFile.findUnique({ where: { id: req.params.fileId } })
+  if (!file || file.projectId !== req.params.id) return res.status(404).json({ error: 'File not found' })
+  if (file.uploaderId !== req.user.id && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  await prisma.projectFile.delete({ where: { id: file.id } })
+  return res.status(204).send()
 })
 
 // ── POST /projects ────────────────────────────────────────────────────────────

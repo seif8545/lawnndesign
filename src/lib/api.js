@@ -120,6 +120,9 @@ export const projects = {
   advance: (id, body)   => request(`/projects/${id}/advance`, { method: 'POST', body }),
   paymentSent: (id, body) => request(`/projects/${id}/payment-sent`, { method: 'POST', body }),
   review:  (id, body)   => request(`/projects/${id}/reviews`, { method: 'POST', body }),
+  // Shared project files (client ↔ talent, from hire through completion)
+  addFiles:   (id, body)        => request(`/projects/${id}/files`, { method: 'POST', body }),
+  deleteFile: (id, fileId)      => request(`/projects/${id}/files/${fileId}`, { method: 'DELETE' }),
 }
 
 // ── Feed ──────────────────────────────────────────────────────────────────────
