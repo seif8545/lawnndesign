@@ -19,6 +19,9 @@ export function safeUrl(value) {
   const v = String(value).trim()
   if (!v) return null
   if (v.startsWith('//')) return null
+  // Reject path-traversal segments anywhere — legit public URLs and storage
+  // paths (folder/userId/uuid.ext) never contain "..".
+  if (v.includes('..')) return null
   if (/^https?:\/\//i.test(v)) return v
   // Scheme-less storage path: must start with an alphanumeric/underscore and
   // contain only [A-Za-z0-9 _ - / .] — no colon, so no executable scheme.

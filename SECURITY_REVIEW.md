@@ -94,6 +94,43 @@ Fix: an unparseable `before` is now ignored rather than queried. (`conversations
 ### Hardening — targeted write rate limiting
 The global limiter (600 / 15 min) is generous for content creation. Added a `writeLimiter` (100 writes / 10 min, GET/HEAD exempt) on `/feed`, `/marketplace`, `/projects`, `/conversations`, and `/uploads`, plus the auth limiter on `/auth/change-password`. Browsing is unaffected; automated flooding of the create/sign endpoints is throttled. (`index.js`)
 
+## Findings and fixes (applied 2026-06-21 — headers & authz pass)
+
+### Hardening — Content-Security-Policy + security headers (the standing CSP rec)
+Added `public/_headers` (copied to the build root, where Cloudflare Pages reads it). Ships a CSP scoped to the app's real origins — `script-src 'self'` (no inline scripts; `'unsafe-eval'` deliberately omitted), `style-src 'self' 'unsafe-inline' fonts.googleapis.com` (React inline-style attributes + Google Fonts), `font-src` gstatic + `data:`, `img-src 'self' data: blob: *.supabase.co`, `connect-src 'self' onrender + wss + *.supabase.co` — plus `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, and HSTS. **Verify the deployed site after the first Pages deploy** — if the API or Supabase host moves, update `connect-src`/`img-src`. This shrinks the impact of any future stored-XSS (the JWT in `localStorage` can no longer be exfiltrated to an arbitrary origin).
+
+### LOW — Client could self-promote a project to VIP
+`POST /projects` set `vip: Boolean(vip)` from the body, and the board orders `vip desc`, so any client could pin their own project to the top.
+
+Fix: `vip` is only honoured for admins; a client's value is forced to `false`. (`projects.js`)
+
+### LOW — Non-admins could mint uploads into the admin `site` folder
+`POST /uploads/sign` accepted `kind: 'site'` (the admin-only homepage hero image) from any authenticated user.
+
+Fix: the `site` kind now requires the admin role. (`uploads.js`)
+
+## Findings and fixes (applied 2026-06-21 — hardening batch + tests)
+
+### Hardening — shorter JWT lifetime
+Default token TTL dropped from 7d to **24h** (`JWT_EXPIRES_IN` still overrides). Suspension/deletion/role-change already take effect immediately (per-request live-account read), so this only bounds the raw-token-theft window. Raise the env value if frequent re-logins become a problem before a refresh-token flow exists. (`auth.js`)
+
+### Hardening — upload safety
+`POST /uploads/sign` now **requires a valid `size`** and enforces the per-type cap (a client omitting `size` previously skipped the check). Financial payment-proof signed-read URLs now expire in **10 minutes** instead of 60. (`uploads.js`, `projects.js`) Note: with direct-to-Supabase signed uploads the backend never sees the bytes, so server-side magic-byte validation isn't possible — the real controls are the content-type allowlist, the Supabase bucket config (ensure the public bucket serves with the stored content-type and doesn't allow override), and the CSP.
+
+### Hardening — path traversal in `safeUrl`
+`safeUrl()` now rejects any value containing `..` (previously a scheme-less path like `a/../b` passed; only the payment-proof route blocked traversal separately). Covered by the new tests. (`sanitize.js`)
+
+### NEW — security-focused test suite (`backend/tests/`)
+Added **Vitest** (`npm test`) with `sanitize.test.js` (15 tests over `safeUrl`, `clampText`, `nonNegativeInt`, `normalizeEmail` — the XSS/traversal/integer guards) and `authz.test.js` (`requireRole` allow/deny). All 19 tests pass on Windows.
+
+_Dependency note:_ Vitest is pinned to **`^3.2.4`** (not 2.x). The initial 2.x pin pulled an old `vite`/`esbuild` chain that `npm audit` flagged (incl. 1 critical / 1 high); 3.2.x clears those, leaving only a single **low-severity, dev-server-only** esbuild advisory (`GHSA-g7r4-m6w7-qqqr`) that Vitest never triggers — it's transform-only, the esbuild dev server is never run. These are **devDependencies** (like the existing `prisma`), so with `NODE_ENV=production` on Render they aren't part of the production runtime. Do **not** `npm audit fix --force` (it would jump major versions). The backend's *runtime* deps remain clean.
+
+### Login/account enumeration — reviewed, documented (no code change)
+Login is already generic + timing-safe (dummy-hash compare). The residual leak is `POST /auth/register` returning 409 "account already exists", which reveals a registered email. It's rate-limited (20/15min). Fully hiding it requires an email-verification flow (return a neutral "check your email" and notify the existing owner out-of-band) — the app has no transactional email yet, and hiding "email taken" without it would break the signup UX. Recommend bundling this with email verification later rather than degrading signup now.
+
+### JWT → httpOnly cookie — plan written (no code change)
+See `docs/JWT_COOKIE_MIGRATION.md` for the full migration plan, the cross-origin (Cloudflare ↔ Render) cookie constraint, the CSRF mitigation, step-by-step rollout, and rollback. Key prerequisite: put the API on a same-site host (`api.lawnndesign.com`) first.
+
 ## Action items for you (need DB access / shell / hosting config)
 
 1. **Rotate any leaked credential.** The prior review flagged a `yomna@lawnndesign.com` credential committed in history (GitGuardian). Rotate/delete it in the DB; optionally scrub git history.

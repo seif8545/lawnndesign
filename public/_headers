@@ -1,0 +1,21 @@
+# Cloudflare Pages security headers for the Lawnn SPA.
+# Files in public/ are copied to the build root (dist/), where Cloudflare Pages
+# reads this file. Applies to every route.
+#
+# CSP notes (why each source is allowed):
+#   - script-src 'self'            Vite ships bundled JS; there are no inline scripts.
+#   - style-src   'unsafe-inline'  the app uses React inline style attributes
+#                                  (e.g. avatar background colors) + Google Fonts CSS.
+#   - font-src    fonts.gstatic    Google Fonts files; data: for inline glyphs.
+#   - img-src     *.supabase.co    public-bucket + signed image URLs; data:/blob: for
+#                                  the inline favicon and client-side upload previews.
+#   - connect-src onrender + ws    REST API + Socket.io websocket; *.supabase.co for
+#                                  the signed-upload PUTs.
+# If you move the API or storage host, update connect-src/img-src below.
+/*
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://lawnndesign.onrender.com wss://lawnndesign.onrender.com https://*.supabase.co; upgrade-insecure-requests
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains

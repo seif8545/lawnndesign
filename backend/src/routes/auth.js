@@ -21,7 +21,12 @@ function signToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    // Shorter default lifetime limits how long a stolen/leaked token is usable.
+    // (Suspension, deletion, and role changes already take effect immediately —
+    // requireAuth re-reads the live account every request — so this only bounds
+    // the raw-token-theft window.) Tune via JWT_EXPIRES_IN; raise it if more
+    // frequent re-logins are a problem before a refresh-token flow exists.
+    { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
   )
 }
 

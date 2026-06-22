@@ -53,11 +53,22 @@ router.post('/sign', requireAuth, async (req, res) => {
   if (!policy) {
     return res.status(400).json({ error: `kind must be one of: ${Object.keys(KINDS).join(', ')}` })
   }
+  // The 'site' kind backs the admin-only homepage hero image; don't let a
+  // non-admin mint uploads into that folder.
+  if (kind === 'site' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
   if (!contentType || !policy.types.includes(contentType)) {
     return res.status(400).json({ error: `contentType not allowed for kind=${kind}. Allowed: ${policy.types.join(', ')}` })
   }
+  // Require a declared size and enforce the cap. (The direct-to-Supabase PUT
+  // isn't size-bounded by the signed URL itself, so this is the gate we can
+  // enforce; a client omitting size used to skip the check entirely.)
   const maxBytes = maxSizeFor(contentType)
-  if (typeof size === 'number' && size > maxBytes) {
+  if (!Number.isFinite(size) || size <= 0) {
+    return res.status(400).json({ error: 'A valid file size is required' })
+  }
+  if (size > maxBytes) {
     return res.status(413).json({ error: `File too large. Max ${Math.round(maxBytes / 1024 / 1024)}MB for ${contentType}` })
   }
 

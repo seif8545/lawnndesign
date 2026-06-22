@@ -13,10 +13,13 @@ const router = Router()
 // never sees the client's transfer screenshots.
 async function withSignedProofs(project, viewer) {
   const canSee = viewer.role === 'admin' || project.clientId === viewer.id
+  // Financial screenshots get a short 10-minute read window — long enough to
+  // view in the UI, short enough that a leaked URL expires quickly.
+  const PROOF_TTL = 10 * 60
   return {
     ...project,
-    depositProofUrl:      canSee ? await signPrivateRead(project.depositProofUrl) : null,
-    finalPaymentProofUrl: canSee ? await signPrivateRead(project.finalPaymentProofUrl) : null,
+    depositProofUrl:      canSee ? await signPrivateRead(project.depositProofUrl, PROOF_TTL) : null,
+    finalPaymentProofUrl: canSee ? await signPrivateRead(project.finalPaymentProofUrl, PROOF_TTL) : null,
   }
 }
 
@@ -185,7 +188,9 @@ router.post('/', requireAuth, requireRole('client', 'admin'), async (req, res) =
       budget: budgetInt,
       budgetType: clampText(budgetType, 40) || 'Fixed',
       category: clampText(category, 80) || 'Visuals & Branding',
-      vip: Boolean(vip),
+      // VIP drives board ordering (vip desc), so only admins may set it — a
+      // client can't self-promote their own project to the top.
+      vip: req.user.role === 'admin' ? Boolean(vip) : false,
       status: req.user.role === 'admin' ? 'open' : 'pending',
       skills:      { create: (Array.isArray(skills) ? skills : []).slice(0, 30).map(skill => ({ skill: clampText(skill, 60) })).filter(s => s.skill) },
       attachments: { create: cleanAttachments },
