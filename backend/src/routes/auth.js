@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/requireAuth.js'
 import { normalizeEmail, validatePassword } from '../lib/sanitize.js'
 import { hashPassword, verifyPassword } from '../lib/password.js'
 import { cooldownMs, waitMessage } from '../lib/loginThrottle.js'
+import { turnstileEnabled, verifyTurnstile, CAPTCHA_AFTER_FAILURES } from '../lib/turnstile.js'
 import { notify } from '../lib/notify.js'
 import { cookieAuthEnabled, setSessionCookies, clearSessionCookies } from '../lib/cookies.js'
 
@@ -110,12 +111,24 @@ router.post('/login', async (req, res) => {
     return res.status(429).json({ error: waitMessage(user.lockedUntil - new Date()) })
   }
 
+  // CAPTCHA gate: once an account has accumulated a few failures, require a
+  // valid Turnstile token before we'll even check the password. Stops automated
+  // password-guessing. (No-op when Turnstile isn't configured.)
+  const captchaRequired = turnstileEnabled() && (user?.failedLoginAttempts || 0) >= CAPTCHA_AFTER_FAILURES
+  if (captchaRequired) {
+    const ok = await verifyTurnstile(req.body.turnstileToken, req.ip)
+    if (!ok) {
+      return res.status(400).json({ error: 'Please complete the verification challenge.', captchaRequired: true })
+    }
+  }
+
   // Always run a hash verification (against a dummy hash when the user doesn't
   // exist) so the response time doesn't reveal whether the email is registered.
   const { valid, needsRehash } = await verifyPassword(password, user?.password || DUMMY_HASH)
   if (!user || !valid) {
     // Record the failure on a real account and start/extend the cooldown once
     // the threshold is crossed. Best-effort — never let this throw the request.
+    let willNeedCaptcha = false
     if (user) {
       const failed = (user.failedLoginAttempts || 0) + 1
       const cd = cooldownMs(failed)
@@ -123,8 +136,10 @@ router.post('/login', async (req, res) => {
         where: { id: user.id },
         data: { failedLoginAttempts: failed, lockedUntil: cd > 0 ? new Date(Date.now() + cd) : null },
       }).catch(() => {})
+      willNeedCaptcha = turnstileEnabled() && failed >= CAPTCHA_AFTER_FAILURES
     }
-    return res.status(401).json({ error: 'Invalid email or password' })
+    // Signal the frontend to show the CAPTCHA on the next attempt.
+    return res.status(401).json({ error: 'Invalid email or password', captchaRequired: willNeedCaptcha })
   }
 
   if (user.suspended) {
@@ -262,9 +277,10 @@ router.post('/change-password', requireAuth, async (req, res) => {
   return res.json({ user: safeUser(user), token })
 })
 
-// Strip password before sending user data to the client
+// Strip the password hash and internal auth bookkeeping before sending user
+// data to the client — these never need to leave the server.
 function safeUser(user) {
-  const { password, ...rest } = user
+  const { password, failedLoginAttempts, lockedUntil, tokenVersion, ...rest } = user
   return rest
 }
 

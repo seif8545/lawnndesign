@@ -50,7 +50,12 @@ async function request(path, options = {}) {
         unauthorizedHandler?.()
       }
     }
-    throw new Error(data.error || `Request failed (${res.status})`)
+    // Attach status + full payload so callers can react to flags like
+    // `captchaRequired` (the message alone would lose them).
+    const err = new Error(data.error || `Request failed (${res.status})`)
+    err.status = res.status
+    err.data = data
+    throw err
   }
 
   return data
@@ -59,7 +64,7 @@ async function request(path, options = {}) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const auth = {
-  login:         (email, password)  => request('/auth/login',         { method: 'POST', body: { email, password } }),
+  login:         (email, password, turnstileToken) => request('/auth/login', { method: 'POST', body: { email, password, turnstileToken } }),
   register:      (fields)           => request('/auth/register',      { method: 'POST', body: fields }),
   acceptInvite:  (token, password)  => request('/auth/accept-invite', { method: 'POST', body: { token, password } }),
   // Bootstrap hydration call. Skips the global 401 handler so a stale stored

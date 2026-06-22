@@ -1,7 +1,52 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Check, X } from 'lucide-react';
 import { auth as authApi, setToken } from '../lib/api.js';
 import { Modal } from './ui.jsx';
+
+// Public Cloudflare Turnstile site key (safe to ship in client code).
+const TURNSTILE_SITE_KEY = '0x4AAAAAADpKWSeBZ7YzcUj7';
+
+// Renders a Cloudflare Turnstile CAPTCHA and reports the solved token via
+// onToken. Loads the Turnstile script on demand. Re-mount (via a changing key)
+// to get a fresh challenge after a failed attempt — tokens are single-use.
+function TurnstileWidget({ onToken }) {
+  const ref = useRef(null);
+  const widgetId = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const renderWidget = () => {
+      if (cancelled || !ref.current || !window.turnstile || widgetId.current !== null) return;
+      widgetId.current = window.turnstile.render(ref.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: token => onToken(token),
+        'expired-callback': () => onToken(''),
+        'error-callback': () => onToken(''),
+      });
+    };
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      let s = document.querySelector('script[data-turnstile]');
+      if (!s) {
+        s = document.createElement('script');
+        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+        s.async = true; s.defer = true; s.setAttribute('data-turnstile', '1');
+        document.head.appendChild(s);
+      }
+      s.addEventListener('load', renderWidget);
+    }
+    return () => {
+      cancelled = true;
+      if (widgetId.current !== null && window.turnstile) {
+        try { window.turnstile.remove(widgetId.current); } catch { /* noop */ }
+        widgetId.current = null;
+      }
+    };
+  }, [onToken]);
+
+  return <div ref={ref} className="mt-1" />;
+}
 
 // ─── PASSWORD REQUIREMENTS ───────────────────────────────────────────────────
 // Single source of truth for the password policy, mirroring the backend
@@ -51,21 +96,33 @@ export function LoginModal({ open, onClose, onLogin }) {
   const [role, setRole]         = useState('student');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaToken, setCaptchaToken]       = useState('');
+  const [captchaKey, setCaptchaKey]           = useState(0); // bump to remount → fresh challenge
 
-  const reset = () => { setEmail(''); setPassword(''); setName(''); setError(''); setLoading(false); };
+  const reset = () => {
+    setEmail(''); setPassword(''); setName(''); setError(''); setLoading(false);
+    setCaptchaRequired(false); setCaptchaToken('');
+  };
 
   const switchMode = m => { setMode(m); setError(''); };
 
   const handleLogin = async () => {
     setError(''); setLoading(true);
     try {
-      const { token, user } = await authApi.login(email, password);
+      const { token, user } = await authApi.login(email, password, captchaToken || undefined);
       setToken(token);
       onLogin(user);
       onClose();
       reset();
     } catch (e) {
       setError(e.message);
+      if (e.data?.captchaRequired) {
+        // Show (or refresh) the CAPTCHA — the just-used token is now spent.
+        setCaptchaRequired(true);
+        setCaptchaToken('');
+        setCaptchaKey(k => k + 1);
+      }
     } finally {
       setLoading(false);
     }
@@ -140,9 +197,17 @@ export function LoginModal({ open, onClose, onLogin }) {
           <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 leading-relaxed">{error}</p>
         )}
 
+        {/* CAPTCHA — appears only after repeated failed logins. */}
+        {mode === 'login' && captchaRequired && (
+          <div>
+            <p className="text-xs text-[#21326c]/60 mb-1.5">Please confirm you’re human to continue:</p>
+            <TurnstileWidget key={captchaKey} onToken={setCaptchaToken} />
+          </div>
+        )}
+
         <button
           onClick={mode === 'login' ? handleLogin : handleRegister}
-          disabled={!email || !password || (mode === 'register' && !name) || loading}
+          disabled={!email || !password || (mode === 'register' && !name) || loading || (mode === 'login' && captchaRequired && !captchaToken)}
           className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: '#ff9044' }}
         >

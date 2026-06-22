@@ -61,7 +61,7 @@ enum FeedPostStatus {
 model User {
   id          String   @id @default(cuid())
   email       String   @unique
-  password    String   // bcrypt hash
+  password    String   // Argon2id hash (legacy bcrypt hashes auto-upgrade on login)
   role        Role     @default(student)
   name        String
   initials    String   @db.VarChar(4)
