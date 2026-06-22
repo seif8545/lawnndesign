@@ -2,6 +2,16 @@ import { Server } from 'socket.io'
 import jwt from 'jsonwebtoken'
 import prisma from './lib/prisma.js'
 import { safeUrl } from './lib/sanitize.js'
+import { cookieAuthEnabled, readCookie, SESSION_COOKIE } from './lib/cookies.js'
+
+// The handshake token comes from auth.token (current client) or, when cookie
+// auth is enabled, the httpOnly session cookie sent on the WS upgrade request.
+function handshakeToken(socket) {
+  const fromAuth = socket.handshake.auth?.token
+  if (fromAuth) return fromAuth
+  if (cookieAuthEnabled()) return readCookie(socket.handshake, SESSION_COOKIE)
+  return null
+}
 
 export function initSocket(httpServer) {
   // Match the REST layer: support a comma-separated list of allowed origins
@@ -25,7 +35,7 @@ export function initSocket(httpServer) {
   // an unexpired 7-day token keeps full realtime chat access (sending messages,
   // observing rooms), defeating the instant-ban guarantee the HTTP layer gives.
   io.use(async (socket, next) => {
-    const token = socket.handshake.auth?.token
+    const token = handshakeToken(socket)
     if (!token) return next(new Error('Unauthorized'))
     let payload
     try {
@@ -38,9 +48,11 @@ export function initSocket(httpServer) {
     // from the (possibly stale) token claims.
     const user = await prisma.user.findUnique({
       where:  { id: payload.id },
-      select: { id: true, role: true, suspended: true },
+      select: { id: true, role: true, suspended: true, tokenVersion: true },
     }).catch(() => null)
     if (!user || user.suspended) return next(new Error('Account is no longer active'))
+    // Reject tokens invalidated by a password change (tokenVersion bump).
+    if ((payload.tv ?? 0) !== user.tokenVersion) return next(new Error('Session expired'))
     socket.user = { id: user.id, role: user.role }
     next()
   })

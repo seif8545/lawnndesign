@@ -1,6 +1,19 @@
 # Plan — Move JWT from localStorage to an httpOnly cookie
 
-_Status: PROPOSAL (no code changed). Owner decision required before implementation._
+_Status: BACKEND GROUNDWORK IMPLEMENTED (flag-gated, inert by default) · frontend cutover + DNS still pending._
+
+## What's already built (2026-06-21)
+
+The backend half now exists but is **gated behind `COOKIE_AUTH` (default off)** — with the flag off, nothing is issued or read and auth is byte-for-byte the current Bearer flow:
+
+- `backend/src/lib/cookies.js` — cookie read/write, CSRF token gen, constant-time double-submit check, env-tunable cookie attributes.
+- `requireAuth`/`optionalAuth` — header-first, cookie-fallback (cookie only when flag on); cookie-authenticated **writes require a matching `X-CSRF-Token`** (header-auth is exempt because a cross-site caller can't set a custom header).
+- `POST /auth/logout` — clears the cookies.
+- Login/register/accept-invite — also set the cookies when the flag is on (still return the body token during transition).
+- Sockets — read the session cookie from the WS handshake when the flag is on (`auth.token` stays primary).
+- Tests: `backend/tests/cookies.test.js` (cookie parse, CSRF, method classifier, flag default-off).
+
+**Still to do (the parts below):** the DNS/same-site move, the frontend cutover, then flipping `COOKIE_AUTH=on` and removing the header fallback.
 
 ## Why
 

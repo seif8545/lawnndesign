@@ -128,10 +128,41 @@ _Dependency note:_ Vitest is pinned to **`^3.2.4`** (not 2.x). The initial 2.x p
 ### Login/account enumeration — reviewed, documented (no code change)
 Login is already generic + timing-safe (dummy-hash compare). The residual leak is `POST /auth/register` returning 409 "account already exists", which reveals a registered email. It's rate-limited (20/15min). Fully hiding it requires an email-verification flow (return a neutral "check your email" and notify the existing owner out-of-band) — the app has no transactional email yet, and hiding "email taken" without it would break the signup UX. Recommend bundling this with email verification later rather than degrading signup now.
 
-### JWT → httpOnly cookie — plan written (no code change)
-See `docs/JWT_COOKIE_MIGRATION.md` for the full migration plan, the cross-origin (Cloudflare ↔ Render) cookie constraint, the CSRF mitigation, step-by-step rollout, and rollback. Key prerequisite: put the API on a same-site host (`api.lawnndesign.com`) first.
+### JWT → httpOnly cookie — backend groundwork implemented (flag-gated, OFF)
+The backend half of the migration is now in place but **gated behind `COOKIE_AUTH` (default off)** — with the flag off it's completely inert and auth is unchanged. New `lib/cookies.js` (cookie read/write, CSRF token, constant-time double-submit check), header-first/cookie-fallback in `requireAuth`/`optionalAuth` with CSRF enforced on cookie-authenticated writes, `POST /auth/logout`, cookie issuance on the auth endpoints, and a socket cookie fallback. Tested in `tests/cookies.test.js`. Remaining: the `api.lawnndesign.com` same-site move, the frontend cutover (`credentials: 'include'` + echo the CSRF token), then flip the flag and drop the header fallback. Full plan + new env vars in `docs/JWT_COOKIE_MIGRATION.md` and `backend/.env.example`.
+
+## Brute-force & session protections (applied 2026-06-21)
+
+Schema migration `add_login_throttle_and_token_version` added three columns to `users` (applied to the live DB + `schema.prisma`): `failedLoginAttempts`, `lockedUntil`, `tokenVersion`.
+
+- **Smart login throttle (not a hard lockout).** After 5 consecutive failed logins on an account, an **escalating, self-healing cooldown** kicks in (30s → 1m → 2m → 5m → 15m cap); a correct login clears it. Chosen over a fixed "N-strikes → locked" rule precisely because a hard per-account lockout is a denial-of-service lever (anyone could lock any account out by email). The cooldown only ever delays; it never permanently locks. Tracked per account; non-existent emails still get the constant-time dummy verify (no enumeration). Pure cooldown logic in `lib/loginThrottle.js`, tested in `tests/loginThrottle.test.js`.
+- **"New sign-in" notification.** A successful login creates an in-app notification ("New sign-in to your account… if this wasn't you, change your password") so a stolen password gets noticed. (Refinement option: only notify on a new device/IP once device tracking exists.)
+- **Sessions invalidated on password change.** JWTs now carry a `tv` (tokenVersion) claim, checked against the DB on every request (`requireAuth` + socket auth). Changing a password bumps `tokenVersion`, instantly invalidating every other outstanding token for that account; the session that performed the change is handed a fresh token so it stays logged in. Tokens issued before this change (`tv` absent → treated as 0) remain valid until expiry, so deploying doesn't mass-log-out everyone.
+
+**Still open — CAPTCHA after repeated failures (needs your action).** Recommended provider: **Cloudflare Turnstile** (free, privacy-friendly, and you're already on Cloudflare). It needs a site key + secret key from your Cloudflare dashboard before it can be wired in (frontend widget + backend verification, enforced only after a few failures). Flagging as the next step — get the keys and I'll implement it gated behind them.
+
+## Upgrade — Argon2id password hashing (applied 2026-06-21)
+
+Password hashing moved from bcrypt to **Argon2id** (OWASP's current first choice — memory-hard, so far more resistant to GPU/ASIC cracking). New `lib/password.js` wraps `@node-rs/argon2` (prebuilt binaries — installs cleanly on Windows dev and Render's Linux, no node-gyp): `hashPassword()` (Argon2id, 19 MiB / t=2 / p=1) and `verifyPassword()` which accepts **either** algorithm and returns a `needsRehash` flag. Login uses it and, on a correct password stored as a legacy bcrypt hash, **transparently re-hashes to Argon2id** (`upgrade-on-login`, best-effort) — so existing accounts migrate themselves with no forced resets. All set-password paths (register, accept-invite, change-password, admin create-client, bulk students, seed) now produce Argon2id hashes; bcryptjs is retained only to verify old hashes. The login timing-equaliser dummy hash is now Argon2 too. Covered by `tests/password-hash.test.js` (7 tests, run & passing, incl. the bcrypt→Argon2 upgrade path). **Run `npm install` in `backend/` before `npm test`** (pulls `@node-rs/argon2`). The three rotated accounts (below) currently hold bcrypt hashes and will auto-upgrade on their next login.
+
+## Findings and fixes (applied 2026-06-21 — seed credentials)
+
+### HIGH — Default seed passwords committed + auto-reset on re-run
+`backend/seed.js` hardcoded the starter-account passwords (`admin@lawnndesign.com` / `lawnn-admin`, and the client/student equivalents) directly in the repo, and used `upsert` with `update: { password }` — so anyone reading the repo knew the admin login, and **re-running the script reset those accounts back to the known weak passwords**, including in any populated DB.
+
+Fix: `seed.js` now (1) refuses to run unless `ALLOW_SEED=yes` and `NODE_ENV !== 'production'`, (2) never overwrites an existing account (create-only, so a real password can't be reset), and (3) uses per-account env passwords (`SEED_ADMIN_PASSWORD`, etc.) or generates a strong random one printed once — no weak passwords in the repo. **Operational action remains (below): rotate these in the live DB if they were ever the real passwords.**
+
+### Password policy — consistent rules everywhere (applied 2026-06-21)
+Password validation was inconsistent (just "≥ 8 chars" in some places, missing in others) and there was no max length. Added `validatePassword()` to `sanitize.js` — **8–72 chars, must mix lower + upper + number + special** — applied at register, accept-invite, change-password, and admin create-client. The 72-char cap matters because bcrypt only hashes the first 72 bytes (longer is silently truncated) and it blocks oversized input. Bulk-student temporary passwords now use a compliant `generatePassword()` instead of a short random token. Changing an existing password already requires the current password (first-login setup exempt). Covered by `tests/password.test.js`.
+
+**Frontend (built 2026-06-21):** a new `ChangePasswordModal` (reached from the avatar menu in the top nav) lets signed-in users change their password — current-password field, new + confirm, and a **live requirements checklist** (each rule red ✕ → green ✓ as you type) backed by a shared `passwordValid()`/`PasswordRequirements` in `auth.jsx`. The same checklist + client-side gate were added to the sign-up, accept-invite, and first-login forms so they mirror the backend rules. _Minor remaining:_ the Admin "create client" form (`AdminPage.jsx`) doesn't yet show the checklist — the backend still enforces it, so a weak entry is rejected with a clear message.
+
+### ✅ DONE — seed credentials rotated in production (2026-06-21)
+Verified via the Supabase connector that `admin@`, `client@`, and `student@lawnndesign.com` were **still using the committed `lawnn-*` passwords**. All three were rotated to strong owner-chosen passwords (bcrypt cost 12) and the old passwords confirmed dead. The committed seed passwords are now powerless.
 
 ## Action items for you (need DB access / shell / hosting config)
+
+0. ~~Rotate the seed passwords in production~~ — **DONE this session** (admin/client/student rotated + verified). If you scrub git history later, the old hashes/passwords in `seed.js` history are already invalidated.
 
 1. **Rotate any leaked credential.** The prior review flagged a `yomna@lawnndesign.com` credential committed in history (GitGuardian). Rotate/delete it in the DB; optionally scrub git history.
 2. **Run `npm audit`** in both the repo root and `backend/`, and update anything flagged. (Couldn't run in-sandbox.)

@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { BookOpen, Briefcase, Droplets, Grid, Home, Menu, MessageSquare, Package, Plus, Shield, ShoppingBag, UserCheck, Users } from 'lucide-react';
+import { BookOpen, Briefcase, ChevronDown, Droplets, Grid, Home, KeyRound, LogOut, Menu, MessageSquare, Package, Plus, Shield, ShoppingBag, UserCheck, Users } from 'lucide-react';
 import { Avatar, NotificationPanel } from './ui.jsx';
 
-export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, notifications = [], onMarkNotifRead, onMarkAllNotifRead }) {
+export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, onChangePassword, notifications = [], onMarkNotifRead, onMarkAllNotifRead }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const getNavItems = () => {
     // Students: find work, network, manage their own profile.
@@ -125,17 +126,38 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, not
                   onMarkRead={onMarkNotifRead}
                   onMarkAllRead={onMarkAllNotifRead}
                 />
-                <div className="flex items-center gap-2 pl-2 border-l border-[#21326c]/10">
-                  <Avatar initials={currentUser.initials} color={currentUser.avatarColor} size="sm" />
-                  <span className="hidden sm:inline text-sm font-medium text-[#21326c]">
-                    {currentUser.name.split(' ')[0]}
-                  </span>
+                <div className="relative pl-2 border-l border-[#21326c]/10">
+                  {profileOpen && <div className="fixed inset-0 z-30" onClick={() => setProfileOpen(false)} />}
                   <button
-                    onClick={onLogout}
-                    className="text-xs text-[#21326c]/50 hover:text-[#21326c] transition-colors px-2 py-1 rounded-lg hover:bg-[#21326c]/5"
+                    onClick={() => setProfileOpen(o => !o)}
+                    className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-[#21326c]/5 transition-colors"
                   >
-                    Sign out
+                    <Avatar initials={currentUser.initials} color={currentUser.avatarColor} size="sm" />
+                    <span className="hidden sm:inline text-sm font-medium text-[#21326c]">
+                      {currentUser.name.split(' ')[0]}
+                    </span>
+                    <ChevronDown size={14} className="hidden sm:inline text-[#21326c]/40" />
                   </button>
+                  {profileOpen && (
+                    <div className="absolute right-0 top-full mt-2 z-40 bg-white rounded-xl shadow-2xl border border-[#21326c]/10 w-52 py-1.5 overflow-hidden">
+                      <div className="px-4 py-2 border-b border-[#21326c]/8">
+                        <p className="text-sm font-semibold text-[#21326c] truncate">{currentUser.name}</p>
+                        <p className="text-xs text-[#21326c]/45 capitalize">{currentUser.role}</p>
+                      </div>
+                      <button
+                        onClick={() => { setProfileOpen(false); onChangePassword?.(); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
+                      >
+                        <KeyRound size={15} className="text-[#21326c]/60" /> Change password
+                      </button>
+                      <button
+                        onClick={() => { setProfileOpen(false); onLogout(); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
+                      >
+                        <LogOut size={15} className="text-[#21326c]/60" /> Sign out
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -1,17 +1,27 @@
 import { Router } from 'express'
-import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import { normalizeEmail } from '../lib/sanitize.js'
+import { normalizeEmail, validatePassword } from '../lib/sanitize.js'
+import { hashPassword, verifyPassword } from '../lib/password.js'
+import { cooldownMs, waitMessage } from '../lib/loginThrottle.js'
+import { notify } from '../lib/notify.js'
+import { cookieAuthEnabled, setSessionCookies, clearSessionCookies } from '../lib/cookies.js'
 
 const router = Router()
 
-// A throwaway bcrypt hash used to equalise login response time when the email
+// Issue the session + CSRF cookies when cookie auth is enabled. No-op otherwise,
+// so today's header/localStorage flow (which still receives the token in the
+// body) is unchanged.
+function issueSession(res, token) {
+  if (cookieAuthEnabled()) setSessionCookies(res, token)
+}
+
+// A throwaway Argon2 hash used to equalise login response time when the email
 // isn't found, so attackers can't distinguish "no such user" from "wrong
-// password" by timing. Generated once at startup.
-const DUMMY_HASH = bcrypt.hashSync('lawnn-timing-equalizer', 12)
+// password" by timing. Generated once at startup (top-level await).
+const DUMMY_HASH = await hashPassword('lawnn-timing-equalizer')
 
 function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex')
@@ -19,7 +29,7 @@ function hashToken(raw) {
 
 function signToken(user) {
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, tv: user.tokenVersion ?? 0 },
     process.env.JWT_SECRET,
     // Shorter default lifetime limits how long a stolen/leaked token is usable.
     // (Suspension, deletion, and role changes already take effect immediately —
@@ -44,16 +54,15 @@ router.post('/register', async (req, res) => {
   if (!['client'].includes(role)) {
     return res.status(400).json({ error: 'role must be client' })
   }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' })
-  }
+  const pwError = validatePassword(password)
+  if (pwError) return res.status(400).json({ error: pwError })
 
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) {
     return res.status(409).json({ error: 'An account with this email already exists' })
   }
 
-  const hash = await bcrypt.hash(password, 12)
+  const hash = await hashPassword(password)
   const initials = name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()
 
   const user = await prisma.user.create({
@@ -78,6 +87,7 @@ router.post('/register', async (req, res) => {
   })
 
   const token = signToken(user)
+  issueSession(res, token)
   return res.status(201).json({ token, user: safeUser(user) })
 })
 
@@ -94,10 +104,26 @@ router.post('/login', async (req, res) => {
     include: { profile: true },
   })
 
-  // Always run a bcrypt comparison (against a dummy hash when the user doesn't
+  // Throttle: if this account is in a cooldown from repeated failures, refuse
+  // early (don't even check the password). Self-clears once the timer passes.
+  if (user?.lockedUntil && user.lockedUntil > new Date()) {
+    return res.status(429).json({ error: waitMessage(user.lockedUntil - new Date()) })
+  }
+
+  // Always run a hash verification (against a dummy hash when the user doesn't
   // exist) so the response time doesn't reveal whether the email is registered.
-  const valid = await bcrypt.compare(password, user?.password || DUMMY_HASH)
+  const { valid, needsRehash } = await verifyPassword(password, user?.password || DUMMY_HASH)
   if (!user || !valid) {
+    // Record the failure on a real account and start/extend the cooldown once
+    // the threshold is crossed. Best-effort — never let this throw the request.
+    if (user) {
+      const failed = (user.failedLoginAttempts || 0) + 1
+      const cd = cooldownMs(failed)
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: failed, lockedUntil: cd > 0 ? new Date(Date.now() + cd) : null },
+      }).catch(() => {})
+    }
     return res.status(401).json({ error: 'Invalid email or password' })
   }
 
@@ -105,7 +131,32 @@ router.post('/login', async (req, res) => {
     return res.status(403).json({ error: 'Your account has been suspended. Please contact Lawnn support.' })
   }
 
+  // Successful login: clear any failure state, and transparently upgrade a
+  // legacy bcrypt hash to Argon2id now that we have the verified plaintext.
+  // One write covers both. Best-effort — never block a valid login.
+  if (needsRehash || user.failedLoginAttempts || user.lockedUntil) {
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          ...(needsRehash ? { password: await hashPassword(password) } : {}),
+        },
+      })
+    } catch { /* non-fatal */ }
+  }
+
+  // Tell the user a sign-in happened, so a stolen password gets noticed.
+  notify(user.id, {
+    type: 'check',
+    title: 'New sign-in to your account',
+    body: `Signed in on ${new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}. If this wasn’t you, change your password.`,
+    link: 'profile',
+  })
+
   const token = signToken(user)
+  issueSession(res, token)
   return res.json({ token, user: safeUser(user) })
 })
 
@@ -118,9 +169,8 @@ router.post('/accept-invite', async (req, res) => {
   if (!token || !password) {
     return res.status(400).json({ error: 'token and password are required' })
   }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' })
-  }
+  const pwError = validatePassword(password)
+  if (pwError) return res.status(400).json({ error: pwError })
 
   const invite = await prisma.studentInvite.findUnique({
     where: { tokenHash: hashToken(token) },
@@ -131,7 +181,7 @@ router.post('/accept-invite', async (req, res) => {
     return res.status(400).json({ error: 'This setup link is invalid or has expired.' })
   }
 
-  const hash = await bcrypt.hash(password, 12)
+  const hash = await hashPassword(password)
 
   const [, , user] = await prisma.$transaction([
     prisma.user.update({ where: { id: invite.userId }, data: { password: hash } }),
@@ -140,7 +190,16 @@ router.post('/accept-invite', async (req, res) => {
   ])
 
   const jwtToken = signToken(user)
+  issueSession(res, jwtToken)
   return res.json({ token: jwtToken, user: safeUser(user) })
+})
+
+// ── POST /auth/logout ─────────────────────────────────────────────────────────
+// Clears the session cookies. Harmless (and a no-op for the body) when cookie
+// auth is off; the header/localStorage client just drops its own token.
+router.post('/logout', (req, res) => {
+  if (cookieAuthEnabled()) clearSessionCookies(res)
+  return res.json({ ok: true })
 })
 
 // ── GET /auth/me ──────────────────────────────────────────────────────────────
@@ -160,9 +219,8 @@ router.get('/me', requireAuth, async (req, res) => {
 // students added by email.
 router.post('/change-password', requireAuth, async (req, res) => {
   const { newPassword, name, currentPassword } = req.body
-  if (!newPassword || newPassword.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' })
-  }
+  const pwError = validatePassword(newPassword)
+  if (pwError) return res.status(400).json({ error: pwError })
 
   // For an established account, require the current password — so a leaked or
   // borrowed token can't silently change the password (and lock the owner out)
@@ -178,12 +236,14 @@ router.post('/change-password', requireAuth, async (req, res) => {
     if (!currentPassword) {
       return res.status(400).json({ error: 'Your current password is required' })
     }
-    const ok = await bcrypt.compare(currentPassword, current.password)
-    if (!ok) return res.status(401).json({ error: 'Current password is incorrect' })
+    const { valid } = await verifyPassword(currentPassword, current.password)
+    if (!valid) return res.status(401).json({ error: 'Current password is incorrect' })
   }
 
-  const hash = await bcrypt.hash(newPassword, 12)
-  const data = { password: hash, mustChangePassword: false }
+  const hash = await hashPassword(newPassword)
+  // Bump tokenVersion so every OTHER existing session for this account is
+  // invalidated (a changed password should log out anyone else holding a token).
+  const data = { password: hash, mustChangePassword: false, tokenVersion: { increment: 1 } }
   if (typeof name === 'string' && name.trim()) {
     const clean = name.trim()
     data.name = clean
@@ -195,7 +255,11 @@ router.post('/change-password', requireAuth, async (req, res) => {
     data,
     include: { profile: true },
   })
-  return res.json({ user: safeUser(user) })
+  // Re-issue a token for THIS session against the new tokenVersion, so the user
+  // who just changed their password stays logged in while others are kicked.
+  const token = signToken(user)
+  issueSession(res, token)
+  return res.json({ user: safeUser(user), token })
 })
 
 // Strip password before sending user data to the client

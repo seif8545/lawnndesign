@@ -1,6 +1,47 @@
 import { useState } from 'react';
+import { Check, X } from 'lucide-react';
 import { auth as authApi, setToken } from '../lib/api.js';
 import { Modal } from './ui.jsx';
+
+// ─── PASSWORD REQUIREMENTS ───────────────────────────────────────────────────
+// Single source of truth for the password policy, mirroring the backend
+// (validatePassword in sanitize.js): 8–72 chars + lower + upper + number +
+// special. Used for the live checklist and the client-side gate on every form
+// that sets a password.
+const PASSWORD_RULES = [
+  { id: 'len',   label: '8–72 characters',          test: p => p.length >= 8 && p.length <= 72 },
+  { id: 'lower', label: 'A lowercase letter (a–z)',  test: p => /[a-z]/.test(p) },
+  { id: 'upper', label: 'An uppercase letter (A–Z)', test: p => /[A-Z]/.test(p) },
+  { id: 'num',   label: 'A number (0–9)',            test: p => /[0-9]/.test(p) },
+  { id: 'spec',  label: 'A special character (!@#…)', test: p => /[^A-Za-z0-9]/.test(p) },
+];
+
+export function passwordValid(p) {
+  return typeof p === 'string' && PASSWORD_RULES.every(r => r.test(p));
+}
+
+// Live checklist: each rule starts red with an ✕ and flips to green with a ✓ as
+// the typed password satisfies it.
+export function PasswordRequirements({ password }) {
+  return (
+    <ul className="space-y-1.5 mt-1">
+      {PASSWORD_RULES.map(rule => {
+        const ok = rule.test(password || '');
+        return (
+          <li key={rule.id} className="flex items-center gap-2 text-xs transition-colors">
+            <span
+              className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
+              style={ok ? { background: '#dcfce7', color: '#16a34a' } : { background: '#fee2e2', color: '#dc2626' }}
+            >
+              {ok ? <Check size={11} strokeWidth={3} /> : <X size={11} strokeWidth={3} />}
+            </span>
+            <span className={ok ? 'text-green-700' : 'text-[#21326c]/55'}>{rule.label}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 export function LoginModal({ open, onClose, onLogin }) {
   const [mode, setMode]         = useState('login'); // 'login' | 'register'
@@ -31,7 +72,7 @@ export function LoginModal({ open, onClose, onLogin }) {
   };
 
   const handleRegister = async () => {
-    if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (!passwordValid(password)) { setError('Please choose a password that meets all the requirements.'); return; }
     setError(''); setLoading(true);
     try {
       const { token, user } = await authApi.register({ email, password, name, role: 'client' });
@@ -89,9 +130,10 @@ export function LoginModal({ open, onClose, onLogin }) {
         {/* Password */}
         <div>
           <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Password</label>
-          <input type="password" placeholder={mode === 'register' ? 'At least 8 characters' : 'Enter your password'} value={password}
+          <input type="password" placeholder={mode === 'register' ? 'Create a password' : 'Enter your password'} value={password}
             onChange={e => { setPassword(e.target.value); setError(''); }} onKeyDown={handleKey}
             className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+          {mode === 'register' && <PasswordRequirements password={password} />}
         </div>
 
         {error && (
@@ -130,7 +172,7 @@ export function AcceptInviteModal({ token, onAccept, onClose }) {
   const [done, setDone]         = useState(false);
 
   const handleSubmit = async () => {
-    if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (!passwordValid(password)) { setError('Please choose a password that meets all the requirements.'); return; }
     if (password !== confirm) { setError('Passwords do not match'); return; }
     setError(''); setLoading(true);
     try {
@@ -159,9 +201,10 @@ export function AcceptInviteModal({ token, onAccept, onClose }) {
             </p>
             <div>
               <label className="block text-sm font-semibold text-[#21326c] mb-1.5">New Password</label>
-              <input type="password" placeholder="At least 8 characters" value={password}
+              <input type="password" placeholder="Choose a password" value={password}
                 onChange={e => { setPassword(e.target.value); setError(''); }}
                 className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+              <PasswordRequirements password={password} />
             </div>
             <div>
               <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Confirm Password</label>
@@ -201,11 +244,12 @@ export function FirstLoginSetup({ user, onDone }) {
 
   const submit = async () => {
     if (!name.trim()) { setError('Please enter your name.'); return; }
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (!passwordValid(password)) { setError('Please choose a password that meets all the requirements.'); return; }
     if (password !== confirm) { setError('Passwords do not match.'); return; }
     setError(''); setLoading(true);
     try {
-      const { user: updated } = await authApi.changePassword({ name: name.trim(), newPassword: password });
+      const { user: updated, token } = await authApi.changePassword({ name: name.trim(), newPassword: password });
+      if (token) setToken(token); // keep this session valid after the tokenVersion bump
       onDone(updated);
     } catch (e) {
       setError(e.message);
@@ -228,9 +272,10 @@ export function FirstLoginSetup({ user, onDone }) {
         </div>
         <div>
           <label className="block text-sm font-semibold text-[#21326c] mb-1.5">New Password</label>
-          <input type="password" placeholder="At least 8 characters" value={password}
+          <input type="password" placeholder="Choose a password" value={password}
             onChange={e => { setPassword(e.target.value); setError(''); }}
             className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+          <PasswordRequirements password={password} />
         </div>
         <div>
           <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Confirm Password</label>
@@ -250,6 +295,102 @@ export function FirstLoginSetup({ user, onDone }) {
         >
           {loading ? 'Saving…' : 'Save & Continue'}
         </button>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── CHANGE PASSWORD (logged-in users) ───────────────────────────────────────
+// Lets a signed-in user change their password. Requires the current password
+// (the backend enforces this for established accounts) and shows the live
+// requirement checklist for the new one.
+
+export function ChangePasswordModal({ open, onClose, onChanged }) {
+  const [currentPassword, setCurrent] = useState('');
+  const [password, setPassword]       = useState('');
+  const [confirm, setConfirm]         = useState('');
+  const [error, setError]             = useState('');
+  const [loading, setLoading]         = useState(false);
+  const [done, setDone]               = useState(false);
+
+  const reset = () => { setCurrent(''); setPassword(''); setConfirm(''); setError(''); setLoading(false); setDone(false); };
+  const close = () => { reset(); onClose(); };
+
+  const submit = async () => {
+    if (!currentPassword)            { setError('Enter your current password.'); return; }
+    if (!passwordValid(password))    { setError('Your new password doesn’t meet the requirements below.'); return; }
+    if (password !== confirm)        { setError('The new passwords don’t match.'); return; }
+    if (password === currentPassword){ setError('Your new password must be different from your current one.'); return; }
+    setError(''); setLoading(true);
+    try {
+      const { user, token } = await authApi.changePassword({ currentPassword, newPassword: password });
+      if (token) setToken(token); // keep this session valid after the tokenVersion bump
+      setDone(true);
+      onChanged?.(user);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputCls = 'w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40';
+
+  return (
+    <Modal open={open} onClose={close} title="Change Password">
+      <div className="space-y-4">
+        {done ? (
+          <>
+            <div className="rounded-xl p-4 text-sm text-[#21326c] border border-green-200 flex items-center gap-2" style={{ background: '#dcfce7' }}>
+              <Check size={16} className="text-green-600 flex-shrink-0" />
+              Your password has been changed.
+            </div>
+            <button
+              onClick={close}
+              className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90"
+              style={{ background: '#21326c' }}
+            >
+              Done
+            </button>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Current Password</label>
+              <input type="password" autoComplete="current-password" placeholder="Enter your current password" value={currentPassword}
+                onChange={e => { setCurrent(e.target.value); setError(''); }}
+                className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">New Password</label>
+              <input type="password" autoComplete="new-password" placeholder="Choose a new password" value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                className={inputCls} />
+              <PasswordRequirements password={password} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Confirm New Password</label>
+              <input type="password" autoComplete="new-password" placeholder="Re-enter your new password" value={confirm}
+                onChange={e => { setConfirm(e.target.value); setError(''); }}
+                onKeyDown={e => e.key === 'Enter' && submit()}
+                className={inputCls} />
+              {confirm && confirm !== password && (
+                <p className="text-xs text-red-600 mt-1.5">Passwords don’t match yet.</p>
+              )}
+            </div>
+            {error && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 leading-relaxed">{error}</p>
+            )}
+            <button
+              onClick={submit}
+              disabled={loading || !currentPassword || !passwordValid(password) || password !== confirm}
+              className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: '#ff9044' }}
+            >
+              {loading ? 'Updating…' : 'Update Password'}
+            </button>
+          </>
+        )}
       </div>
     </Modal>
   );

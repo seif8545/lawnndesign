@@ -1,9 +1,9 @@
 import { Router } from 'express'
-import bcrypt from 'bcryptjs'
+import { hashPassword } from '../lib/password.js'
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
-import { normalizeEmail } from '../lib/sanitize.js'
+import { normalizeEmail, validatePassword, generatePassword } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -43,7 +43,7 @@ router.post('/students', async (req, res) => {
   // Placeholder password — unguessable random bytes the student never uses.
   // Replaced when they accept the invite.
   const placeholder      = crypto.randomBytes(48).toString('hex')
-  const placeholderHash  = await bcrypt.hash(placeholder, 12)
+  const placeholderHash  = await hashPassword(placeholder)
   const rawToken         = crypto.randomBytes(32).toString('hex')
   const tokenHash        = hashToken(rawToken)
   const initials         = name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()
@@ -107,8 +107,8 @@ router.post('/students/bulk', async (req, res) => {
       const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } })
       if (existing) { skipped.push({ email, reason: 'already exists' }); continue }
 
-      const password = crypto.randomBytes(6).toString('base64url') // ~8 chars, temporary
-      const hash     = await bcrypt.hash(password, 12)
+      const password = generatePassword() // strong, policy-compliant temporary password
+      const hash     = await hashPassword(password)
       // Placeholder name from the email's local part; the student fixes it at setup.
       const local    = email.split('@')[0].replace(/[._-]+/g, ' ').trim()
       const name     = local ? local.replace(/\b\w/g, c => c.toUpperCase()) : 'New Student'
@@ -198,9 +198,8 @@ router.post('/clients', async (req, res) => {
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'name, email and password are required' })
   }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters' })
-  }
+  const pwError = validatePassword(password)
+  if (pwError) return res.status(400).json({ error: pwError })
 
   const existing = await prisma.user.findUnique({ where: { email } })
   if (existing) {
@@ -208,7 +207,7 @@ router.post('/clients', async (req, res) => {
   }
 
   const initials = name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()
-  const hash     = await bcrypt.hash(password, 12)
+  const hash     = await hashPassword(password)
   const user = await prisma.user.create({
     data: { email, password: hash, name, role: 'client', initials },
   })

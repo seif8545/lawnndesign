@@ -1,5 +1,23 @@
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
+import {
+  cookieAuthEnabled, readCookie, SESSION_COOKIE, csrfOk, isMutating,
+} from '../lib/cookies.js'
+
+// Resolve the raw JWT and how it arrived. The Authorization header is always
+// primary: a cross-site attacker can't set a custom header (CORS preflight
+// blocks it), so header-auth needs no CSRF check. The cookie is only consulted
+// when COOKIE_AUTH is on, and cookie-auth on a mutating request requires a
+// matching CSRF token. Returns { token, via } or { token: null }.
+function resolveToken(req) {
+  const header = req.headers.authorization
+  if (header?.startsWith('Bearer ')) return { token: header.slice(7), via: 'header' }
+  if (cookieAuthEnabled()) {
+    const cookie = readCookie(req, SESSION_COOKIE)
+    if (cookie) return { token: cookie, via: 'cookie' }
+  }
+  return { token: null, via: null }
+}
 
 // Look up the live account behind a verified token. Returns the user (id, email,
 // role) if it still exists and isn't suspended, otherwise null. This is what
@@ -11,9 +29,12 @@ async function liveUser(payload) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
-      select: { id: true, email: true, role: true, suspended: true },
+      select: { id: true, email: true, role: true, suspended: true, tokenVersion: true },
     })
     if (!user || user.suspended) return null
+    // Reject tokens minted before the account's tokenVersion was bumped (e.g. by
+    // a password change) — that's how a password change logs out other sessions.
+    if ((payload.tv ?? 0) !== user.tokenVersion) return null
     return { id: user.id, email: user.email, role: user.role }
   } catch {
     return null
@@ -25,14 +46,20 @@ async function liveUser(payload) {
  * AND the account still exists and is active. Returns 401 otherwise.
  */
 export async function requireAuth(req, res, next) {
-  const header = req.headers.authorization
-  if (!header?.startsWith('Bearer ')) {
+  const { token, via } = resolveToken(req)
+  if (!token) {
     return res.status(401).json({ error: 'Missing or invalid Authorization header' })
+  }
+
+  // Cookie-authenticated writes must carry a valid double-submit CSRF token.
+  // (Header-authenticated requests are exempt — see resolveToken.)
+  if (via === 'cookie' && isMutating(req.method) && !csrfOk(req)) {
+    return res.status(403).json({ error: 'Invalid or missing CSRF token' })
   }
 
   let payload
   try {
-    payload = jwt.verify(header.slice(7), process.env.JWT_SECRET)
+    payload = jwt.verify(token, process.env.JWT_SECRET)
   } catch {
     return res.status(401).json({ error: 'Token expired or invalid' })
   }
@@ -49,10 +76,11 @@ export async function requireAuth(req, res, next) {
  * requests. Suspended/deleted accounts are treated as anonymous.
  */
 export async function optionalAuth(req, _res, next) {
-  const header = req.headers.authorization
-  if (!header?.startsWith('Bearer ')) return next()
+  // optionalAuth is used on read (GET) routes, so no CSRF check is needed here.
+  const { token } = resolveToken(req)
+  if (!token) return next()
   try {
-    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET)
+    const payload = jwt.verify(token, process.env.JWT_SECRET)
     const user = await liveUser(payload)
     if (user) req.user = user
   } catch {

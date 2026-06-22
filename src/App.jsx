@@ -3,7 +3,7 @@ import { auth as authApi, clearToken, feed as feedApi, marketplace as marketplac
 import { toast } from './lib/toast.js';
 import { connectSocket, disconnectSocket } from './lib/socket.js';
 import { TopNav } from './components/TopNav.jsx';
-import { AcceptInviteModal, FirstLoginSetup, LoginModal } from './components/auth.jsx';
+import { AcceptInviteModal, ChangePasswordModal, FirstLoginSetup, LoginModal } from './components/auth.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import { Toaster } from './components/Toaster.jsx';
 import { mapApiFeedPost, mapApiJob, mapApiListing, mapApiNews, mapApiProfile, mapApiProject, mapNotification, talentToApiBody } from './lib/mappers.js';
@@ -27,6 +27,7 @@ export default function App() {
   const [selectedTalent, setSelectedTalent] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   // Tracks if the student closed onboarding this session, so the completeness
   // effect doesn't immediately reopen it after they dismiss without finishing.
@@ -323,6 +324,7 @@ export default function App() {
         currentUser={currentUser}
         onLoginClick={() => setShowLogin(true)}
         onLogout={handleLogout}
+        onChangePassword={() => setShowChangePassword(true)}
         notifications={notifications}
         onMarkNotifRead={markNotifRead}
         onMarkAllNotifRead={markAllNotifsRead}
@@ -333,6 +335,14 @@ export default function App() {
         onClose={() => setShowLogin(false)}
         onLogin={user => { handleLogin(user); setShowLogin(false); }}
       />
+
+      {currentUser && (
+        <ChangePasswordModal
+          open={showChangePassword}
+          onClose={() => setShowChangePassword(false)}
+          onChanged={updated => updated && setCurrentUser(updated)}
+        />
+      )}
 
       {inviteToken && (
         <AcceptInviteModal
