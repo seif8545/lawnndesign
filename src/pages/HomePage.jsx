@@ -1,9 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowRight, Building2, CheckCircle, ChevronRight, GraduationCap, Grid, Info, Palette, Pen, Sparkles } from 'lucide-react';
 import { AvailabilityBadge, Avatar, CategoryPill, StarRating, VerifiedBadge } from '../components/ui.jsx';
 
-export function HomePage({ setView, setSelectedTalent, talents, heroImageUrl }) {
+export function HomePage({ setView, setSelectedTalent, talents, heroImageUrl, heroImages = [] }) {
   const [activeCategory, setActiveCategory] = useState('all');
+
+  // Hero carousel: rotate through the admin-curated images every 5s.
+  const [heroIndex, setHeroIndex] = useState(0);
+  useEffect(() => {
+    if (heroImages.length < 2) return;
+    const t = setInterval(() => setHeroIndex(i => (i + 1) % heroImages.length), 5000);
+    return () => clearInterval(t);
+  }, [heroImages.length]);
 
   const categories = [
     { id: 'all', label: 'All Categories', icon: Sparkles },
@@ -31,6 +39,7 @@ export function HomePage({ setView, setSelectedTalent, talents, heroImageUrl }) 
   // otherwise it's pulled from a real talent's portfolio; otherwise a
   // typographic gallery card is shown.
   const heroFeature = (() => {
+    if (heroImages.length) return { imageUrl: heroImages[heroIndex % heroImages.length], admin: true, carousel: true };
     if (heroImageUrl) return { imageUrl: heroImageUrl, admin: true };
     const t = talents.find(t => t.portfolio?.some(p => p.imageUrl));
     if (!t) return null;
@@ -84,7 +93,18 @@ export function HomePage({ setView, setSelectedTalent, talents, heroImageUrl }) 
             <figure className="w-full max-w-sm">
               <div className="relative aspect-[4/5] gallery-frame bg-[#f3efe4] overflow-hidden">
                 {heroFeature?.imageUrl ? (
-                  <div className="absolute inset-0" style={{ backgroundImage: `url(${heroFeature.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                  <>
+                    <div key={heroFeature.imageUrl} className="absolute inset-0 animate-fade-in" style={{ backgroundImage: `url(${heroFeature.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                    {heroFeature.carousel && heroImages.length > 1 && (
+                      <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10">
+                        {heroImages.map((_, i) => (
+                          <button key={i} onClick={() => setHeroIndex(i)} aria-label={`Slide ${i + 1}`}
+                            className="w-2 h-2 rounded-full transition-all"
+                            style={{ background: i === (heroIndex % heroImages.length) ? '#fff' : 'rgba(255,255,255,0.55)' }} />
+                        ))}
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <>
                     <div className="absolute inset-0" style={{ background: 'linear-gradient(150deg, #fffefb 0%, #f3efe4 45%, #e9e2d2 100%)' }} />

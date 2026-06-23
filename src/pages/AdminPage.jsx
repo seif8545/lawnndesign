@@ -615,7 +615,7 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
       {adminTab === 'content' && (
         <>
           {/* Homepage feature image control */}
-          <HomepageImageCard current={siteSettings?.homeHeroImageUrl} refresh={refreshSettings} />
+          <HomepageImageCard images={(() => { try { return JSON.parse(siteSettings?.homeHeroImages || '[]'); } catch { return []; } })()} refresh={refreshSettings} />
 
           {/* Stats row */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
@@ -729,28 +729,27 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
 // ─── HOMEPAGE FEATURE IMAGE (admin) ──────────────────────────────────────────
 // Upload/replace/clear the image shown in the framed panel next to the homepage
 // headline. Empty = fall back to auto-pulling a student portfolio image.
-function HomepageImageCard({ current, refresh }) {
+function HomepageImageCard({ images = [], refresh }) {
   const [busy, setBusy] = useState(false);
 
-  const onPick = async (file) => {
+  const addImage = async (file) => {
     if (!file) return;
     setBusy(true);
     try {
       const r = await uploadFile(file, 'site');
-      await settingsApi.update({ homeHeroImageUrl: r.url });
+      await settingsApi.update({ homeHeroImages: [...images, r.url] });
       await refresh?.();
-      toast.success('Homepage image updated.');
-    } catch (e) { toast.error(`Couldn't update: ${e.message}`); }
+      toast.success('Image added to the homepage carousel.');
+    } catch (e) { toast.error(`Couldn't add: ${e.message}`); }
     finally { setBusy(false); }
   };
 
-  const clear = async () => {
+  const removeImage = async (url) => {
     setBusy(true);
     try {
-      await settingsApi.update({ homeHeroImageUrl: '' });
+      await settingsApi.update({ homeHeroImages: images.filter(u => u !== url) });
       await refresh?.();
-      toast.success('Reverted to the automatic image.');
-    } catch (e) { toast.error(`Couldn't clear: ${e.message}`); }
+    } catch (e) { toast.error(`Couldn't remove: ${e.message}`); }
     finally { setBusy(false); }
   };
 
@@ -758,24 +757,23 @@ function HomepageImageCard({ current, refresh }) {
     <div className="bg-white rounded-2xl border border-[#21326c]/10 p-5 mb-6">
       <div className="flex items-center gap-2 mb-1">
         <ImageIcon size={16} className="text-[#21326c]" />
-        <h3 className="font-semibold text-[#21326c]">Homepage feature image</h3>
+        <h3 className="font-semibold text-[#21326c]">Homepage hero carousel</h3>
       </div>
-      <p className="text-xs text-[#21326c]/60 mb-3">Shown in the framed panel next to the homepage headline. Leave empty to auto-pick from student portfolios.</p>
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="w-28 h-36 rounded-xl overflow-hidden border border-[#21326c]/10 bg-[#21326c]/5 flex items-center justify-center flex-shrink-0">
-          {current ? <img src={current} alt="Homepage feature" className="w-full h-full object-cover" /> : <ImageIcon size={22} className="text-[#21326c]/25" />}
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-all" style={{ background: '#ff9044' }}>
-            <Upload size={14} /> {busy ? 'Working…' : (current ? 'Replace image' : 'Upload image')}
-            <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={e => onPick(e.target.files?.[0])} />
-          </label>
-          {current && (
-            <button onClick={clear} disabled={busy} className="text-xs font-semibold text-[#21326c]/60 hover:text-red-500 transition-colors text-left">
-              Remove (use automatic)
+      <p className="text-xs text-[#21326c]/60 mb-3">These images rotate in the framed panel next to the homepage headline. Add a few. Leave empty to auto-pick from student portfolios.</p>
+      <div className="flex items-center gap-3 flex-wrap">
+        {images.map(url => (
+          <div key={url} className="relative w-24 h-32 rounded-xl overflow-hidden border border-[#21326c]/10">
+            <img src={url} alt="Hero" className="w-full h-full object-cover" />
+            <button onClick={() => removeImage(url)} disabled={busy} title="Remove"
+              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-[#21326c] hover:text-red-500 shadow disabled:opacity-50">
+              <Trash2 size={12} />
             </button>
-          )}
-        </div>
+          </div>
+        ))}
+        <label className="cursor-pointer w-24 h-32 rounded-xl border-2 border-dashed border-[#21326c]/25 flex flex-col items-center justify-center gap-1 text-[#21326c]/60 hover:bg-[#21326c]/5 transition-colors text-xs font-semibold">
+          <Upload size={16} /> {busy ? '…' : 'Add'}
+          <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={e => addImage(e.target.files?.[0])} />
+        </label>
       </div>
     </div>
   );

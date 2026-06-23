@@ -1,9 +1,20 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
+import { signPrivateRead } from './uploads.js'
 
 const router = Router()
 router.use(requireAuth)
+
+// Message attachments are stored as private-bucket paths; swap them for a
+// short-lived signed URL before sending to the client. Already-absolute URLs
+// (legacy/public) pass through untouched.
+async function signMessageFile(msg) {
+  if (msg?.fileUrl && !/^https?:\/\//i.test(msg.fileUrl)) {
+    return { ...msg, fileUrl: await signPrivateRead(msg.fileUrl) }
+  }
+  return msg
+}
 
 // Shared participant selects for conversation includes.
 const userSelect = { select: { id: true, name: true, initials: true, avatarColor: true, profile: { select: { avatar: true } } } }
@@ -53,7 +64,9 @@ router.get('/', async (req, res) => {
             },
           })
         : 0
-      return { ...conv, unreadCount }
+      // Sign the last-message preview's attachment, if any.
+      const messages = conv.messages?.length ? [await signMessageFile(conv.messages[0])] : conv.messages
+      return { ...conv, messages, unreadCount }
     })
   )
 
@@ -180,8 +193,9 @@ router.get('/:id/messages', async (req, res) => {
     },
   })
 
-  // Return in chronological order (oldest first)
-  res.json(messages.reverse())
+  // Sign any private attachments, then return chronologically (oldest first).
+  const signed = await Promise.all(messages.reverse().map(signMessageFile))
+  res.json(signed)
 })
 
 export default router

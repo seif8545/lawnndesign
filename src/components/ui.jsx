@@ -3,25 +3,28 @@ import { createPortal } from 'react-dom';
 import { Bell, Briefcase, CheckCircle, DollarSign, File, MessageSquare, Plus, Search, Star, TrendingUp, X } from 'lucide-react';
 import { AVAILABILITY, SKILL_LIBRARY } from '../lib/constants.js';
 
-export function SkillPicker({ currentTags, onAdd }) {
+// Search-first skill autocomplete. Type anything — suggestions from the library
+// appear as you type, and you can always add your own custom skill (free text).
+// No browsing a fixed list.
+export function SkillPicker({ currentTags = [], onAdd }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
   const q = query.trim().toLowerCase();
   const allSkills = SKILL_LIBRARY.flatMap(c => c.skills);
 
-  const filtered = q
-    ? [{ category: 'Results', skills: allSkills.filter(s => s.toLowerCase().includes(q)) }]
-    : SKILL_LIBRARY;
+  // Autocomplete matches when typing; a handful of starters when empty.
+  const suggestions = (q ? allSkills.filter(s => s.toLowerCase().includes(q)) : allSkills)
+    .filter(s => !currentTags.some(t => t.toLowerCase() === s.toLowerCase()))
+    .slice(0, q ? 12 : 8);
 
-  const hasExactMatch = allSkills.some(s => s.toLowerCase() === query.trim().toLowerCase());
-  const canAddCustom = query.trim().length > 0 && !hasExactMatch && !currentTags.includes(query.trim());
+  const exists = currentTags.some(t => t.toLowerCase() === q) || allSkills.some(s => s.toLowerCase() === q);
+  const canAddCustom = q.length > 0 && !exists;
 
-  const handleAdd = skill => {
-    if (!currentTags.includes(skill)) onAdd(skill);
-  };
-  const handleCustom = () => {
-    if (canAddCustom) { onAdd(query.trim()); setQuery(''); }
+  const add = skill => {
+    const s = (skill || '').trim();
+    if (s && !currentTags.some(t => t.toLowerCase() === s.toLowerCase())) onAdd(s);
+    setQuery('');
   };
 
   return (
@@ -38,82 +41,54 @@ export function SkillPicker({ currentTags, onAdd }) {
 
       {open && (
         <div className="absolute left-0 top-full mt-2 z-20 bg-white rounded-2xl shadow-2xl border border-[#21326c]/10 w-72 max-h-80 flex flex-col overflow-hidden">
-          {/* Search bar */}
+          {/* Search input */}
           <div className="p-3 border-b border-[#21326c]/8 flex-shrink-0">
-            <div className="flex gap-2 items-center">
-              <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-[#21326c]/20 focus-within:border-[#21326c] transition-colors bg-[#21326c]/3">
-                <Search size={12} className="text-[#21326c]/40 flex-shrink-0" />
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Search or type a custom skill…"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      if (canAddCustom) handleCustom();
-                      else if (filtered[0]?.skills?.[0]) handleAdd(filtered[0].skills.find(s => !currentTags.includes(s)) || filtered[0].skills[0]);
-                    }
-                    if (e.key === 'Escape') setOpen(false);
-                  }}
-                  className="flex-1 text-xs text-[#21326c] placeholder:text-[#21326c]/40 bg-transparent outline-none min-w-0"
-                />
-                {query && (
-                  <button onClick={() => setQuery('')} className="text-[#21326c]/30 hover:text-[#21326c]/60 flex-shrink-0">
-                    <X size={11} />
-                  </button>
-                )}
-              </div>
-              {canAddCustom && (
-                <button
-                  onClick={handleCustom}
-                  title={`Add "${query.trim()}" as custom skill`}
-                  className="flex-shrink-0 text-xs font-semibold px-3 py-2 rounded-xl text-white transition-opacity hover:opacity-90"
-                  style={{ background: '#21326c' }}
-                >
-                  Add
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#21326c]/20 focus-within:border-[#21326c] transition-colors bg-[#21326c]/3">
+              <Search size={12} className="text-[#21326c]/40 flex-shrink-0" />
+              <input
+                autoFocus
+                type="text"
+                placeholder="Type a skill…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { if (canAddCustom) add(query); else if (suggestions[0]) add(suggestions[0]); }
+                  if (e.key === 'Escape') setOpen(false);
+                }}
+                className="flex-1 text-xs text-[#21326c] placeholder:text-[#21326c]/40 bg-transparent outline-none min-w-0"
+              />
+              {query && (
+                <button onClick={() => setQuery('')} className="text-[#21326c]/30 hover:text-[#21326c]/60 flex-shrink-0">
+                  <X size={11} />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Skill list */}
-          <div className="overflow-y-auto flex-1 px-3 py-2 space-y-3">
-            {filtered.map(({ category, skills }) => {
-              const visible = skills.filter(s => !q || s.toLowerCase().includes(q));
-              if (!visible.length) return null;
-              return (
-                <div key={category}>
-                  {!q && (
-                    <p className="text-[9px] font-black text-[#21326c]/30 uppercase tracking-widest mb-1.5 px-0.5">{category}</p>
-                  )}
-                  <div className="flex flex-wrap gap-1">
-                    {visible.map(skill => {
-                      const added = currentTags.includes(skill);
-                      return (
-                        <button
-                          key={skill}
-                          type="button"
-                          disabled={added}
-                          onClick={() => handleAdd(skill)}
-                          className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${
-                            added
-                              ? 'border-[#21326c]/15 text-[#21326c]/30 bg-[#21326c]/5 cursor-default'
-                              : 'border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c] hover:text-white hover:border-[#21326c] cursor-pointer'
-                          }`}
-                        >
-                          {added ? '✓ ' : ''}{skill}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-            {q && filtered.every(c => c.skills.filter(s => s.toLowerCase().includes(q)).length === 0) && (
-              <p className="text-xs text-[#21326c]/40 text-center py-3">
-                No match — press Enter or click Add to create <strong>"{query.trim()}"</strong>
-              </p>
+          {/* Autocomplete list */}
+          <div className="overflow-y-auto flex-1 py-1">
+            {canAddCustom && (
+              <button
+                onClick={() => add(query)}
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-[#21326c] hover:bg-[#21326c]/5"
+              >
+                <Plus size={13} className="flex-shrink-0" style={{ color: '#ff9044' }} />
+                Add “<strong className="font-semibold">{query.trim()}</strong>”
+              </button>
+            )}
+            {!q && <p className="text-[10px] text-[#21326c]/35 px-4 pt-1.5 pb-1">Suggestions — or type your own</p>}
+            {suggestions.map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => add(s)}
+                className="w-full text-left px-4 py-2 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
+              >
+                {s}
+              </button>
+            ))}
+            {q && !canAddCustom && suggestions.length === 0 && (
+              <p className="text-xs text-[#21326c]/40 text-center py-4">Already added.</p>
             )}
           </div>
         </div>

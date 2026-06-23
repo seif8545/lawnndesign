@@ -1,8 +1,9 @@
 import { toast } from '../lib/toast.js';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Briefcase, CheckCircle, ChevronRight, CreditCard, DollarSign, Download, File as FileIcon, Hourglass, PackageCheck, PartyPopper, Plus, Star, Trash2, Upload, Users, X } from 'lucide-react';
-import { projects as projectsApi, uploadFile } from '../lib/api.js';
+import { Briefcase, CheckCircle, ChevronRight, CreditCard, DollarSign, File as FileIcon, Hourglass, Paperclip, PackageCheck, PartyPopper, Plus, Send, Star, Trash2, Upload, Users, X } from 'lucide-react';
+import { projects as projectsApi, conversations as convApi, uploadFile } from '../lib/api.js';
+import { getSocket } from '../lib/socket.js';
 import { AvailabilityBadge, Avatar, Modal, SkillPicker, StarPicker } from '../components/ui.jsx';
 import { useBusy } from '../hooks/useBusy.js';
 import { PROJECT_DONE_STATUSES, PROJECT_STATUS_LABELS, PROJECT_STATUS_STEPS } from '../lib/constants.js';
@@ -120,28 +121,92 @@ function ProofView({ url, label }) {
   );
 }
 
-// Shared project files — a running stream the client and talent both add to,
-// from hire through completion. Files are private; the API returns short-lived
-// signed URLs for viewing/downloading.
-function ProjectFiles({ proj, currentUser, refreshProjects }) {
-  const [uploading, setUploading] = useState(false);
-  const [note, setNote] = useState('');
-  const files = proj.files || [];
-  const canUpload = currentUser && (proj.clientId === currentUser.id || proj.acceptedTalentId === currentUser.id);
+// One message bubble — renders text and/or a private file attachment (the API
+// returns a short-lived signed URL for fileUrl).
+function ChatBubble({ msg, isMe }) {
+  const isImage = (msg.fileMime || '').startsWith('image/');
+  return (
+    <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${isMe ? 'bg-[#21326c] text-white rounded-br-sm' : 'bg-[#21326c]/10 text-[#21326c] rounded-bl-sm'}`}>
+        {msg.fileUrl && (
+          isImage ? (
+            <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
+              <img src={msg.fileUrl} alt={msg.fileName || 'attachment'} className="max-h-44 rounded-lg" />
+            </a>
+          ) : (
+            <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer"
+               className={`flex items-center gap-2 mb-1 underline ${isMe ? 'text-white' : 'text-[#2563eb]'}`}>
+              <FileIcon size={14} /> {msg.fileName || 'Download file'}
+            </a>
+          )
+        )}
+        {msg.content && <span>{msg.content}</span>}
+      </div>
+    </div>
+  );
+}
 
-  const addFiles = async (fileList) => {
-    const picked = Array.from(fileList || []).slice(0, 10);
-    if (picked.length === 0) return;
+// Embedded project chat — the conversation between client and talent, shown at
+// the top of the project modal. Files are shared here (private, signed URLs).
+function ProjectChat({ proj, currentUser }) {
+  const otherUserId = proj.clientId === currentUser?.id ? proj.acceptedTalentId : proj.clientId;
+  const [conv, setConv] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const endRef = useRef(null);
+
+  // Get (or create) the project conversation and load its messages.
+  useEffect(() => {
+    let active = true;
+    if (!otherUserId) return;
+    (async () => {
+      try {
+        const c = await convApi.create({ otherUserId, projectId: proj.id });
+        if (!active) return;
+        setConv(c);
+        const msgs = await convApi.messages(c.id);
+        if (!active) return;
+        setMessages(msgs);
+        getSocket()?.emit('join_conversation', { conversationId: c.id });
+      } catch (e) {
+        if (active) toast.error(`Couldn't open chat: ${e.message}`);
+      }
+    })();
+    return () => { active = false; };
+  }, [proj.id, otherUserId]);
+
+  // Live incoming messages for this conversation.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !conv) return;
+    const onMsg = (m) => { if (m.conversationId === conv.id) setMessages(prev => [...prev, m]); };
+    socket.on('message', onMsg);
+    return () => socket.off('message', onMsg);
+  }, [conv?.id]);
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  const send = () => {
+    const socket = getSocket();
+    if (!socket || !conv || !text.trim()) return;
+    socket.emit('send_message', { conversationId: conv.id, content: text.trim() });
+    setText('');
+  };
+
+  const attach = async (fileList) => {
+    const f = fileList?.[0];
+    const socket = getSocket();
+    if (!f || !conv || !socket) return;
     setUploading(true);
     try {
-      const uploaded = [];
-      for (const f of picked) {
-        const r = await uploadFile(f, 'project-file');
-        uploaded.push({ name: f.name, url: r.path, mimeType: f.type });
-      }
-      await projectsApi.addFiles(proj.id, { files: uploaded, note: note.trim() || undefined });
-      setNote('');
-      await refreshProjects?.();
+      const r = await uploadFile(f, 'chat'); // private bucket
+      socket.emit('send_message', {
+        conversationId: conv.id,
+        content: text.trim() || `Shared a file: ${f.name}`,
+        fileUrl: r.path, fileName: f.name, fileMime: f.type,
+      });
+      setText('');
     } catch (e) {
       toast.error(`Upload failed: ${e.message}`);
     } finally {
@@ -149,66 +214,35 @@ function ProjectFiles({ proj, currentUser, refreshProjects }) {
     }
   };
 
-  const removeFile = async (fileId) => {
-    try {
-      await projectsApi.deleteFile(proj.id, fileId);
-      await refreshProjects?.();
-    } catch (e) {
-      toast.error(`Couldn't remove file: ${e.message}`);
-    }
-  };
-
   return (
-    <div className="rounded-2xl p-4 border border-[#21326c]/10" style={{ background: '#21326c04' }}>
-      <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-3">Shared files</p>
-
-      {files.length === 0 && (
-        <p className="text-xs text-[#21326c]/50 mb-3">No files shared yet. Drafts, assets, and deliverables you both add will appear here.</p>
-      )}
-
-      <div className="space-y-2 mb-3">
-        {files.map(f => {
-          const isImage = (f.mimeType || '').startsWith('image/');
-          const mine = f.uploaderId === currentUser?.id;
-          return (
-            <div key={f.id} className="flex items-center gap-2.5 p-2 rounded-xl bg-white border border-[#21326c]/10">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#21326c10' }}>
-                {isImage ? <FileIcon size={15} className="text-[#21326c]" /> : <FileIcon size={15} className="text-[#21326c]" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-[#21326c] font-medium truncate">{f.name}</p>
-                <p className="text-[11px] text-[#21326c]/50">{f.uploaderName} · {f.createdAt}{f.note ? ` · ${f.note}` : ''}</p>
-              </div>
-              <a href={f.url} target="_blank" rel="noopener noreferrer" title="Download" className="p-1.5 rounded-lg hover:bg-[#21326c]/5 text-[#21326c] flex-shrink-0">
-                <Download size={15} />
-              </a>
-              {(mine || currentUser?.role === 'admin') && (
-                <button onClick={() => removeFile(f.id)} title="Remove" className="p-1.5 rounded-lg hover:bg-red-50 text-[#21326c]/40 hover:text-red-500 flex-shrink-0">
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          );
-        })}
+    <div className="rounded-2xl border border-[#21326c]/10 overflow-hidden mb-4">
+      <div className="px-4 py-2.5 border-b border-[#21326c]/10 bg-[#21326c]/[0.03]">
+        <p className="text-xs font-semibold text-[#21326c] uppercase tracking-wider">Project chat</p>
+        <p className="text-[11px] text-[#21326c]/50">Message and share files with {proj.clientId === currentUser?.id ? (proj.acceptedTalentName || 'the student') : (proj.clientName || 'the client')}.</p>
       </div>
-
-      {canUpload && (
-        <div className="space-y-2">
-          <input
-            type="text"
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            placeholder="Optional note (e.g. 'v2 of the logo')"
-            className="w-full px-3 py-2 rounded-xl border border-[#21326c]/20 text-sm text-[#21326c] focus:ring-2 focus:ring-[#21326c] placeholder:text-[#21326c]/40"
-          />
-          <label className="block">
-            <input type="file" accept="image/*,application/pdf" multiple className="hidden" disabled={uploading} onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
-            <span className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border-2 border-dashed border-[#21326c]/25 text-sm font-semibold text-[#21326c] cursor-pointer hover:bg-[#21326c]/5 transition-colors">
-              <Upload size={15} /> {uploading ? 'Uploading…' : 'Share files (images / PDF)'}
-            </span>
-          </label>
-        </div>
-      )}
+      <div className="p-3 space-y-2 max-h-72 overflow-y-auto" style={{ background: '#fff' }}>
+        {messages.length === 0 && <p className="text-center text-xs text-[#21326c]/40 py-6">No messages yet — say hello or share a file.</p>}
+        {messages.map(m => <ChatBubble key={m.id} msg={m} isMe={m.senderId === currentUser?.id} />)}
+        <div ref={endRef} />
+      </div>
+      <div className="p-3 border-t border-[#21326c]/10 flex items-end gap-2">
+        <label className="p-2 rounded-xl hover:bg-[#21326c]/5 text-[#21326c] cursor-pointer flex-shrink-0" title="Attach a file">
+          <input type="file" accept="image/*,application/pdf" className="hidden" disabled={uploading} onChange={e => { attach(e.target.files); e.target.value = ''; }} />
+          <Paperclip size={18} className={uploading ? 'opacity-40' : ''} />
+        </label>
+        <textarea
+          rows={1}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder={uploading ? 'Uploading…' : 'Message…'}
+          className="flex-1 px-4 py-2.5 rounded-2xl border border-[#21326c]/20 text-[#21326c] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#21326c] placeholder:text-[#21326c]/40"
+          style={{ maxHeight: '100px' }}
+        />
+        <button onClick={send} disabled={!text.trim()} className="p-2.5 rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-40 flex-shrink-0" style={{ background: '#ff9044' }}>
+          <Send size={18} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -279,6 +313,19 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
       toast.success('Confirmed.');
     } catch (e) { toast.error(`Couldn't confirm: ${e.message}`); }
   });
+
+  // Admin rejects a transfer screenshot with a reason the client will see.
+  const rejectPayment = (projId) => {
+    const reason = window.prompt('Why is the screenshot being rejected? The client will see this and re-upload.');
+    if (!reason || !reason.trim()) return;
+    runApprove(async () => {
+      try {
+        await projectsApi.rejectPayment(projId, { reason: reason.trim() });
+        await refreshProjects?.();
+        toast.success('Screenshot rejected — the client has been notified.');
+      } catch (e) { toast.error(`Couldn't reject: ${e.message}`); }
+    });
+  };
 
   const submitReview = (projId) => runReview(async () => {
     if (!reviewForm.rating) return;
@@ -459,6 +506,12 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                 </div>
               </div>
 
+              {/* Project chat — available to the client & talent from hire onward. */}
+              {(proj.clientId === currentUser?.id || proj.acceptedTalentId === currentUser?.id) &&
+               ['offer_accepted', 'deposit_paid', 'in_progress', 'delivered', 'completed', 'reviewed'].includes(proj.status) && (
+                <ProjectChat proj={proj} currentUser={currentUser} />
+              )}
+
               {/* ── STEP: open — Review applications ── */}
               {proj.status === 'open' && (
                 <div>
@@ -554,6 +607,12 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                         >
                           {approving ? 'Confirming…' : 'Confirm Deposit Received'}
                         </button>
+                        {proj.depositProofUrl && (
+                          <button onClick={() => rejectPayment(proj.id)} disabled={approving}
+                            className="w-full py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                            Reject screenshot…
+                          </button>
+                        )}
                       </div>
                     ) : isOwnerClient ? (
                       <div className="rounded-2xl border-2 border-dashed border-[#21326c]/20 p-5 text-center space-y-3">
@@ -565,6 +624,11 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                         <p className="text-xs text-[#21326c]/60 leading-relaxed max-w-xs mx-auto">
                           Pay the deposit by InstaPay transfer. Lawnn will send you the account details, then verify your screenshot and start the project. The balance is due after delivery.
                         </p>
+                        {proj.paymentRejectionReason && (
+                          <div className="rounded-xl p-3 text-xs text-red-700 bg-red-50 border border-red-100 text-left">
+                            <strong>Your last screenshot was rejected:</strong> {proj.paymentRejectionReason} Please re-upload a clear one.
+                          </div>
+                        )}
                         {proj.depositProofUrl ? (
                           <div className="space-y-2">
                             <ProofView url={proj.depositProofUrl} label="deposit" />
@@ -696,6 +760,12 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                         >
                           {approving ? 'Confirming…' : 'Confirm Final Payment Received'}
                         </button>
+                        {proj.finalPaymentProofUrl && (
+                          <button onClick={() => rejectPayment(proj.id)} disabled={approving}
+                            className="w-full py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                            Reject screenshot…
+                          </button>
+                        )}
                       </div>
                     ) : proj.clientId === currentUser?.id ? (
                       <div className="rounded-2xl border-2 border-dashed border-green-300 p-5 text-center space-y-3">
@@ -704,6 +774,11 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                           <p className="font-display text-xl font-bold text-[#21326c]">Happy with the work?</p>
                           <p className="text-sm text-[#21326c]/60 mt-1">Transfer the remaining <strong>{remaining.toLocaleString()} EGP</strong> by InstaPay (Lawnn will share the details), then upload your screenshot.</p>
                         </div>
+                        {proj.paymentRejectionReason && (
+                          <div className="rounded-xl p-3 text-xs text-red-700 bg-red-50 border border-red-100 text-left">
+                            <strong>Your last screenshot was rejected:</strong> {proj.paymentRejectionReason} Please re-upload a clear one.
+                          </div>
+                        )}
                         {proj.finalPaymentProofUrl ? (
                           <div className="space-y-2">
                             <ProofView url={proj.finalPaymentProofUrl} label="final payment" />
@@ -803,10 +878,6 @@ export function ProjectsPage({ projects, setProjects, currentUser, setView, setS
                 </div>
               )}
 
-              {/* Shared file stream — available from hire through completion. */}
-              {['offer_accepted', 'deposit_paid', 'in_progress', 'delivered', 'completed'].includes(proj.status) && (
-                <ProjectFiles proj={proj} currentUser={currentUser} refreshProjects={refreshProjects} />
-              )}
             </div>
           </div>
         </div>

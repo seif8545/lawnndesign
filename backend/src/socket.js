@@ -2,6 +2,7 @@ import { Server } from 'socket.io'
 import jwt from 'jsonwebtoken'
 import prisma from './lib/prisma.js'
 import { safeUrl } from './lib/sanitize.js'
+import { signPrivateRead } from './routes/uploads.js'
 import { cookieAuthEnabled, readCookie, SESSION_COOKIE } from './lib/cookies.js'
 
 // The handshake token comes from auth.token (current client) or, when cookie
@@ -112,8 +113,14 @@ export function initSocket(httpServer) {
         data:  { updatedAt: new Date() },
       })
 
+      // Private attachments are stored as paths — broadcast a signed URL so the
+      // recipients can actually open the file.
+      const outgoing = message.fileUrl && !/^https?:\/\//i.test(message.fileUrl)
+        ? { ...message, fileUrl: await signPrivateRead(message.fileUrl) }
+        : message
+
       // Broadcast to everyone in the room (both participants + any admin)
-      io.to(`conv:${conversationId}`).emit('message', message)
+      io.to(`conv:${conversationId}`).emit('message', outgoing)
     })
 
     // ── typing indicator ────────────────────────────────────────────────────

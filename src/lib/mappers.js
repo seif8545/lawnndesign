@@ -177,6 +177,7 @@ export function mapApiProject(p) {
     depositPaidAt:          p.depositPaidAt ? formatRelativeTime(p.depositPaidAt) : null,
     depositProofUrl:        p.depositProofUrl || null,
     finalPaymentProofUrl:   p.finalPaymentProofUrl || null,
+    paymentRejectionReason: p.paymentRejectionReason || null,
     deliveryNote:           p.deliveryNote,
     deliveredAt:            p.deliveredAt ? formatRelativeTime(p.deliveredAt) : null,
     clientApproved:         Boolean(p.clientApproved),
@@ -185,18 +186,6 @@ export function mapApiProject(p) {
     talentReview: talentReview ? { rating: talentReview.rating, text: talentReview.comment } : null,
     applications,
     acceptedApplicationId: applications.find(a => a.status === 'accepted')?.id || null,
-    files: (p.files || []).map(f => ({
-      id:               f.id,
-      name:             f.name,
-      url:              f.url,
-      mimeType:         f.mimeType,
-      note:             f.note,
-      createdAt:        formatRelativeTime(f.createdAt),
-      uploaderId:       f.uploader?.id,
-      uploaderName:     f.uploader?.name || 'Someone',
-      uploaderInitials: f.uploader?.initials || '??',
-      uploaderColor:    f.uploader?.avatarColor || '#21326c',
-    })),
   };
 }
 

@@ -22,8 +22,9 @@ const KINDS = {
   marketplace:      { bucket: PUBLIC_BUCKET,  folder: 'marketplace',    types: IMAGE_TYPES },
   site:             { bucket: PUBLIC_BUCKET,  folder: 'site',           types: IMAGE_TYPES },
   application:      { bucket: PRIVATE_BUCKET, folder: 'application',    types: [...IMAGE_TYPES, ...DOC_TYPES] },
-  // Shared project files (client ↔ talent) — private, images or PDF.
-  'project-file':   { bucket: PRIVATE_BUCKET, folder: 'project-file',   types: [...IMAGE_TYPES, ...DOC_TYPES] },
+  // Chat attachments (incl. the project chat) — private, images or PDF; served
+  // via short-lived signed URLs by the conversation/message layer.
+  chat:             { bucket: PRIVATE_BUCKET, folder: 'chat',           types: [...IMAGE_TYPES, ...DOC_TYPES] },
   // InstaPay transfer screenshots — private (financial), images or PDF.
   'payment-proof':  { bucket: PRIVATE_BUCKET, folder: 'payment-proof',  types: [...IMAGE_TYPES, ...DOC_TYPES] },
 }

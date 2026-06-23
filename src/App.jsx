@@ -252,10 +252,16 @@ export default function App() {
     setView(v);
   };
 
+  // Admin-curated hero carousel images (JSON array of URLs), if set.
+  const heroImages = (() => {
+    try { const a = JSON.parse(siteSettings.homeHeroImages || '[]'); return Array.isArray(a) ? a : []; }
+    catch { return []; }
+  })();
+
   const renderView = () => {
     switch (view) {
       case 'home':
-        return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} heroImageUrl={siteSettings.homeHeroImageUrl} />;
+        return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} heroImageUrl={siteSettings.homeHeroImageUrl} heroImages={heroImages} />;
       case 'jobs':
         return <JobBoardPage setView={handleNavChange} jobs={jobs} setJobs={setJobs} pendingJobs={pendingJobs} setPendingJobs={setPendingJobs} currentUser={currentUser} talents={talents} refreshJobs={refreshJobs} refreshProjects={refreshProjects} />;
       case 'directory':
@@ -304,7 +310,7 @@ export default function App() {
       case 'projects':
         return currentUser
           ? <ProjectsPage projects={projects} setProjects={setProjects} currentUser={currentUser} setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} addNotification={addNotification} refreshProjects={refreshProjects} refreshJobs={refreshJobs} />
-          : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
+          : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} heroImageUrl={siteSettings.homeHeroImageUrl} heroImages={heroImages} />;
       case 'admin':
         return currentUser?.role === 'admin'
           ? <AdminPage
@@ -315,9 +321,9 @@ export default function App() {
               refreshJobs={refreshJobs} refreshFeed={refreshFeed} refreshMarketplace={refreshMarketplace} refreshProjects={refreshProjects}
               siteSettings={siteSettings} refreshSettings={refreshSettings}
             />
-          : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} />;
+          : <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} heroImageUrl={siteSettings.homeHeroImageUrl} heroImages={heroImages} />;
       default:
-        return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} heroImageUrl={siteSettings.homeHeroImageUrl} />;
+        return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} heroImageUrl={siteSettings.homeHeroImageUrl} heroImages={heroImages} />;
     }
   };
 

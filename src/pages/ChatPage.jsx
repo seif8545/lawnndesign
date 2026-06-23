@@ -1,7 +1,7 @@
 import { toast } from '../lib/toast.js';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { CheckCircle, ChevronLeft, Lock, MessageSquare, MessageSquareText, Search, Send, Shield, X } from 'lucide-react';
-import { conversations as convApi } from '../lib/api.js';
+import { CheckCircle, ChevronLeft, File as FileIcon, Lock, MessageSquare, MessageSquareText, Paperclip, Search, Send, Shield, X } from 'lucide-react';
+import { conversations as convApi, uploadFile } from '../lib/api.js';
 import { getSocket } from '../lib/socket.js';
 import { Avatar } from '../components/ui.jsx';
 import { AdminStartConversation } from './AdminPage.jsx';
@@ -146,6 +146,28 @@ export function ChatPage({ currentUser }) {
     setMessage('');
     textareaRef.current?.focus();
   }, [message, activeConvo, isAdmin]);
+
+  // Attach a file — uploads privately, then sends it as a message attachment.
+  const [attaching, setAttaching] = useState(false);
+  const attachFile = useCallback(async (fileList) => {
+    const f = fileList?.[0];
+    const socket = getSocket();
+    if (!f || !activeConvo || !socket || !amParticipant(activeConvo)) return;
+    setAttaching(true);
+    try {
+      const r = await uploadFile(f, 'chat');
+      socket.emit('send_message', {
+        conversationId: activeConvo.id,
+        content: message.trim() || `Shared a file: ${f.name}`,
+        fileUrl: r.path, fileName: f.name, fileMime: f.type,
+      });
+      setMessage('');
+    } catch (e) {
+      toast.error(`Upload failed: ${e.message}`);
+    } finally {
+      setAttaching(false);
+    }
+  }, [activeConvo, message]);
 
   // ── Typing indicator ──────────────────────────────────────────────────────
   const handleTyping = () => {
@@ -362,6 +384,17 @@ export function ChatPage({ currentUser }) {
                           </div>
                         )}
                         <div className={`max-w-xs sm:max-w-sm px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${isMe ? 'bg-[#21326c] text-white rounded-br-sm' : 'bg-[#21326c]/10 text-[#21326c] rounded-bl-sm'}`}>
+                          {msg.fileUrl && (
+                            (msg.fileMime || '').startsWith('image/') ? (
+                              <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
+                                <img src={msg.fileUrl} alt={msg.fileName || 'attachment'} className="max-h-44 rounded-lg" />
+                              </a>
+                            ) : (
+                              <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 mb-1 underline ${isMe ? 'text-white' : 'text-[#2563eb]'}`}>
+                                <FileIcon size={14} /> {msg.fileName || 'Download file'}
+                              </a>
+                            )
+                          )}
                           {msg.content}
                           <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                             <span className={`text-[10px] ${isMe ? 'text-white/50' : 'text-[#21326c]/40'}`}>{formatTime(msg.createdAt)}</span>
@@ -379,6 +412,10 @@ export function ChatPage({ currentUser }) {
                 {amParticipant(activeConvo) && (
                   <div className="p-4 border-t border-[#21326c]/10">
                     <div className="flex items-end gap-2">
+                      <label className="p-2.5 rounded-xl hover:bg-[#21326c]/5 text-[#21326c] cursor-pointer flex-shrink-0" title="Attach a file">
+                        <input type="file" accept="image/*,application/pdf" className="hidden" disabled={attaching} onChange={e => { attachFile(e.target.files); e.target.value = ''; }} />
+                        <Paperclip size={18} className={attaching ? 'opacity-40' : ''} />
+                      </label>
                       <div className="flex-1">
                         <textarea
                           ref={textareaRef}
@@ -386,7 +423,7 @@ export function ChatPage({ currentUser }) {
                           value={message}
                           onChange={e => { setMessage(e.target.value); handleTyping(); }}
                           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                          placeholder="Message…"
+                          placeholder={attaching ? 'Uploading…' : 'Message…'}
                           className="w-full px-4 py-2.5 rounded-2xl border border-[#21326c]/20 text-[#21326c] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40"
                           style={{ maxHeight: '100px' }}
                         />

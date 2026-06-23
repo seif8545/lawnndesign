@@ -68,8 +68,8 @@ router.get('/', optionalAuth, async (req, res) => {
 })
 
 // ── POST /marketplace ─────────────────────────────────────────────────────────
-// Auth required. Sellers post pending; admins post active.
-router.post('/', requireAuth, async (req, res) => {
+// Students post pending; admins post active. Clients can browse + buy, not list.
+router.post('/', requireAuth, requireRole('student', 'admin'), async (req, res) => {
   const { price, category, fileUrl, imageUrl, location } = req.body
   const title       = clampText(req.body.title, 200)
   const description = clampText(req.body.description, 5000)

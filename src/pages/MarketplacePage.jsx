@@ -26,7 +26,9 @@ export function MarketplacePage({ listings, setListings, pendingListings, setPen
 
   // The current user's own listings (pending + active/sold). Anyone signed in
   // (student, client, or admin) can sell. Match by real user id.
-  const canSell = isStudent || isClient || isAdmin;
+  // Clients (and guests) can browse + message sellers, but only students and
+  // admins can list items for sale.
+  const canSell = isStudent || isAdmin;
   const myListings = canSell
     ? [
         ...pendingListings.filter(l => l.seller?.userId === currentUser?.id).map(l => ({ ...l, isPending: true })),

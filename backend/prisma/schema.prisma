@@ -93,7 +93,6 @@ model User {
   adminConversations    Conversation[]  @relation("AdminConversations")
   sentMessages          Message[]       @relation("SentMessages")
   invite                StudentInvite?
-  projectFilesUploaded  ProjectFile[]   @relation("ProjectFilesUploaded")
 
   @@map("users")
 }
@@ -289,6 +288,7 @@ model Project {
   depositPaidAt        DateTime?
   depositProofUrl      String?   // private storage path — client's InstaPay screenshot
   finalPaymentProofUrl String?   // private storage path — client's InstaPay screenshot
+  paymentRejectionReason String? @db.Text // set when an admin rejects a transfer screenshot
   deliveryNote         String?   @db.Text
   deliveredAt          DateTime?
   clientApproved       Boolean   @default(false)
@@ -300,31 +300,11 @@ model Project {
   applications  Application[]
   reviews       Review[]
   conversations Conversation[]
-  files         ProjectFile[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("projects")
-}
-
-// ─── Project files (shared file stream between client & talent) ───────────────
-model ProjectFile {
-  id         String   @id @default(cuid())
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  uploaderId String
-  uploader   User     @relation("ProjectFilesUploaded", fields: [uploaderId], references: [id], onDelete: Cascade)
-
-  name      String
-  url       String   @db.Text   // private storage path
-  mimeType  String?
-  note      String?  @db.Text
-
-  createdAt DateTime @default(now())
-
-  @@index([projectId])
-  @@map("project_files")
 }
 
 // ─── Reviews ──────────────────────────────────────────────────────────────────

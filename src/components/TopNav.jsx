@@ -13,7 +13,6 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, onC
       { id: 'jobs',        label: 'Projects',    icon: Briefcase },
       { id: 'projects',    label: 'My Projects', icon: Package },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
-      { id: 'profile',     label: 'My Profile',  icon: UserCheck },
       { id: 'news',        label: 'News',        icon: BookOpen },
     ];
     // Clients: hire talent, post jobs, manage their projects.
@@ -22,7 +21,6 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, onC
       { id: 'directory',   label: 'Talent',      icon: Users },
       { id: 'jobs',        label: 'Projects',    icon: Briefcase },
       { id: 'projects',    label: 'My Projects', icon: Package },
-      { id: 'profile',     label: 'My Profile',  icon: UserCheck },
       { id: 'feed',        label: 'Feed',        icon: Grid },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
       { id: 'news',        label: 'News',        icon: BookOpen },
@@ -95,7 +93,7 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, onC
                   Log In
                 </button>
                 <button
-                  onClick={() => setView('jobs')}
+                  onClick={onLoginClick}
                   className="flex items-center gap-1.5 px-4 py-2 rounded text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
                   style={{ background: '#ff9044' }}
                 >
@@ -144,6 +142,14 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, onC
                         <p className="text-sm font-semibold text-[#21326c] truncate">{currentUser.name}</p>
                         <p className="text-xs text-[#21326c]/45 capitalize">{currentUser.role}</p>
                       </div>
+                      {(currentUser.role === 'student' || currentUser.role === 'client') && (
+                        <button
+                          onClick={() => { setProfileOpen(false); setView('profile'); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
+                        >
+                          <UserCheck size={15} className="text-[#21326c]/60" /> My Profile
+                        </button>
+                      )}
                       <button
                         onClick={() => { setProfileOpen(false); onChangePassword?.(); }}
                         className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors"

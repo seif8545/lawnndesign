@@ -5,11 +5,12 @@ import { safeUrl } from '../lib/sanitize.js'
 
 const router = Router()
 
-// Keys whose values are URLs and must be passed through safeUrl on write.
+// Keys whose values are single URLs and must be passed through safeUrl on write.
 const URL_KEYS = new Set(['homeHeroImageUrl'])
 // Allowed setting keys — anything else is ignored, so the endpoint can't be
-// used as an arbitrary key/value dumping ground.
-const ALLOWED_KEYS = new Set(['homeHeroImageUrl'])
+// used as an arbitrary key/value dumping ground. `homeHeroImages` is a JSON
+// array of URLs (the homepage hero carousel).
+const ALLOWED_KEYS = new Set(['homeHeroImageUrl', 'homeHeroImages'])
 
 // ── GET /settings ─────────────────────────────────────────────────────────────
 // Public — returns all site settings as a flat { key: value } object.
@@ -29,6 +30,15 @@ router.patch('/', requireAuth, requireRole('admin'), async (req, res) => {
 
   for (const [key, raw] of Object.entries(body)) {
     if (!ALLOWED_KEYS.has(key)) continue
+
+    // Hero carousel: an array of image URLs, validated and stored as JSON.
+    if (key === 'homeHeroImages') {
+      const clean = (Array.isArray(raw) ? raw : []).map(u => safeUrl(String(u))).filter(Boolean).slice(0, 12)
+      updates.push(clean.length === 0
+        ? prisma.siteSetting.deleteMany({ where: { key } })
+        : prisma.siteSetting.upsert({ where: { key }, update: { value: JSON.stringify(clean) }, create: { key, value: JSON.stringify(clean) } }))
+      continue
+    }
 
     // Empty value → delete the setting (revert to default behaviour).
     if (raw === null || raw === undefined || raw === '') {
