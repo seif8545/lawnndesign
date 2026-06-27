@@ -66,6 +66,14 @@ export const SKILL_LIBRARY = [
   },
 ];
 
+// Most commonly picked skills — surfaced as quick-add chips before the user
+// starts typing. All drawn from SKILL_LIBRARY above.
+export const COMMON_SKILLS = [
+  'AutoCAD', 'SketchUp', 'Adobe Photoshop', 'Adobe Illustrator', 'Figma',
+  '3ds Max', 'Blender', 'V-Ray', 'Rhinoceros', 'Revit',
+  '3D Visualization', 'Space Planning', 'Branding', 'Rendering Optimization',
+];
+
 // ─── SHARED COMPONENTS ───────────────────────────────────────────────────────
 
 // LinkedIn-style skill picker — searchable list + free-type custom skills

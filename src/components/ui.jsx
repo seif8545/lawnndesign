@@ -1,22 +1,21 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bell, Briefcase, CheckCircle, DollarSign, File, MessageSquare, Plus, Search, Star, TrendingUp, X } from 'lucide-react';
-import { AVAILABILITY, SKILL_LIBRARY } from '../lib/constants.js';
+import { AVAILABILITY, SKILL_LIBRARY, COMMON_SKILLS } from '../lib/constants.js';
 
-// Search-first skill autocomplete. Type anything — suggestions from the library
-// appear as you type, and you can always add your own custom skill (free text).
-// No browsing a fixed list.
+// Quick-pick the most common skills up front, then type-ahead autocomplete over
+// the full library as you type — and you can always add your own custom skill.
 export function SkillPicker({ currentTags = [], onAdd }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
   const q = query.trim().toLowerCase();
   const allSkills = SKILL_LIBRARY.flatMap(c => c.skills);
+  const notAdded = s => !currentTags.some(t => t.toLowerCase() === s.toLowerCase());
 
-  // Autocomplete matches when typing; a handful of starters when empty.
-  const suggestions = (q ? allSkills.filter(s => s.toLowerCase().includes(q)) : allSkills)
-    .filter(s => !currentTags.some(t => t.toLowerCase() === s.toLowerCase()))
-    .slice(0, q ? 12 : 8);
+  // Typing → autocomplete over the whole library. Empty → most common skills.
+  const suggestions = (q ? allSkills.filter(s => s.toLowerCase().includes(q)) : []).filter(notAdded).slice(0, 12);
+  const common = COMMON_SKILLS.filter(notAdded).slice(0, 12);
 
   const exists = currentTags.some(t => t.toLowerCase() === q) || allSkills.some(s => s.toLowerCase() === q);
   const canAddCustom = q.length > 0 && !exists;
@@ -65,30 +64,52 @@ export function SkillPicker({ currentTags = [], onAdd }) {
             </div>
           </div>
 
-          {/* Autocomplete list */}
-          <div className="overflow-y-auto flex-1 py-1">
-            {canAddCustom && (
-              <button
-                onClick={() => add(query)}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-[#21326c] hover:bg-[#21326c]/5"
-              >
-                <Plus size={13} className="flex-shrink-0" style={{ color: '#ff9044' }} />
-                Add “<strong className="font-semibold">{query.trim()}</strong>”
-              </button>
-            )}
-            {!q && <p className="text-[10px] text-[#21326c]/35 px-4 pt-1.5 pb-1">Suggestions — or type your own</p>}
-            {suggestions.map(s => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => add(s)}
-                className="w-full text-left px-4 py-2 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
-              >
-                {s}
-              </button>
-            ))}
-            {q && !canAddCustom && suggestions.length === 0 && (
-              <p className="text-xs text-[#21326c]/40 text-center py-4">Already added.</p>
+          {/* Empty → common quick-pick chips. Typing → autocomplete list. */}
+          <div className="overflow-y-auto flex-1">
+            {!q ? (
+              <div className="px-3 pt-2 pb-3">
+                <p className="text-[10px] text-[#21326c]/35 px-1 pb-2">Popular skills — or type your own</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {common.map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => add(s)}
+                      className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border border-[#21326c]/15 text-[#21326c] hover:border-[#21326c] hover:bg-[#21326c]/5 transition-all"
+                    >
+                      <Plus size={10} className="flex-shrink-0" style={{ color: '#ff9044' }} /> {s}
+                    </button>
+                  ))}
+                  {common.length === 0 && (
+                    <p className="text-xs text-[#21326c]/40 py-2">All popular skills added — type to find more.</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="py-1">
+                {canAddCustom && (
+                  <button
+                    onClick={() => add(query)}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-left text-[#21326c] hover:bg-[#21326c]/5"
+                  >
+                    <Plus size={13} className="flex-shrink-0" style={{ color: '#ff9044' }} />
+                    Add “<strong className="font-semibold">{query.trim()}</strong>”
+                  </button>
+                )}
+                {suggestions.map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => add(s)}
+                    className="w-full text-left px-4 py-2 text-sm text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+                {!canAddCustom && suggestions.length === 0 && (
+                  <p className="text-xs text-[#21326c]/40 text-center py-4">Already added.</p>
+                )}
+              </div>
             )}
           </div>
         </div>
