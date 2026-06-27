@@ -1,6 +1,6 @@
-# Lawnn — Session Handoff (updated 2026-06-20)
+# Lawnn — Session Handoff (updated 2026-06-23)
 
-Snapshot of the project for a fresh session. Supersedes the older `SESSION_HANDOFF.md`.
+Snapshot for a fresh session. Supersedes the 2026-06-20 handoff. The last session was a large security-hardening + feature pass; most of it is **written to disk but not yet built/pushed by the user** unless noted. Read "Deploy & verify" before anything else.
 
 ## Project & stack
 - **Repo:** `C:\Users\DELL\Downloads\lawnndesign`
@@ -8,41 +8,64 @@ Snapshot of the project for a fresh session. Supersedes the older `SESSION_HANDO
 - **Backend:** Express + Prisma + Socket.io (`backend/`). Hosted on **Render** at `https://lawnndesign.onrender.com`.
 - **DB + file storage:** **Supabase** — project `LawnnDesign`, id `fojptzeakjieqcuwgpbl` (eu-west-1). Storage buckets: `lawnn-public`, `lawnn-private`.
 - **Fonts:** Playfair Display (`font-display`), DM Sans (`font-body`), Noto Naskh Arabic. **Colors:** navy `#21326c`, orange `#ff9044`, cream `#fffcf4`.
-- **Test accounts (all "Yomna"):** `student@lawnndesign.com`, `client@lawnndesign.com`, `admin@lawnndesign.com`. Emails are now normalized lowercase in the DB.
+- **Test accounts (all "Yomna"):** `admin@`, `client@`, `student@lawnndesign.com`. **Passwords were rotated last session** (they were still the weak committed seed values). The new passwords are NOT stored in the repo — ask the owner.
 
-## Deployment workflow
-- **Both Render and Cloudflare auto-deploy from GitHub on push.** Committing + pushing is what ships changes. Render runs `prisma generate` on build; the live site is briefly mismatched between a DB migration and the code deploy, so push promptly after schema changes.
-- **DB migrations during these sessions were applied directly to the live Supabase DB via the Supabase MCP connector**, and `backend/prisma/schema.prisma` was kept in sync. On Windows, run `npx prisma db push` (use `--accept-data-loss` only when intended) and `npx prisma generate`, then restart/redeploy.
-- **Render env vars (all set):** `DATABASE_URL`, `DIRECT_URL`, `FRONTEND_URL` (the Cloudflare origin — drives CORS + Socket.io allowlist), `JWT_SECRET` (≥32 chars), `NODE_ENV=production`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
-- **Cloudflare Pages env:** `VITE_API_URL=https://lawnndesign.onrender.com` (baked in at build — redeploy Pages after changing).
+## Deploy & verify (do this first)
+- **Both Render and Cloudflare auto-deploy from GitHub on push.** Committing + pushing is what ships.
+- **A new runtime dependency was added: `@node-rs/argon2`.** Run **`npm install`** in `backend/` before anything.
+- **The Prisma schema changed** (added `failedLoginAttempts`, `lockedUntil`, `tokenVersion` on User; `paymentRejectionReason` on Project; removed the short-lived `ProjectFile` model). **Run `npx prisma generate`** in `backend/` (Render runs it on build). All these migrations are **already applied to the live DB** via the Supabase MCP connector and `schema.prisma` is in sync.
+- **`npm test`** (backend) → should be **53 green** across 7 Vitest files (needs `@node-rs/argon2` and `vitest@^3.2.4` installed).
+- **`npm audit`** (backend): exactly **1 low** advisory (esbuild dev-server, pulled in by Vitest) — **leave it**, dev-only and not reachable. Do NOT `npm audit fix --force`.
+- **Sandbox quirk:** the Cowork sandbox file mount frequently serves **stale/truncated** copies of just-edited files, so in-sandbox `node --check`/`vite build`/`esbuild` fail spuriously. The editor writes correct canonical files. **All real builds/tests must run on the user's Windows machine.** Backend files were verified to parse; the **frontend changes from the last batch were NOT compile-verified** — smoke-test after `npm run dev`.
 
-## Architecture highlights (current)
-- **One core entity: `Project`** (the Jobs↔Projects merge). A client/admin posts a project → `pending` → admin approves (`open`) → students apply → client accepts an applicant (`offer_accepted`) → deposit → `in_progress` → `delivered` → `completed` → `reviewed`. Hiring no longer creates a second record — the project *is* the engagement. Nav: **Projects** (board, view id `jobs`) + **My Projects** (lifecycle, view id `projects`). The old `Job` model/route/page are gone; `Application` is keyed to `projectId`.
-- **Payments are manual (InstaPay), admin-confirmed.** No gateway. Client pays a 50% deposit then the balance off-platform, uploads a screenshot (private `payment-proof` bucket), and an **admin confirms receipt** (Admin → Payments tab, or inline in My Projects) to advance the state. `walletBalance` = total earned (paid out manually). Money steps in `advance` are admin-gated.
-- **Applications** carry a note + files: students pick items from their portfolio and/or upload new files; the client sees them in the review modal. Private files are signed for admin/owner only.
-- **Feed:** posts support **comments** (`Comment` model) and **shareable deep links** (`?post=<id>` opens the feed and highlights the post). No video anywhere (removed).
-- **Marketplace:** anyone signed in can post (pending → admin-approved → active). Listings have **photo** (`imageUrl`) + **location**. Buyers can **Message Seller** (chat) — the conversation system was generalized to any buyer↔seller pair. Offers still exist. Sellers and admins can deactivate/reactivate listings.
-- **User suspension/ban:** `User.suspended`. `requireAuth`/`optionalAuth` do a per-request DB check and reject suspended/deleted accounts (which triggers the frontend auto-logout) — so ban/delete kicks active sessions. Login blocks suspended users. Suspended users' content is hidden from public marketplace/feed/directory/board (admins still see all). Admin → Users has Suspend/Reinstate.
-- **Site settings:** `SiteSetting` key/value table + `/settings` (GET public, PATCH admin). Currently powers the **admin-set homepage feature image** (Admin → Content). Empty = auto-pull a student portfolio image.
-- **Adding students:** two ways — (1) the original **name + one-time invite link** flow; (2) new **bulk/individual add by email** (Admin → Users → Students): generates a temporary password, sets `mustChangePassword`, and on first login the student is forced to set their **name + new password** (component `FirstLoginSetup`) before profile setup.
-- **Auth/session:** JWT (7d) in `localStorage`. `onUnauthorized` hook in `src/lib/api.js` → App auto-logout on any 401-with-token. Error boundary + toast system in place.
+## Security posture (hardened last session — full log in `SECURITY_REVIEW.md`)
+- **Password hashing: Argon2id** (`backend/src/lib/password.js`, via `@node-rs/argon2`). `verifyPassword` accepts either algorithm; legacy bcrypt hashes **auto-upgrade to Argon2id on the next successful login**. bcryptjs kept only to verify old hashes.
+- **Password policy** (`validatePassword` in `sanitize.js`): 8–72 chars + lower + upper + number + special, enforced on register, accept-invite, change-password, admin create-client. `generatePassword()` for bulk students. Live requirement checklist in the UI (`PasswordRequirements` in `auth.jsx`).
+- **Change-password** requires the current password (first-login `mustChangePassword` exempt) and **bumps `tokenVersion`** to log out all other sessions; the acting session gets a fresh token.
+- **Session/token:** JWT carries `tv` (tokenVersion); `requireAuth` + socket auth reject stale tokens. Default JWT lifetime **24h** (`JWT_EXPIRES_IN`). Per-request live-account check gives instant ban/suspend/role-change.
+- **Login throttle** (`loginThrottle.js`): smart self-healing escalating cooldown after 5 consecutive failures (30s→15m cap) — NOT a hard lockout (avoids DoS). **New-sign-in notification** on every successful login.
+- **CAPTCHA: Cloudflare Turnstile** (`lib/turnstile.js`) required on login after **3 failed attempts** (`CAPTCHA_AFTER_FAILURES`). Gated on `TURNSTILE_SECRET` (set in Render). Public site key in `auth.jsx` (`TURNSTILE_SITE_KEY`). Inert on localhost/dev. CSP allows `challenges.cloudflare.com`.
+- **Database RLS:** Row-Level Security **enabled deny-by-default on every public table** (backend uses the service-role key + owner connection, which bypass RLS). Supabase security advisor clean except expected INFO `rls_enabled_no_policy`. **If you add a new table via Prisma, enable RLS on it** (`ALTER TABLE public.<t> ENABLE ROW LEVEL SECURITY;`).
+- **CSP + security headers:** `public/_headers` (Cloudflare Pages) — CSP scoped to fonts/Supabase/Render/Turnstile, plus HSTS, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy. **Verify the live site console after deploy** — a missed origin shows as a blocked resource.
+- **Abuse hardening:** input length caps (`clampText`), one-pending-offer-per-listing + bounded amounts, duplicate-review → 409, unparseable `?before=` guard, targeted write rate-limiter on `/feed`/`/marketplace`/`/projects`/`/conversations`/`/uploads`, VIP flag admin-only, `site` upload kind admin-only, `safeUrl` rejects `..`, signed-upload requires a valid `size`, financial-proof signed-URL TTL 10 min.
+- **Cookie-auth groundwork** built but **flag-gated OFF** (`COOKIE_AUTH`, default off) — see `docs/JWT_COOKIE_MIGRATION.md`. With the flag off, auth is the normal `Authorization: Bearer` flow.
+- **Tests:** `backend/tests/` — `sanitize`, `password`, `password-hash`, `authz`, `cookies`, `loginThrottle`, `turnstile`.
+
+## Features shipped last session
+- **Project chat:** the project detail modal (My Projects) has an **embedded chat** at the top, available to client & talent from hire (`offer_accepted`) onward. **File sharing happens in the chat** as message attachments, stored **private + served via short-lived signed URLs** (`uploads` kind `chat`; signed in `conversations.js` GET + the socket broadcast). Images/PDF only. The same conversation also shows in the standalone Messages page (which now renders + sends attachments too). _(Replaced a short-lived separate "project files" table, since dropped.)_
+- **Profile glitch fixed:** opening someone else's profile no longer shows your own — navigation carries the target talent (`handleNavChange(v, talent)`); this also unblocked client↔student and student↔student messaging.
+- **Realtime message echo fixed:** sender now joins the conversation room on send/open (conversations started from a marketplace listing weren't echoing the sender's own messages).
+- **Profile moved to the top-right avatar dropdown** ("My Profile" / Change password / Sign out); removed from the main nav.
+- **Skills:** `SkillPicker` is now **search-first autocomplete with free custom entry** (no fixed-list browsing). Used on profile, about/edit, projects.
+- **Homepage hero carousel:** admin-curated. **Admin → Content** manages a list of images (`homeHeroImages` SiteSetting, a JSON array); homepage rotates them every 5s with dots. Falls back to auto student-portfolio image if none set. Old single `homeHeroImageUrl` still read as a fallback.
+- **Admin reject transfer screenshot with reason** (`POST /projects/:id/reject-payment`, admin-only): clears the proof, stores `paymentRejectionReason`, notifies the client; client sees a red banner and re-uploads (which clears the reason). On both deposit and final-payment steps.
+- **Access changes:** marketplace listing restricted to **students + admins** (clients/guests browse + message only — enforced backend via `requireRole('student','admin')`); guest **"Post a Project"** opens the login modal; **Feed is public** for guests (already worked — loads without auth).
+- **Change-password screen** (`ChangePasswordModal`) with the live requirements checklist.
+- **Marketplace:** removed the "Card Colour" picker (listings default to navy); the "pending approval" caption is hidden for admins (their listings go live immediately; button reads "Publish Listing").
+
+## Architecture highlights (carried from prior handoffs, still true)
+- **One core entity: `Project`** (Jobs↔Projects merge): `pending` → admin `open` → students apply → client accepts (`offer_accepted`) → deposit → `in_progress` → `delivered` → `completed` → `reviewed`. `Application` is keyed to `projectId`. Nav: **Projects** (board, view id `jobs`) + **My Projects** (lifecycle, view id `projects`).
+- **Payments are manual (InstaPay), admin-confirmed.** Client pays 50% deposit then balance off-platform, uploads a screenshot (private `payment-proof`), admin confirms (or now **rejects with a reason**). Money steps in `advance` are admin-gated. `walletBalance` = total earned.
+- **User suspension/ban:** `User.suspended`; `requireAuth`/`optionalAuth` do a per-request DB check (instant kick). Suspended content hidden from public views.
+- **Site settings:** `SiteSetting` key/value table + `/settings` (GET public, PATCH admin). Powers the homepage hero (now `homeHeroImages` carousel).
+- **Adding students:** name + one-time invite link, or bulk/individual add by email (generated temp password, `mustChangePassword`, forced `FirstLoginSetup`).
 
 ## Schema (all applied to live DB + `schema.prisma`)
-Added this session: `ProjectStatus` gained `pending`/`closed` (default `pending`); `Project` gained `budgetType`, `category`, `depositProofUrl`, `finalPaymentProofUrl`, and `skills`/`attachments`/`applications` relations; `Application.jobId → projectId`; new models `ProjectSkill`, `ProjectAttachment`, `Comment`, `SiteSetting`; `User` gained `suspended` + `mustChangePassword`; `MarketplaceListing` gained `imageUrl` + `location`; `FeedPost` gained `comments`. Dropped: `Job`, `JobSkill`, `JobAttachment`, `JobStatus`.
+Last session: `User.failedLoginAttempts`/`lockedUntil`/`tokenVersion`, `Project.paymentRejectionReason`. RLS enabled on all public tables. Created then **dropped** `project_files`. `User.password` comment updated to Argon2id.
 
-## Environment quirks (Cowork sandbox — only relevant to that tooling)
-- The sandbox file mount frequently serves **stale/truncated copies** of just-edited files, so `node --check` / `vite build` in-sandbox fail spuriously. **All real builds/tests were done on the user's Windows machine.** The editor (Read/Edit) writes the correct canonical files.
-- `vite build` in-sandbox needs `ulimit -n 8192` (EMFILE); Prisma engine downloads are blocked (can't run `prisma validate/generate` there); file deletion is blocked; git index was corrupt/locked. DB work was done via the Supabase MCP connector (sandbox can't reach Postgres directly). Verification was done with standalone Node logic-simulations.
+## New env vars (defaults safe; only TURNSTILE_SECRET needed for CAPTCHA)
+`JWT_EXPIRES_IN` (default 24h) · `TURNSTILE_SECRET` (set in Render — enables CAPTCHA) · cookie-auth (inert unless `COOKIE_AUTH=on`): `COOKIE_AUTH`, `COOKIE_SAMESITE`, `COOKIE_DOMAIN`, `COOKIE_SECURE`, `COOKIE_MAX_AGE_MS`. All documented in `backend/.env.example`. Existing Render vars unchanged: `DATABASE_URL`, `DIRECT_URL`, `FRONTEND_URL`, `JWT_SECRET` (≥32), `NODE_ENV=production`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Cloudflare Pages: `VITE_API_URL`.
 
 ## Outstanding / backlog
-- **Refund / cancellation path** (deferred): owners can't cancel a project once past `open` (deposit involved). `DELETE /projects/:id` blocks it; needs a release-talent + refund flow.
-- **Repo hygiene:** delete the now-orphaned `backend/src/routes/jobs.js` (dead, unimported); delete stray root `vite.config.js.timestamp-*.mjs` files; `dist/` is tracked in git (`git rm -r --cached dist` + add to `.gitignore`). `main/` is a separate "Coming Soon" static page (left intact); `living-gallery-prototype.html` is a prototype.
-- **About-page text** edits are frontend-only (don't persist) — could move into `SiteSetting`.
-- **Security (standing recs in `SECURITY_REVIEW.md`):** move JWT from `localStorage` to an httpOnly cookie; add a CSP header on Cloudflare; consider shorter JWT lifetime / revocation. `requireAuth` now does a DB lookup per request (deliberate, for instant ban/delete) — fine at current scale.
-- **Deps:** `npm audit` is clean on the backend; the frontend has only dev-only `esbuild`/`vite` advisories — do **not** `npm audit fix --force` (it jumps to Vite 8, breaking).
-- **No automated tests** exist (no Vitest/supertest).
-- Pre-launch: rotate any previously-leaked `yomna@lawnndesign.com` credential if still present.
+- **Verify + push the last batch.** The 5-feature batch (profile dropdown, skills, carousel, reject-transfer, marketplace/feed) and the project-chat rework were authored but **not compile-tested in-session** (sandbox mount truncation). Run `npm run dev` and smoke-test before/after pushing.
+- **JWT → httpOnly cookie cutover** (last standing security item): backend ready behind `COOKIE_AUTH`. Prereq: move the API to a **same-site host** (`api.lawnndesign.com`, Cloudflare-proxied to Render), then frontend cutover (`credentials:'include'` + echo the CSRF cookie), then flip the flag. Full plan in `docs/JWT_COOKIE_MIGRATION.md`.
+- **Confirm `lawnn-private` Supabase bucket is NOT public** (Dashboard → Storage). Chat/application/payment files rely on signed URLs.
+- **Chat attachments** are images/PDF only — widen to zip/design files later if needed.
+- **Refund / cancellation path** still deferred (owners can't cancel past `open`).
+- **Repo hygiene** (older, still open): delete stray root `vite.config.js.timestamp-*.mjs`; `dist/` is tracked (`git rm -r --cached dist` + `.gitignore`); confirm/remove dead `backend/src/routes/jobs.js`.
+- Onboarding has its own skill search input (works, supports custom) — could be unified with `SkillPicker`.
 
 ## Key files
-- Backend routes: `backend/src/routes/{auth,profiles,projects,admin,conversations,feed,marketplace,news,notifications,uploads,settings}.js`; middleware `requireAuth.js`; libs `sanitize.js` (`safeUrl`, `nonNegativeInt`, `normalizeEmail`), `supabase.js`, `notify.js`.
-- Frontend: `src/App.jsx` (orchestrator: state, routing, nav wiring), `src/lib/{api.js,mappers.js,toast.js}`, `src/components/{auth.jsx,TopNav.jsx,ui.jsx,ErrorBoundary.jsx,Toaster.jsx}`, `src/pages/*`.
+- Backend routes: `backend/src/routes/{auth,profiles,projects,admin,conversations,feed,marketplace,news,notifications,uploads,settings}.js`; middleware `requireAuth.js`; libs `sanitize.js` (`safeUrl`, `clampText`, `validatePassword`, `generatePassword`, `normalizeEmail`, `nonNegativeInt`), `password.js`, `loginThrottle.js`, `turnstile.js`, `cookies.js`, `supabase.js`, `notify.js`; `socket.js`.
+- Frontend: `src/App.jsx` (state/routing/nav, `handleNavChange(v, talent)`, `heroImages`), `src/lib/{api.js,mappers.js,toast.js,socket.js}`, `src/components/{auth.jsx,TopNav.jsx,ui.jsx,ErrorBoundary.jsx,Toaster.jsx}`, `src/pages/*` (notably `ProjectsPage.jsx` — project modal/chat/payment proofs; `ChatPage.jsx`; `HomePage.jsx` — carousel; `AdminPage.jsx` — content/payments).
+- Docs: `SECURITY_REVIEW.md`, `docs/JWT_COOKIE_MIGRATION.md`.
