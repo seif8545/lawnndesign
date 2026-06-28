@@ -303,6 +303,8 @@ export default function App() {
         return <InfoPage slug="privacy" setView={handleNavChange} />;
       case 'terms':
         return <InfoPage slug="terms" setView={handleNavChange} />;
+      case 'refund':
+        return <InfoPage slug="refund" setView={handleNavChange} />;
       case 'contact':
         return <InfoPage slug="contact" setView={handleNavChange} />;
       case 'marketplace':
@@ -408,6 +410,7 @@ export default function App() {
               { label: 'Contact', nav: 'contact' },
               { label: 'Privacy', nav: 'privacy' },
               { label: 'Terms', nav: 'terms' },
+              { label: 'Refund', nav: 'refund' },
             ].map(({ label, nav }) => (
               <button
                 key={nav}
