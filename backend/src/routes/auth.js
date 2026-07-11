@@ -3,7 +3,7 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import { normalizeEmail, validatePassword } from '../lib/sanitize.js'
+import { normalizeEmail, validatePassword, clampText } from '../lib/sanitize.js'
 import { hashPassword, verifyPassword } from '../lib/password.js'
 import { cooldownMs, waitMessage } from '../lib/loginThrottle.js'
 import { turnstileEnabled, verifyTurnstile, CAPTCHA_AFTER_FAILURES } from '../lib/turnstile.js'
@@ -43,7 +43,8 @@ function signToken(user) {
 
 // ── POST /auth/register ───────────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
-  const { password, name, role = 'student', university, dept, year } = req.body
+  const { password, role = 'student', university, dept, year } = req.body
+  const name = clampText(req.body.name, 120)
   const email = normalizeEmail(req.body.email)
 
   if (!email || !password || !name) {
@@ -66,26 +67,37 @@ router.post('/register', async (req, res) => {
   const hash = await hashPassword(password)
   const initials = name.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()
 
-  const user = await prisma.user.create({
-    data: {
-      email,
-      password: hash,
-      name,
-      role,
-      initials,
-      // Auto-create a Profile for students
-      ...(role === 'student' && {
-        profile: {
-          create: {
-            university: university || '',
-            dept: dept || '',
-            year: year ? parseInt(year) : null,
+  let user
+  try {
+    user = await prisma.user.create({
+      data: {
+        email,
+        password: hash,
+        name,
+        role,
+        initials,
+        // Auto-create a Profile for students
+        ...(role === 'student' && {
+          profile: {
+            create: {
+              university: university || '',
+              dept: dept || '',
+              year: year ? parseInt(year) : null,
+            },
           },
-        },
-      }),
-    },
-    include: { profile: true },
-  })
+        }),
+      },
+      include: { profile: true },
+    })
+  } catch (err) {
+    // Unique-email race: two simultaneous registrations slipping past the
+    // pre-check must 409, not crash the process as an unhandled rejection.
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'An account with this email already exists' })
+    }
+    console.error(err)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
 
   const token = signToken(user)
   issueSession(res, token)
@@ -260,7 +272,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
   // invalidated (a changed password should log out anyone else holding a token).
   const data = { password: hash, mustChangePassword: false, tokenVersion: { increment: 1 } }
   if (typeof name === 'string' && name.trim()) {
-    const clean = name.trim()
+    const clean = clampText(name, 120)
     data.name = clean
     data.initials = clean.split(' ').map(w => w[0]).join('').slice(0, 4).toUpperCase()
   }

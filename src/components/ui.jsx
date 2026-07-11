@@ -276,7 +276,7 @@ export function PortfolioBlock({ color, label, height = 'medium', imageUrl, pdfU
     <div
       className={`portfolio-card ${heights[height]} rounded-xl flex items-end p-3 cursor-pointer overflow-hidden relative`}
       style={imageUrl
-        ? { backgroundImage: `url(${imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+        ? { backgroundImage: `url("${encodeURI(imageUrl).replace(/"/g, '%22')}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
         : { background: `linear-gradient(160deg, ${color}cc, ${color})` }
       }
     >

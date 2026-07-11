@@ -94,7 +94,7 @@ export function HomePage({ setView, setSelectedTalent, talents, heroImageUrl, he
               <div className="relative aspect-[4/5] gallery-frame bg-[#f3efe4] overflow-hidden">
                 {heroFeature?.imageUrl ? (
                   <>
-                    <div key={heroFeature.imageUrl} className="absolute inset-0 animate-fade-in" style={{ backgroundImage: `url(${heroFeature.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                    <div key={heroFeature.imageUrl} className="absolute inset-0 animate-fade-in" style={{ backgroundImage: `url("${encodeURI(heroFeature.imageUrl).replace(/"/g, '%22')}")`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
                     {heroFeature.carousel && heroImages.length > 1 && (
                       <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10">
                         {heroImages.map((_, i) => (
@@ -218,7 +218,7 @@ export function TalentCard({ talent, onClick }) {
             key={i}
             className="h-full flex items-end p-1.5 overflow-hidden"
             style={item.imageUrl
-              ? { backgroundImage: `url(${item.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+              ? { backgroundImage: `url("${encodeURI(item.imageUrl).replace(/"/g, '%22')}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
               : { background: `linear-gradient(160deg, ${item.color}aa, ${item.color})` }
             }
           >

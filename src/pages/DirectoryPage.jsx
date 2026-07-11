@@ -61,7 +61,7 @@ export function DirectoryCard({ talent, onClick }) {
               key={i}
               className="h-16 rounded-lg overflow-hidden"
               style={item.imageUrl
-                ? { backgroundImage: `url(${item.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                ? { backgroundImage: `url("${encodeURI(item.imageUrl).replace(/"/g, '%22')}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
                 : { background: `linear-gradient(160deg, ${item.color}aa, ${item.color})` }
               }
             />

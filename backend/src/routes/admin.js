@@ -3,7 +3,7 @@ import { hashPassword } from '../lib/password.js'
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
-import { normalizeEmail, validatePassword, generatePassword } from '../lib/sanitize.js'
+import { normalizeEmail, validatePassword, generatePassword, clampText } from '../lib/sanitize.js'
 
 const router = Router()
 
@@ -28,7 +28,8 @@ function buildInviteUrl(token) {
 // Invite a new student. Admin does NOT set the password — the student does,
 // via the one-time setup link returned in the response.
 router.post('/students', async (req, res) => {
-  const { name, university, dept, year, isGrad = false } = req.body
+  const { university, dept, year, isGrad = false } = req.body
+  const name = clampText(req.body.name, 120)
   const email = normalizeEmail(req.body.email)
 
   if (!name || !email) {
@@ -193,7 +194,8 @@ router.get('/users', async (req, res) => {
 // Create a client account directly. Unlike students (invite flow), the admin
 // sets the password and shares the credentials with the client.
 router.post('/clients', async (req, res) => {
-  const { name, password } = req.body
+  const { password } = req.body
+  const name = clampText(req.body.name, 120)
   const email = normalizeEmail(req.body.email)
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'name, email and password are required' })
@@ -259,7 +261,8 @@ router.delete('/users/:id', async (req, res) => {
         error: 'This user still has active jobs, projects, or other records and cannot be removed yet.',
       })
     }
-    throw err
+    console.error(err)
+    return res.status(500).json({ error: 'Internal server error' })
   }
 })
 
@@ -269,8 +272,18 @@ router.delete('/students/:id', async (req, res) => {
   if (!user || user.role !== 'student') {
     return res.status(404).json({ error: 'Student not found' })
   }
-  await prisma.user.delete({ where: { id: req.params.id } })
-  return res.status(204).send()
+  try {
+    await prisma.user.delete({ where: { id: req.params.id } })
+    return res.status(204).send()
+  } catch (err) {
+    if (err.code === 'P2003') {
+      return res.status(409).json({
+        error: 'This student still has active projects or other records and cannot be removed yet.',
+      })
+    }
+    console.error(err)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
 })
 
 export default router

@@ -74,6 +74,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
 // ── GET /feed/:id/comments ──────────────────────────────────────────────────
 router.get('/:id/comments', async (req, res) => {
+  const parent = await prisma.feedPost.findUnique({ where: { id: req.params.id }, select: { status: true } })
+  if (!parent || parent.status !== 'approved') return res.status(404).json({ error: 'Post not found' })
   const comments = await prisma.comment.findMany({
     where: { feedPostId: req.params.id },
     include: { user: { select: { id: true, name: true, initials: true, avatarColor: true } } },
@@ -160,8 +162,8 @@ router.post('/:id/like', requireAuth, async (req, res) => {
   const feedPostId = req.params.id
   const userId     = req.user.id
 
-  const exists = await prisma.feedPost.findUnique({ where: { id: feedPostId }, select: { id: true } })
-  if (!exists) return res.status(404).json({ error: 'Post not found' })
+  const exists = await prisma.feedPost.findUnique({ where: { id: feedPostId }, select: { status: true } })
+  if (!exists || exists.status !== 'approved') return res.status(404).json({ error: 'Post not found' })
 
   const existing = await prisma.feedLike.findUnique({
     where: { userId_feedPostId: { userId, feedPostId } },
@@ -189,10 +191,17 @@ router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) 
   if (!['approved', 'rejected', 'pending'].includes(status)) {
     return res.status(400).json({ error: 'status must be approved | rejected | pending' })
   }
-  const post = await prisma.feedPost.update({
-    where: { id: req.params.id },
-    data:  { status },
-  })
+  let post
+  try {
+    post = await prisma.feedPost.update({
+      where: { id: req.params.id },
+      data:  { status },
+    })
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Post not found' })
+    console.error(err)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
 
   if (status === 'approved') {
     await notify(post.userId, {

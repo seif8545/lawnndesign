@@ -51,22 +51,23 @@ router.get('/', async (req, res) => {
     },
   })
 
-  // Unread count only for conversations the user actually participates in.
+  // Unread counts in ONE grouped query instead of a COUNT per conversation.
   // (Admins observe every thread but only see unread badges on their own DMs.)
+  const participantConvIds = conversations.filter(conv => isParticipant(conv, userId)).map(conv => conv.id)
+  const unreadGroups = participantConvIds.length
+    ? await prisma.message.groupBy({
+        by: ['conversationId'],
+        where: { conversationId: { in: participantConvIds }, senderId: { not: userId }, readAt: null },
+        _count: { _all: true },
+      })
+    : []
+  const unreadByConv = Object.fromEntries(unreadGroups.map(g => [g.conversationId, g._count._all]))
+
   const withUnread = await Promise.all(
     conversations.map(async conv => {
-      const unreadCount = isParticipant(conv, userId)
-        ? await prisma.message.count({
-            where: {
-              conversationId: conv.id,
-              senderId: { not: userId },
-              readAt: null,
-            },
-          })
-        : 0
       // Sign the last-message preview's attachment, if any.
       const messages = conv.messages?.length ? [await signMessageFile(conv.messages[0])] : conv.messages
-      return { ...conv, messages, unreadCount }
+      return { ...conv, messages, unreadCount: unreadByConv[conv.id] || 0 }
     })
   )
 

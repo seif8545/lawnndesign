@@ -387,7 +387,7 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                 <div
                   className="w-12 h-10 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center relative"
                   style={item.imageUrl
-                    ? { backgroundImage: `url(${item.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                    ? { backgroundImage: `url("${encodeURI(item.imageUrl).replace(/"/g, '%22')}")`, backgroundSize: 'cover', backgroundPosition: 'center' }
                     : { background: item.color }
                   }
                 >

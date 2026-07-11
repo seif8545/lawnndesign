@@ -251,6 +251,7 @@ model Application {
   createdAt DateTime @default(now())
 
   @@unique([projectId, userId]) // one application per user per project
+  @@index([userId])
   @@map("applications")
 }
 
@@ -304,6 +305,9 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([status, vip, createdAt])
+  @@index([clientId])
+  @@index([talentId])
   @@map("projects")
 }
 
@@ -344,6 +348,7 @@ model FeedPost {
 
   createdAt DateTime @default(now())
 
+  @@index([status, createdAt])
   @@map("feed_posts")
 }
 
@@ -433,6 +438,8 @@ model Message {
 
   createdAt      DateTime     @default(now())
 
+  @@index([conversationId, createdAt])
+  @@index([senderId])
   @@map("messages")
 }
 
@@ -456,6 +463,8 @@ model MarketplaceListing {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([status, createdAt])
+  @@index([sellerId])
   @@map("marketplace_listings")
 }
 
@@ -474,6 +483,8 @@ model Offer {
 
   createdAt DateTime @default(now())
 
+  @@index([listingId])
+  @@index([buyerId])
   @@map("offers")
 }
 

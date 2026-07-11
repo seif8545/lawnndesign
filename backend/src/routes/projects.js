@@ -126,9 +126,20 @@ router.get('/', requireAuth, async (req, res) => {
   const signed = await Promise.all(
     projects.map(async p => {
       const withProofs = await withSignedProofs(p, req.user)
-      // Only the owner/admin should get signed application files.
+      // Only the owner/admin should get application files at all. Don't SIGN
+      // them here — that's an N+1 Supabase call per file on every list load.
+      // Public (http) portfolio refs pass through; private storage paths are
+      // nulled, and the review UI fetches signed URLs on demand via
+      // GET /projects/:id/applications (which still signs).
       const canSeeApps = req.user.role === 'admin' || p.clientId === req.user.id
-      withProofs.applications = canSeeApps ? await signApplicationFiles(p.applications) : []
+      withProofs.applications = canSeeApps
+        ? p.applications.map(a => ({
+            ...a,
+            files: (a.files || []).map(f =>
+              f.url && !/^https?:\/\//i.test(f.url) ? { ...f, url: null } : f
+            ),
+          }))
+        : []
       return withProofs
     })
   )
@@ -210,10 +221,17 @@ router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) 
     return res.status(400).json({ error: `status must be one of: ${valid.join(', ')}` })
   }
 
-  const project = await prisma.project.update({
-    where: { id: req.params.id },
-    data: { status },
-  })
+  let project
+  try {
+    project = await prisma.project.update({
+      where: { id: req.params.id },
+      data: { status },
+    })
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Project not found' })
+    console.error(err)
+    return res.status(500).json({ error: 'Internal server error' })
+  }
 
   if (status === 'open') {
     await notify(project.clientId, {
@@ -384,12 +402,14 @@ router.post('/:id/advance', requireAuth, async (req, res) => {
       nextStatus = 'in_progress'
       break
 
-    case 'in_progress':
+    case 'in_progress': {
       if (!isTalent) return res.status(403).json({ error: 'Only the talent can submit delivery' })
-      if (!req.body.deliveryNote) return res.status(400).json({ error: 'deliveryNote is required' })
+      const deliveryNote = clampText(req.body.deliveryNote, 5000)
+      if (!deliveryNote) return res.status(400).json({ error: 'deliveryNote is required' })
       nextStatus = 'delivered'
-      data = { deliveryNote: req.body.deliveryNote, deliveredAt: new Date() }
+      data = { deliveryNote, deliveredAt: new Date() }
       break
+    }
 
     case 'delivered':
       if (!isAdmin) return res.status(403).json({ error: 'Only Lawnn can confirm the final payment' })
@@ -444,10 +464,13 @@ router.post('/:id/payment-sent', requireAuth, async (req, res) => {
   const { proofPath } = req.body || {}
   // Must be a payment-proof storage path with no traversal or scheme — it's
   // later signed for the admin/owner to view.
+  // Pin the path to THIS caller's upload folder (payment-proof/<userId>/…) so a
+  // client can't attach someone else's private screenshot to their project.
+  const proofRe = new RegExp(`^payment-proof/${req.user.id}/[A-Za-z0-9_][A-Za-z0-9_\\-/.]*$`)
   if (
     !proofPath || typeof proofPath !== 'string' ||
-    !/^payment-proof\/[A-Za-z0-9_][A-Za-z0-9_\-/.]*$/.test(proofPath) ||
-    proofPath.includes('..')
+    proofPath.includes('..') ||
+    !proofRe.test(proofPath)
   ) {
     return res.status(400).json({ error: 'A valid transfer screenshot is required' })
   }
@@ -518,7 +541,7 @@ router.post('/:id/reject-payment', requireAuth, requireRole('admin'), async (req
 
 // ── POST /projects/:id/reviews ────────────────────────────────────────────────
 router.post('/:id/reviews', requireAuth, async (req, res) => {
-  const { rating } = req.body
+  const rating = nonNegativeInt(req.body.rating)
   const comment = clampText(req.body.comment, 2000)
   if (!rating || !comment) return res.status(400).json({ error: 'rating and comment are required' })
   if (rating < 1 || rating > 5) return res.status(400).json({ error: 'rating must be 1–5' })
@@ -538,7 +561,7 @@ router.post('/:id/reviews', requireAuth, async (req, res) => {
   let review
   try {
     review = await prisma.review.create({
-      data: { projectId: project.id, authorId: req.user.id, recipientId, rating: parseInt(rating), comment },
+      data: { projectId: project.id, authorId: req.user.id, recipientId, rating, comment },
     })
   } catch (err) {
     // @@unique([projectId, authorId]) — one review per person per project.
@@ -546,11 +569,14 @@ router.post('/:id/reviews', requireAuth, async (req, res) => {
     throw err
   }
 
-  const reviews = await prisma.review.findMany({ where: { recipientId } })
-  const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+  const agg = await prisma.review.aggregate({
+    where: { recipientId },
+    _avg: { rating: true },
+    _count: true,
+  })
   await prisma.profile.updateMany({
     where: { userId: recipientId },
-    data: { rating: Math.round(avg * 10) / 10, reviewCount: reviews.length },
+    data: { rating: Math.round((agg._avg.rating || 0) * 10) / 10, reviewCount: agg._count },
   })
 
   const reviewCount = await prisma.review.count({ where: { projectId: project.id } })

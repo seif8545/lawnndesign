@@ -62,65 +62,74 @@ export function initSocket(httpServer) {
   io.on('connection', async socket => {
     const { id: userId, role } = socket.user
 
-    // Join all conversation rooms this user is a participant in
-    const myConvos = await prisma.conversation.findMany({
-      where: { OR: [{ clientId: userId }, { talentId: userId }, { adminId: userId }] },
-      select: { id: true },
-    })
-    myConvos.forEach(c => socket.join(`conv:${c.id}`))
-
-    // Admins silently join every conversation room
-    if (role === 'admin') {
-      const allConvos = await prisma.conversation.findMany({ select: { id: true } })
-      allConvos.forEach(c => socket.join(`conv:${c.id}`))
+    // Join all conversation rooms this user is a participant in. Never let a
+    // DB hiccup here become an unhandled rejection (which would kill the process).
+    try {
+      const myConvos = await prisma.conversation.findMany({
+        where: { OR: [{ clientId: userId }, { talentId: userId }, { adminId: userId }] },
+        select: { id: true },
+      })
+      myConvos.forEach(c => socket.join(`conv:${c.id}`))
+    } catch (err) {
+      console.error('[socket] failed to join conversation rooms:', err)
     }
 
+    // Admins join ONE broadcast room instead of every conversation room —
+    // O(1) joins no matter how many conversations exist. Message broadcasts
+    // target the conversation room + this room (socket.io de-dupes the union,
+    // so a participating admin still receives each message exactly once).
+    if (role === 'admin') socket.join('admins')
+
     // ── send_message ────────────────────────────────────────────────────────
-    socket.on('send_message', async ({ conversationId, content, fileUrl, fileName, fileMime }) => {
-      if (!conversationId || !content?.trim()) return
-      // Cap message length. Socket payloads bypass the REST express.json('1mb')
-      // limit, so without this a client could persist arbitrarily large strings.
-      const body = content.trim().slice(0, 5000)
+    socket.on('send_message', async ({ conversationId, content, fileUrl, fileName, fileMime } = {}) => {
+      try {
+        if (!conversationId || !content?.trim()) return
+        // Cap message length. Socket payloads bypass the REST express.json('1mb')
+        // limit, so without this a client could persist arbitrarily large strings.
+        const body = content.trim().slice(0, 5000)
 
-      // Verify sender is a participant (client, student, or the admin on an
-      // admin-initiated thread). Admins observing others' threads can't send.
-      const conv = await prisma.conversation.findUnique({ where: { id: conversationId } })
-      if (!conv) return
-      if (conv.clientId !== userId && conv.talentId !== userId && conv.adminId !== userId) return
+        // Verify sender is a participant (client, student, or the admin on an
+        // admin-initiated thread). Admins observing others' threads can't send.
+        const conv = await prisma.conversation.findUnique({ where: { id: conversationId } })
+        if (!conv) return
+        if (conv.clientId !== userId && conv.talentId !== userId && conv.adminId !== userId) return
 
-      // Ensure the sender is subscribed to this room before broadcasting, so a
-      // conversation created after they connected (e.g. started from a
-      // marketplace listing) still echoes their own message back to them.
-      socket.join(`conv:${conversationId}`)
+        // Ensure the sender is subscribed to this room before broadcasting, so a
+        // conversation created after they connected (e.g. started from a
+        // marketplace listing) still echoes their own message back to them.
+        socket.join(`conv:${conversationId}`)
 
-      const message = await prisma.message.create({
-        data: {
-          conversationId,
-          senderId: userId,
-          content:  body,
-          fileUrl:  safeUrl(fileUrl),
-          fileName: fileName || null,
-          fileMime: fileMime || null,
-        },
-        include: {
-          sender: { select: { id: true, name: true, initials: true, avatarColor: true, profile: { select: { avatar: true } } } },
-        },
-      })
+        const message = await prisma.message.create({
+          data: {
+            conversationId,
+            senderId: userId,
+            content:  body,
+            fileUrl:  safeUrl(fileUrl),
+            fileName: fileName || null,
+            fileMime: fileMime || null,
+          },
+          include: {
+            sender: { select: { id: true, name: true, initials: true, avatarColor: true, profile: { select: { avatar: true } } } },
+          },
+        })
 
-      // Update conversation's updatedAt so list sorts correctly
-      await prisma.conversation.update({
-        where: { id: conversationId },
-        data:  { updatedAt: new Date() },
-      })
+        // Update conversation's updatedAt so list sorts correctly
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data:  { updatedAt: new Date() },
+        })
 
-      // Private attachments are stored as paths — broadcast a signed URL so the
-      // recipients can actually open the file.
-      const outgoing = message.fileUrl && !/^https?:\/\//i.test(message.fileUrl)
-        ? { ...message, fileUrl: await signPrivateRead(message.fileUrl) }
-        : message
+        // Private attachments are stored as paths — broadcast a signed URL so the
+        // recipients can actually open the file.
+        const outgoing = message.fileUrl && !/^https?:\/\//i.test(message.fileUrl)
+          ? { ...message, fileUrl: await signPrivateRead(message.fileUrl) }
+          : message
 
-      // Broadcast to everyone in the room (both participants + any admin)
-      io.to(`conv:${conversationId}`).emit('message', outgoing)
+        // Broadcast to everyone in the room (both participants + any admin)
+        io.to(`conv:${conversationId}`).to('admins').emit('message', outgoing)
+      } catch (err) {
+        console.error('[socket] send_message failed:', err)
+      }
     })
 
     // ── typing indicator ────────────────────────────────────────────────────
@@ -130,39 +139,47 @@ export function initSocket(httpServer) {
     })
 
     // ── mark_read ───────────────────────────────────────────────────────────
-    socket.on('mark_read', async ({ conversationId }) => {
-      if (!conversationId) return
-      // Only a participant may clear unread state on a thread. (Admins observing
-      // others' threads shouldn't flip read receipts on conversations they're
-      // merely watching.)
-      const conv = await prisma.conversation.findUnique({ where: { id: conversationId } })
-      if (!conv) return
-      if (conv.clientId !== userId && conv.talentId !== userId && conv.adminId !== userId) return
+    socket.on('mark_read', async ({ conversationId } = {}) => {
+      try {
+        if (!conversationId) return
+        // Only a participant may clear unread state on a thread. (Admins observing
+        // others' threads shouldn't flip read receipts on conversations they're
+        // merely watching.)
+        const conv = await prisma.conversation.findUnique({ where: { id: conversationId } })
+        if (!conv) return
+        if (conv.clientId !== userId && conv.talentId !== userId && conv.adminId !== userId) return
 
-      // Mark all messages in this conversation not sent by this user as read
-      await prisma.message.updateMany({
-        where: {
-          conversationId,
-          senderId: { not: userId },
-          readAt:   null,
-        },
-        data: { readAt: new Date() },
-      })
-      // Tell the other participant their messages were read
-      socket.to(`conv:${conversationId}`).emit('messages_read', { conversationId, readBy: userId })
+        // Mark all messages in this conversation not sent by this user as read
+        await prisma.message.updateMany({
+          where: {
+            conversationId,
+            senderId: { not: userId },
+            readAt:   null,
+          },
+          data: { readAt: new Date() },
+        })
+        // Tell the other participant their messages were read
+        socket.to(`conv:${conversationId}`).emit('messages_read', { conversationId, readBy: userId })
+      } catch (err) {
+        console.error('[socket] mark_read failed:', err)
+      }
     })
 
     // ── new_conversation (admin join hook) ──────────────────────────────────
     // When a new conversation is created via REST, the server notifies admins
     // so they can join the new room without reconnecting
-    socket.on('join_conversation', ({ conversationId }) => {
-      const conv_check = prisma.conversation.findUnique({ where: { id: conversationId } }).then(conv => {
+    socket.on('join_conversation', async ({ conversationId } = {}) => {
+      try {
+        if (!conversationId) return
+        const conv = await prisma.conversation.findUnique({ where: { id: conversationId } })
         if (!conv) return
         const isParticipant = conv.clientId === userId || conv.talentId === userId || conv.adminId === userId
         if (isParticipant || role === 'admin') {
           socket.join(`conv:${conversationId}`)
         }
-      })
+      } catch (err) {
+        console.error('[socket] join_conversation failed:', err)
+      }
     })
   })
 

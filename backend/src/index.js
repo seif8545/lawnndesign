@@ -121,6 +121,19 @@ app.use((err, _req, res, _next) => {
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 initSocket(server)
 
+// ── Last-resort safety nets ──────────────────────────────────────────────────
+// Express 4 does not catch a rejected promise inside an async route handler; on
+// Node ≥15 such a rejection would otherwise kill the whole process. Log loudly
+// and keep serving. Truly unknown synchronous exceptions still exit (the host
+// restarts us) after being logged.
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err)
+  process.exit(1)
+})
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 server.listen(PORT, () => {
   console.log(`\n🌿 Lawnn API running on http://localhost:${PORT}`)
