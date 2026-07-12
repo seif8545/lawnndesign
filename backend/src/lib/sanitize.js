@@ -90,6 +90,10 @@ export function clampText(value, max = 5000) {
 // increments) and NaN (which crashes Prisma Int columns with a 500).
 export function nonNegativeInt(value) {
   if (value === undefined || value === null || value === '') return null
+  // Only accept primitives that represent a number. Without this, JS coercion
+  // lets hostile JSON slip through: Number([]) === 0, Number([5]) === 5, and
+  // Number(true) === 1 would all be treated as valid amounts.
+  if (typeof value !== 'number' && typeof value !== 'string') return null
   const n = Number(value)
   if (!Number.isFinite(n) || n < 0) return null
   return Math.floor(n)
