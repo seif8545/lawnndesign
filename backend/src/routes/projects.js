@@ -247,6 +247,11 @@ router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) 
 // ── POST /projects/:id/applications ───────────────────────────────────────────
 // Students apply to an open project (note + selected portfolio items / uploads).
 router.post('/:id/applications', requireAuth, requireRole('student'), async (req, res) => {
+  // Community-access students engage everywhere else but can't apply to jobs yet.
+  const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { communityOnly: true } })
+  if (me?.communityOnly) {
+    return res.status(403).json({ error: "Your account has community access for now. Once your portfolio is stronger, the Lawnn team will unlock job applications." })
+  }
   const { files = [] } = req.body
   const note = clampText(req.body.note, 5000)
   if (!note) return res.status(400).json({ error: 'Application note is required' })

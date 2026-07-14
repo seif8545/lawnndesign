@@ -68,6 +68,7 @@ model User {
   avatarColor String   @default("#21326c")
   suspended   Boolean  @default(false) // admin suspension: blocks login + hides public content
   mustChangePassword Boolean @default(false) // force a password reset on next login
+  communityOnly      Boolean @default(false) // community tier: can engage but not apply to jobs
   failedLoginAttempts Int      @default(0)  // consecutive failed logins (throttle)
   lockedUntil         DateTime?              // login cooldown expiry (throttle)
   tokenVersion        Int      @default(0)  // bumped to invalidate all existing JWTs
