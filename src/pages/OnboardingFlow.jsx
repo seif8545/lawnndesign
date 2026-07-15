@@ -353,7 +353,7 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
           >
             {current.cta}
           </button>
-          {!isLast && (
+          {!isLast && !isStudent && (
             <button onClick={onDone} className="w-full py-2 text-sm text-[#21326c]/40 hover:text-[#21326c] transition-colors">
               Skip setup
             </button>

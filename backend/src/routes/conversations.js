@@ -121,6 +121,9 @@ router.post('/', async (req, res) => {
   // pair always dedupes to a single conversation. The slots are just user
   // references; the chat UI renders participants by their actual identity.
   let clientId, actualTalentId
+  const isClientStudent =
+    (role === 'client' && other.role === 'student') ||
+    (role === 'student' && other.role === 'client')
   if (role === 'client' && other.role === 'student') {
     clientId = userId
     actualTalentId = other.id
@@ -133,11 +136,40 @@ router.post('/', async (req, res) => {
     actualTalentId = b
   }
 
-  // Upsert: find existing or create new
-  const conversation = await prisma.conversation.upsert({
+  // Return an existing thread as-is (don't hide past history), attaching project
+  // context if provided.
+  const existing = await prisma.conversation.findUnique({
     where: { clientId_talentId: { clientId, talentId: actualTalentId } },
-    update: projectId ? { projectId } : {},
-    create: { clientId, talentId: actualTalentId, projectId: projectId || null },
+    include: convInclude,
+  })
+  if (existing) {
+    if (projectId && existing.projectId !== projectId) {
+      const updated = await prisma.conversation.update({
+        where: { id: existing.id },
+        data: { projectId },
+        include: convInclude,
+      })
+      return res.json(updated)
+    }
+    return res.json(existing)
+  }
+
+  // Gate NEW client↔student threads: the student must have applied to one of the
+  // client's projects. Admin threads and same-role marketplace pairs are exempt.
+  if (isClientStudent) {
+    const application = await prisma.application.findFirst({
+      where: { userId: actualTalentId, project: { clientId } },
+      select: { id: true },
+    })
+    if (!application) {
+      return res.status(403).json({
+        error: 'You can only message a student who has applied to one of your projects.',
+      })
+    }
+  }
+
+  const conversation = await prisma.conversation.create({
+    data: { clientId, talentId: actualTalentId, projectId: projectId || null },
     include: convInclude,
   })
 

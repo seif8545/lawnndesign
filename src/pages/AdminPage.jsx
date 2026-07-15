@@ -675,9 +675,25 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
                 <>
                   <p className="text-sm font-semibold text-[#21326c] mb-0.5">{job.title}</p>
                   <p className="text-xs text-[#21326c]/60">{job.client} · {job.budget} EGP</p>
+                  {job.brief && (
+                    <p className="text-sm text-[#21326c]/80 leading-relaxed line-clamp-3 mt-2">{job.brief}</p>
+                  )}
                   {job.tags?.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {job.tags.map(t => <span key={t} className="tag-pill">{t}</span>)}
+                    </div>
+                  )}
+                  {job.attachments?.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {job.attachments.map(att => (
+                        <a key={att.id}
+                          href={/^https?:\/\//i.test(att.url || '') ? att.url : undefined}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-2 py-1 rounded-lg bg-[#21326c]/5 hover:bg-[#21326c]/10 text-xs text-[#2563eb] transition-colors">
+                          <ImageIcon size={12} className="flex-shrink-0" />
+                          <span className="truncate">{att.name}</span>
+                        </a>
+                      ))}
                     </div>
                   )}
                 </>

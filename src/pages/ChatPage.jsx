@@ -17,7 +17,7 @@ export function ChatPage({ currentUser }) {
   const [loadingConvos, setLoadingConvos] = useState(true);
   const [loadingMsgs, setLoadingMsgs]   = useState(false);
   const [searchQ, setSearchQ]           = useState('');
-  const messagesEndRef                  = useRef(null);
+  const messagesContainerRef            = useRef(null);
   const typingTimerRef                  = useRef(null);
   const textareaRef                     = useRef(null);
 
@@ -79,7 +79,9 @@ export function ChatPage({ currentUser }) {
 
   // ── Auto-scroll to bottom ─────────────────────────────────────────────────
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll the message pane itself to the newest message — never the page.
+    const el = messagesContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   // ── Socket event listeners ────────────────────────────────────────────────
@@ -365,7 +367,7 @@ export function ChatPage({ currentUser }) {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
                   {loadingMsgs && <p className="text-center text-sm text-[#21326c]/40 pt-8">Loading messages…</p>}
                   {!loadingMsgs && messages.length === 0 && (
                     <p className="text-center text-sm text-[#21326c]/40 pt-8">No messages yet — say hello!</p>
@@ -404,7 +406,6 @@ export function ChatPage({ currentUser }) {
                       </div>
                     );
                   })}
-                  <div ref={messagesEndRef} />
                 </div>
 
                 {/* Input — shown only to actual participants (admins can send in
