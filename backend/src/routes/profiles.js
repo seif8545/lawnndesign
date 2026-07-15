@@ -17,14 +17,15 @@ router.get('/', optionalAuth, async (req, res) => {
       ...(skill && {
         skills: { some: { skill: { contains: skill, mode: 'insensitive' } } },
       }),
-      // Hide suspended students from everyone but admins; keep the name search.
+      // Hide suspended + not-yet-approved students from everyone but admins;
+      // keep the name search.
       user: {
-        ...(isAdmin ? {} : { suspended: false }),
+        ...(isAdmin ? {} : { suspended: false, approved: true }),
         ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
       },
     },
     include: {
-      user: { select: { id: true, name: true, initials: true, avatarColor: true } },
+      user: { select: { id: true, name: true, initials: true, avatarColor: true, approved: true } },
       skills: true,
       portfolio: { orderBy: { sortOrder: 'asc' } },
     },
@@ -66,7 +67,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
   const profile = await prisma.profile.findUnique({
     where: { id: req.params.id },
     include: {
-      user: { select: { id: true, name: true, initials: true, avatarColor: true, suspended: true } },
+      user: { select: { id: true, name: true, initials: true, avatarColor: true, suspended: true, approved: true } },
       skills: true,
       portfolio: { orderBy: { sortOrder: 'asc' } },
       education: true,
@@ -75,8 +76,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
   })
 
   if (!profile) return res.status(404).json({ error: 'Profile not found' })
-  // A suspended student's profile is hidden from everyone but admins.
-  if (profile.user?.suspended && req.user?.role !== 'admin') {
+  const isAdmin = req.user?.role === 'admin'
+  const isOwner = profile.userId === req.user?.id
+  // Suspended, or not-yet-approved, student profiles are hidden from everyone
+  // but an admin or the student themselves.
+  if ((profile.user?.suspended || !profile.user?.approved) && !isAdmin && !isOwner) {
     return res.status(404).json({ error: 'Profile not found' })
   }
   return res.json(profile)

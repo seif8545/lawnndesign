@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
 import { normalizeEmail, validatePassword, generatePassword, clampText } from '../lib/sanitize.js'
+import { notify } from '../lib/notify.js'
 
 const router = Router()
 
@@ -171,12 +172,33 @@ router.get('/students', async (req, res) => {
   const students = await prisma.user.findMany({
     where: { role: 'student' },
     include: {
-      profile: { include: { skills: true } },
+      profile: { include: { skills: true, portfolio: true } },
       invite:  { select: { expiresAt: true, acceptedAt: true } },
     },
     orderBy: { createdAt: 'desc' },
   })
   return res.json(students.map(({ password, ...u }) => u))
+})
+
+// ── POST /admin/students/:id/approve ──────────────────────────────────────────
+// Approve a student's completed profile: makes them publicly visible in the
+// directory and able to apply to jobs. Notifies the student.
+router.post('/students/:id/approve', async (req, res) => {
+  const student = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, role: true, approved: true },
+  })
+  if (!student || student.role !== 'student') return res.status(404).json({ error: 'Student not found' })
+  if (student.approved) return res.status(409).json({ error: 'Student is already approved' })
+
+  await prisma.user.update({ where: { id: student.id }, data: { approved: true } })
+  await notify(student.id, {
+    type: 'check',
+    title: 'Your profile is approved! 🎉',
+    body: 'Welcome aboard — your profile is now live and you can start applying to jobs.',
+    link: 'jobs',
+  })
+  return res.json({ ok: true })
 })
 
 // ── GET /admin/users ──────────────────────────────────────────────────────────

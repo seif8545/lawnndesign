@@ -21,6 +21,7 @@ export function mapApiProfile(p) {
   return {
     id:           p.id,
     userId:       p.user.id,
+    approved:     p.user.approved,
     name:         p.user.name,
     initials:     p.user.initials,
     avatarColor:  p.user.avatarColor,

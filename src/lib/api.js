@@ -92,6 +92,7 @@ export const admin = {
   createStudent:  (body) => request('/admin/students',                  { method: 'POST', body }),
   bulkAddStudents:(emails) => request('/admin/students/bulk',           { method: 'POST', body: { emails } }),
   reinviteStudent:(id)   => request(`/admin/students/${id}/reinvite`,   { method: 'POST' }),
+  approveStudent: (id)   => request(`/admin/students/${id}/approve`,    { method: 'POST' }),
   listStudents:   ()     => request('/admin/students'),
   listUsers:      ()     => request('/admin/users'),
   createClient:   (body) => request('/admin/clients',                  { method: 'POST', body }),

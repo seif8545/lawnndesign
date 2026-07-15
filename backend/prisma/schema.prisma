@@ -69,6 +69,7 @@ model User {
   suspended   Boolean  @default(false) // admin suspension: blocks login + hides public content
   mustChangePassword Boolean @default(false) // force a password reset on next login
   communityOnly      Boolean @default(false) // community tier: can engage but not apply to jobs
+  approved           Boolean @default(false) // student profiles go live (public + can apply) only after admin review
   failedLoginAttempts Int      @default(0)  // consecutive failed logins (throttle)
   lockedUntil         DateTime?              // login cooldown expiry (throttle)
   tokenVersion        Int      @default(0)  // bumped to invalidate all existing JWTs

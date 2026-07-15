@@ -212,14 +212,15 @@ export default function App() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Prompt students to finish their profile whenever it's incomplete (no bio or
-  // no skills). Runs once talent profiles have loaded; the session-dismissed flag
-  // stops it from reopening immediately after the student closes it.
+  // Prompt students to finish their profile whenever it's incomplete (no bio,
+  // no skills, or no portfolio piece). Runs once talent profiles have loaded; the
+  // session-dismissed flag stops it from reopening immediately after they close it.
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'student' || onboardingDismissed) return;
     const talent = talents.find(t => t.userId === currentUser.id);
     if (!talent) return; // profile not loaded yet
-    const incomplete = !talent.bio?.trim() || !(talent.tags?.length > 0);
+    const hasPortfolio = (talent.portfolio || []).some(p => p.imageUrl || p.pdfUrl);
+    const incomplete = !talent.bio?.trim() || !(talent.tags?.length > 0) || !hasPortfolio;
     if (incomplete) setShowOnboarding(true);
   }, [currentUser, talents, onboardingDismissed]);
 
@@ -328,6 +329,36 @@ export default function App() {
         return <HomePage setView={handleNavChange} setSelectedTalent={setSelectedTalent} talents={talents} heroImageUrl={siteSettings.homeHeroImageUrl} heroImages={heroImages} />;
     }
   };
+
+  // Students who have finished onboarding but aren't approved yet are held on a
+  // review screen — they can't browse, appear publicly, or apply until an admin
+  // approves them. (First-login password setup and onboarding still run first.)
+  const myTalent = currentUser?.role === 'student' ? talents.find(t => t.userId === currentUser.id) : null;
+  const onboardingComplete = !!(myTalent?.bio?.trim() && myTalent?.tags?.length > 0 && (myTalent?.portfolio || []).some(p => p.imageUrl || p.pdfUrl));
+  const pendingApproval = currentUser?.role === 'student'
+    && currentUser?.approved === false
+    && !currentUser?.mustChangePassword
+    && onboardingComplete;
+
+  if (pendingApproval) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center" style={{ background: '#fffcf4' }}>
+        <Toaster />
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-[#21326c]/10">
+          <div className="w-14 h-14 rounded-full mx-auto flex items-center justify-center mb-5 text-2xl font-bold text-white" style={{ background: '#ff9044' }}>
+            {currentUser?.initials || '✓'}
+          </div>
+          <h1 className="font-display text-2xl font-bold text-[#21326c] mb-2">Your profile is under review</h1>
+          <p className="text-sm text-[#21326c]/70 leading-relaxed mb-6">
+            Thanks {currentUser?.name?.split(' ')[0] || 'there'}! The Lawnn team is reviewing your profile and portfolio. Once you're approved you'll appear in the talent directory and be able to apply to jobs — we'll email you as soon as you're in.
+          </p>
+          <button onClick={handleLogout} className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90" style={{ background: '#21326c' }}>
+            Log out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ background: '#fffcf4' }}>

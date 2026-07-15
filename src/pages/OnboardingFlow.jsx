@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Award, BadgeCheck, Briefcase, Building2, Camera, CheckCircle, Image as ImageIcon, Layers, Palette, Plus, Search, Send, Star, Users, Video, Wallet, X } from 'lucide-react';
+import { Award, BadgeCheck, Briefcase, Building2, Camera, CheckCircle, File as FileIcon, Image as ImageIcon, Layers, Palette, Plus, Search, Send, Star, Users, Video, Wallet, X } from 'lucide-react';
 import { Avatar, NotificationPanel, VerifiedBadge } from '../components/ui.jsx';
 import { AVAILABILITY, SKILL_LIBRARY } from '../lib/constants.js';
+import { uploadFile } from '../lib/api.js';
+import { toast } from '../lib/toast.js';
 
 export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone }) {
   const [step, setStep] = useState(0);
   const [skillQuery, setSkillQuery] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   // Student onboarding draft
   const talent = currentUser?.role === 'student' ? talents.find(t => t.userId === currentUser.id) : null;
@@ -13,6 +16,7 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
     bio: talent?.bio || '',
     availability: talent?.availability || 'open',
     tags: talent?.tags ? [...talent.tags] : [],
+    portfolio: talent?.portfolio ? talent.portfolio.map(p => ({ ...p })) : [],
   });
 
   // Client onboarding interest selection
@@ -29,7 +33,7 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
   const isStudent = currentUser?.role === 'student';
   const isClient  = currentUser?.role === 'client';
 
-  const STUDENT_STEPS = 3;
+  const STUDENT_STEPS = 4;
   const CLIENT_STEPS  = 3;
   const totalSteps = isStudent ? STUDENT_STEPS : CLIENT_STEPS;
 
@@ -199,7 +203,60 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
           </div>
         );
       })(),
-      cta: draft.tags.length === 0 ? 'Skip for now' : 'Complete Setup ✓',
+      cta: 'Next: Add your portfolio →',
+    },
+    // Step 3: Portfolio — required before finishing
+    {
+      title: 'Show your work',
+      sub: 'Upload at least one piece. This is how clients judge your level — images or PDFs.',
+      content: (() => {
+        const items = draft.portfolio || [];
+        return (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              {items.map((item, i) => (
+                <div key={item.id || i} className="relative rounded-xl overflow-hidden border border-[#21326c]/15 aspect-square bg-[#21326c]/5 flex items-center justify-center">
+                  {item.imageUrl
+                    ? <img src={item.imageUrl} alt={item.label || 'piece'} className="w-full h-full object-cover" />
+                    : <div className="text-center px-1"><FileIcon size={18} className="mx-auto text-[#21326c]/50" /><p className="text-[10px] text-[#21326c]/60 mt-1 truncate">{item.pdfName || item.label || 'PDF'}</p></div>}
+                  <button onClick={() => setDraft(d => ({ ...d, portfolio: d.portfolio.filter((_, j) => j !== i) }))}
+                    className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5" title="Remove">
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+              <label className={`cursor-pointer rounded-xl border-2 border-dashed border-[#21326c]/25 aspect-square flex flex-col items-center justify-center text-[#21326c]/50 hover:border-[#ff9044] hover:text-[#ff9044] transition-colors ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                {uploading ? <span className="text-xs">Uploading…</span> : <><Plus size={20} /><span className="text-[10px] mt-1">Add piece</span></>}
+                <input type="file" accept="image/*,application/pdf" className="hidden" disabled={uploading}
+                  onChange={async e => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    setUploading(true);
+                    try {
+                      const r = await uploadFile(file, 'portfolio');
+                      const isPdf = file.type === 'application/pdf';
+                      setDraft(d => ({ ...d, portfolio: [...(d.portfolio || []), {
+                        id: `p${Date.now()}`,
+                        label: file.name.replace(/\.[^.]+$/, '').slice(0, 40),
+                        color: '#21326c', h: 'medium',
+                        imageUrl: isPdf ? null : r.url,
+                        pdfUrl:   isPdf ? r.url : null,
+                        pdfName:  isPdf ? file.name : null,
+                      }] }));
+                    } catch (err) {
+                      toast.error(`Upload failed: ${err.message}`);
+                    } finally {
+                      setUploading(false);
+                    }
+                  }} />
+              </label>
+            </div>
+            <p className="text-xs text-[#21326c]/40">{items.length} piece{items.length !== 1 ? 's' : ''} added — at least one is required to finish.</p>
+          </div>
+        );
+      })(),
+      cta: (draft.portfolio || []).some(p => p.imageUrl || p.pdfUrl) ? 'Complete Setup ✓' : 'Upload a piece to finish',
     },
   ];
 
@@ -298,7 +355,11 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
   const current = steps[step];
   const isLast = step === totalSteps - 1;
 
+  // Students must upload at least one portfolio piece before they can finish.
+  const portfolioBlocked = isStudent && isLast && !(draft.portfolio || []).some(p => p.imageUrl || p.pdfUrl);
+
   const handleNext = () => {
+    if (portfolioBlocked) return;
     if (isLast) {
       if (isStudent) handleStudentDone();
       else onDone();
@@ -348,7 +409,8 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
         <div className="px-6 pb-6 pt-2 flex-shrink-0 space-y-2">
           <button
             onClick={handleNext}
-            className="w-full py-3.5 rounded-2xl font-semibold text-white hover:opacity-90 transition-all text-sm"
+            disabled={portfolioBlocked}
+            className="w-full py-3.5 rounded-2xl font-semibold text-white hover:opacity-90 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: isLast ? '#16a34a' : '#ff9044' }}
           >
             {current.cta}

@@ -247,8 +247,12 @@ router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) 
 // ── POST /projects/:id/applications ───────────────────────────────────────────
 // Students apply to an open project (note + selected portfolio items / uploads).
 router.post('/:id/applications', requireAuth, requireRole('student'), async (req, res) => {
+  const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { communityOnly: true, approved: true } })
+  // Students are only fully active once an admin has reviewed their profile.
+  if (!me?.approved) {
+    return res.status(403).json({ error: 'Your profile is still under review by the Lawnn team. You can apply to jobs once it has been approved.' })
+  }
   // Community-access students engage everywhere else but can't apply to jobs yet.
-  const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { communityOnly: true } })
   if (me?.communityOnly) {
     return res.status(403).json({ error: "Your account has community access for now. Once your portfolio is stronger, the Lawnn team will unlock job applications." })
   }

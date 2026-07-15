@@ -141,6 +141,16 @@ export function AdminUsersTab() {
     setStudents(s => s.filter(u => u.id !== id));
   };
 
+  const handleApprove = async (id) => {
+    try {
+      await adminApi.approveStudent(id);
+      adminApi.listStudents().then(setStudents).catch(() => {});
+      toast.success('Student approved — their profile is now live.');
+    } catch (e) {
+      toast.error(`Couldn't approve: ${e.message}`);
+    }
+  };
+
   const handleDeleteClient = async (id, name) => {
     if (!window.confirm(`Remove ${name}'s account? This cannot be undone.`)) return;
     try {
@@ -328,7 +338,9 @@ export function AdminUsersTab() {
           <p className="text-sm">No student accounts yet. Create one above after accepting an application.</p>
         </div>
       ) : (
-        students.map(user => (
+        students.map(user => {
+          const complete = !!(user.profile?.bio?.trim() && (user.profile?.skills?.length > 0) && (user.profile?.portfolio || []).some(p => p.imageUrl || p.pdfUrl));
+          return (
           <div key={user.id} className="bg-white rounded-2xl border border-[#21326c]/10 p-4 flex items-center gap-4">
             <Avatar initials={user.initials} color={user.avatarColor} imageUrl={user.profile?.avatar} size="md" />
             <div className="flex-1 min-w-0">
@@ -338,10 +350,19 @@ export function AdminUsersTab() {
             </div>
             {user.suspended ? (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#db963015', color: '#db9630' }}>Suspended</span>
-            ) : (
+            ) : user.approved ? (
               <span className="flex items-center gap-1 text-xs text-[#21326c]/50 flex-shrink-0">
                 <BadgeCheck size={13} className="text-[#21326c]" /> Verified Student
               </span>
+            ) : complete ? (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#ff904420', color: '#c4622d' }}>Pending review</span>
+                <button onClick={() => handleApprove(user.id)}
+                  className="text-xs font-semibold px-3 py-1 rounded-full text-white hover:opacity-90 transition-all"
+                  style={{ background: '#16a34a' }}>Approve</button>
+              </div>
+            ) : (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#21326c10', color: '#21326c99' }}>Onboarding incomplete</span>
             )}
             <SuspendButton user={user} isStudent={true} />
             <button onClick={() => handleDelete(user.id, user.name)}
@@ -349,7 +370,8 @@ export function AdminUsersTab() {
               <Trash2 size={15} />
             </button>
           </div>
-        ))
+          );
+        })
       )}
       </>)}
 

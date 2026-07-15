@@ -168,7 +168,7 @@ export function LoginModal({ open, onClose, onLogin }) {
         {mode === 'register' && (
           <>
             <div className="rounded-xl p-3 text-xs text-[#21326c] leading-relaxed border border-[#21326c]/20" style={{ background: '#21326c08' }}>
-              <strong>Are you a student?</strong> Lawnn accounts for students are created by our team after your application is reviewed. Check your email for your sign-in credentials and use the <strong>Sign In</strong> tab.
+              <strong>Are you a student?</strong> Apply now using our <a href="https://docs.google.com/forms/d/e/1FAIpQLScm-OxEG4iucDm8NreNmvsSaXARH0KJE3Al8JZ8e53AlsmvEw/viewform" target="_blank" rel="noopener noreferrer" className="font-semibold underline">application form</a>. Once you're accepted, we'll email your sign-in credentials — then use the <strong>Sign In</strong> tab.
             </div>
             <div>
               <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Full Name</label>
