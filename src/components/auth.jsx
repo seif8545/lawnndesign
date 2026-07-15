@@ -132,13 +132,16 @@ export function LoginModal({ open, onClose, onLogin }) {
     if (!passwordValid(password)) { setError('Please choose a password that meets all the requirements.'); return; }
     setError(''); setLoading(true);
     try {
-      const { token, user } = await authApi.register({ email, password, name, role: 'client' });
+      const { token, user } = await authApi.register({ email, password, name, role: 'client', turnstileToken: captchaToken || undefined });
       setToken(token);
       onLogin(user);
       onClose();
       reset();
     } catch (e) {
       setError(e.message);
+      // The just-used Turnstile token is single-use — remount for a fresh one.
+      setCaptchaToken('');
+      setCaptchaKey(k => k + 1);
     } finally {
       setLoading(false);
     }
@@ -201,6 +204,14 @@ export function LoginModal({ open, onClose, onLogin }) {
         {mode === 'login' && captchaRequired && (
           <div>
             <p className="text-xs text-[#21326c]/60 mb-1.5">Please confirm you’re human to continue:</p>
+            <TurnstileWidget key={captchaKey} onToken={setCaptchaToken} />
+          </div>
+        )}
+
+        {/* CAPTCHA on sign-up — blocks bulk automated fake client accounts. */}
+        {mode === 'register' && (
+          <div>
+            <p className="text-xs text-[#21326c]/60 mb-1.5">Please confirm you’re human:</p>
             <TurnstileWidget key={captchaKey} onToken={setCaptchaToken} />
           </div>
         )}

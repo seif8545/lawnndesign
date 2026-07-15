@@ -56,6 +56,17 @@ router.post('/register', async (req, res) => {
   if (!['client'].includes(role)) {
     return res.status(400).json({ error: 'role must be client' })
   }
+
+  // Bot protection: require a valid Turnstile token before creating an account.
+  // Stops bulk automated client sign-ups. No-op when Turnstile isn't configured
+  // (TURNSTILE_SECRET unset), so local/dev registration still works.
+  if (turnstileEnabled()) {
+    const ok = await verifyTurnstile(req.body.turnstileToken, req.ip)
+    if (!ok) {
+      return res.status(400).json({ error: 'Please complete the verification challenge.', captchaRequired: true })
+    }
+  }
+
   const pwError = validatePassword(password)
   if (pwError) return res.status(400).json({ error: pwError })
 
