@@ -4,7 +4,7 @@ import { auth as authApi, setToken } from '../lib/api.js';
 import { Modal } from './ui.jsx';
 
 // Public Cloudflare Turnstile site key (safe to ship in client code).
-const TURNSTILE_SITE_KEY = '0x4AAAAAADpKWSeBZ7YzcUj7';
+const TURNSTILE_SITE_KEY = '0x4AAAAAAD2jsDT2LzTpfO3M';
 
 // Renders a Cloudflare Turnstile CAPTCHA and reports the solved token via
 // onToken. Loads the Turnstile script on demand. Re-mount (via a changing key)
