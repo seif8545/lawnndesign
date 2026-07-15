@@ -119,6 +119,20 @@ export function AdminUsersTab() {
     }
   };
 
+  const [digestBusy, setDigestBusy] = useState(false);
+  const handleSendDigest = async () => {
+    setDigestBusy(true);
+    try {
+      const r = await adminApi.runJobDigest();
+      if (r?.note) toast.info(r.note);
+      else toast.success(`Digest sent to ${r.sent} student${r.sent !== 1 ? 's' : ''} · ${r.jobs} open job${r.jobs !== 1 ? 's' : ''}.`);
+    } catch (e) {
+      toast.error(`Couldn't send digest: ${e.message}`);
+    } finally {
+      setDigestBusy(false);
+    }
+  };
+
   const handleCreateClient = async () => {
     if (!clientForm.name || !clientForm.email || !clientForm.password) { setClientError('Name, email and password are required'); return; }
     setCreatingClient(true); setClientError('');
@@ -148,6 +162,19 @@ export function AdminUsersTab() {
       toast.success('Student approved — their profile is now live.');
     } catch (e) {
       toast.error(`Couldn't approve: ${e.message}`);
+    }
+  };
+
+  const handleRejectStudent = async (id) => {
+    const reason = window.prompt('Why is this onboarding being rejected? The student will be emailed this reason.');
+    if (reason === null) return;            // cancelled
+    if (!reason.trim()) { toast.error('A rejection reason is required.'); return; }
+    try {
+      await adminApi.rejectStudent(id, reason.trim());
+      adminApi.listStudents().then(setStudents).catch(() => {});
+      toast.success('Student rejected — they were emailed the reason.');
+    } catch (e) {
+      toast.error(`Couldn't reject: ${e.message}`);
     }
   };
 
@@ -207,60 +234,25 @@ export function AdminUsersTab() {
       </div>
 
       {section === 'students' && (<>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-[#21326c]">{students.length} student{students.length !== 1 ? 's' : ''} registered</p>
-        <button
-          onClick={() => { setShowCreate(true); setCreateError(''); setCreateSuccess(''); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all"
-          style={{ background: '#ff9044' }}
-        >
-          <Plus size={14} /> Create Student Account
-        </button>
-      </div>
-
-      {/* Quick add accepted students by email (bulk or individual) */}
-      <div className="bg-white rounded-2xl border border-[#21326c]/10 p-5">
-        <h3 className="font-semibold text-[#21326c] mb-1">Add accepted students by email</h3>
-        <p className="text-xs text-[#21326c]/60 mb-3">Paste one or many emails (comma, space, or new-line separated). Each gets a temporary password and must set their name + a new password on first login.</p>
-        <textarea
-          rows={3}
-          value={bulkEmails}
-          onChange={e => setBulkEmails(e.target.value)}
-          placeholder="ahmed@uni.edu.eg, mona@uni.edu.eg…"
-          className="w-full px-3 py-2.5 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all resize-none placeholder:text-[#21326c]/40"
-        />
-        <button
-          onClick={handleBulkAdd}
-          disabled={bulkBusy || !bulkEmails.trim()}
-          className="mt-2 px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ background: '#ff9044' }}
-        >
-          {bulkBusy ? 'Adding…' : 'Add Students'}
-        </button>
-
-        {bulkResult && (
-          <div className="mt-4 space-y-3">
-            {bulkResult.created?.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-[#16a34a] mb-1">{bulkResult.created.length} added — share these credentials:</p>
-                <div className="text-xs bg-[#21326c]/5 rounded-xl p-3 font-mono leading-relaxed text-[#21326c] break-all whitespace-pre-wrap">
-                  {bulkResult.created.map(c => `${c.email}  /  ${c.password}`).join('\n')}
-                </div>
-                <button
-                  onClick={() => { navigator.clipboard.writeText(bulkResult.created.map(c => `${c.email} / ${c.password}`).join('\n')).catch(() => {}); toast.success('Copied'); }}
-                  className="mt-1 text-xs font-semibold text-[#2563eb] hover:underline"
-                >
-                  Copy all
-                </button>
-              </div>
-            )}
-            {bulkResult.skipped?.length > 0 && (
-              <p className="text-xs text-[#21326c]/50">
-                Skipped {bulkResult.skipped.length}: {bulkResult.skipped.map(s => `${s.email} (${s.reason})`).join(', ')}
-              </p>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleSendDigest}
+            disabled={digestBusy}
+            className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: '#21326c' }}
+          >
+            <Send size={14} /> {digestBusy ? 'Sending…' : 'Send job digest'}
+          </button>
+          <button
+            onClick={() => { setShowCreate(true); setCreateError(''); setCreateSuccess(''); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all"
+            style={{ background: '#ff9044' }}
+          >
+            <Plus size={14} /> Create Student Account
+          </button>
+        </div>
       </div>
 
       {/* Create modal */}
@@ -360,6 +352,9 @@ export function AdminUsersTab() {
                 <button onClick={() => handleApprove(user.id)}
                   className="text-xs font-semibold px-3 py-1 rounded-full text-white hover:opacity-90 transition-all"
                   style={{ background: '#16a34a' }}>Approve</button>
+                <button onClick={() => handleRejectStudent(user.id)}
+                  className="text-xs font-semibold px-3 py-1 rounded-full hover:opacity-90 transition-all"
+                  style={{ background: '#dc262615', color: '#dc2626' }}>Reject</button>
               </div>
             ) : (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#21326c10', color: '#21326c99' }}>Onboarding incomplete</span>
@@ -582,9 +577,13 @@ export function AdminPage({ pendingFeedPosts, setPendingFeedPosts, setFeedPosts,
     }
   };
   const rejectJob = async id => {
+    const reason = window.prompt('Why is this project being rejected? The client will be emailed this reason.');
+    if (reason === null) return;            // cancelled
+    if (!reason.trim()) { toast.error('A rejection reason is required.'); return; }
     try {
-      await projectsApi.delete(id);
+      await projectsApi.reject(id, reason.trim());
       await refreshJobs?.();
+      toast.success('Project rejected — the client was notified.');
     } catch (e) {
       toast.error(`Couldn't reject: ${e.message}`);
     }

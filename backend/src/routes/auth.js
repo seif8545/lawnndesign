@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword } from '../lib/password.js'
 import { cooldownMs, waitMessage } from '../lib/loginThrottle.js'
 import { turnstileEnabled, verifyTurnstile, CAPTCHA_AFTER_FAILURES } from '../lib/turnstile.js'
 import { notify } from '../lib/notify.js'
+import { emailAdmin, SITE_URL } from '../lib/email.js'
 import { cookieAuthEnabled, setSessionCookies, clearSessionCookies } from '../lib/cookies.js'
 
 const router = Router()
@@ -112,6 +113,15 @@ router.post('/register', async (req, res) => {
 
   const token = signToken(user)
   issueSession(res, token)
+
+  // Alert the admin inbox that a new client just signed up.
+  await emailAdmin({
+    subject: `New client sign-up: ${user.name}`,
+    heading: 'A new client joined Lawnn',
+    bodyHtml: `<p><strong>${user.name}</strong> (${user.email}) just created a client account.</p>`,
+    cta: { label: 'Open Lawnn admin', url: SITE_URL },
+  })
+
   return res.status(201).json({ token, user: safeUser(user) })
 })
 

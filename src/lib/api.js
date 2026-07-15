@@ -93,6 +93,8 @@ export const admin = {
   bulkAddStudents:(emails) => request('/admin/students/bulk',           { method: 'POST', body: { emails } }),
   reinviteStudent:(id)   => request(`/admin/students/${id}/reinvite`,   { method: 'POST' }),
   approveStudent: (id)   => request(`/admin/students/${id}/approve`,    { method: 'POST' }),
+  rejectStudent:  (id, reason) => request(`/admin/students/${id}/reject`, { method: 'POST', body: { reason } }),
+  runJobDigest:   ()     => request('/admin/run-job-digest',           { method: 'POST' }),
   listStudents:   ()     => request('/admin/students'),
   listUsers:      ()     => request('/admin/users'),
   createClient:   (body) => request('/admin/clients',                  { method: 'POST', body }),
@@ -111,6 +113,7 @@ export const projects = {
   get:     (id)         => request(`/projects/${id}`),
   create:  (body)       => request('/projects',               { method: 'POST', body }),
   setStatus: (id, status) => request(`/projects/${id}/status`, { method: 'PATCH', body: { status } }),
+  reject:  (id, reason) => request(`/projects/${id}/reject`,   { method: 'POST', body: { reason } }),
   delete:  (id)         => request(`/projects/${id}`,         { method: 'DELETE' }),
   // Applications
   apply:         (id, body)         => request(`/projects/${id}/applications`, { method: 'POST', body }),

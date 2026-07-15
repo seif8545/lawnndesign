@@ -2,8 +2,15 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { safeUrl, clampText, nonNegativeInt } from '../lib/sanitize.js'
+import { emailAdmin, SITE_URL } from '../lib/email.js'
 
 const router = Router()
+
+// A student profile is "complete" (ready for admin review) when it has a bio, at
+// least one skill, and at least one uploaded portfolio piece.
+function profileComplete(p) {
+  return !!(p?.bio?.trim() && (p.skills?.length > 0) && (p.portfolio || []).some(i => i.imageUrl || i.pdfUrl))
+}
 
 // ── GET /profiles ─────────────────────────────────────────────────────────────
 // Public — list all student profiles (talent directory)
@@ -89,8 +96,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
 // ── PATCH /profiles/:id ───────────────────────────────────────────────────────
 // Auth required — students can only update their own profile
 router.patch('/:id', requireAuth, requireRole('student', 'admin'), async (req, res) => {
-  const profile = await prisma.profile.findUnique({ where: { id: req.params.id } })
+  const profile = await prisma.profile.findUnique({
+    where: { id: req.params.id },
+    include: { skills: true, portfolio: true, user: { select: { id: true, name: true, approved: true, suspended: true } } },
+  })
   if (!profile) return res.status(404).json({ error: 'Profile not found' })
+  const wasComplete = profileComplete(profile)
 
   // Students may only edit their own profile
   if (req.user.role === 'student' && profile.userId !== req.user.id) {
@@ -183,6 +194,19 @@ router.patch('/:id', requireAuth, requireRole('student', 'admin'), async (req, r
     where: { id: req.params.id },
     include: { skills: true, portfolio: { orderBy: { sortOrder: 'asc' } }, education: true, experience: true },
   })
+
+  // Onboarding just completed → alert the admin to review this student. Fires only
+  // on the incomplete→complete transition (not on every later profile edit), and
+  // only while the student is still awaiting approval.
+  if (!wasComplete && profileComplete(full) && profile.user && !profile.user.approved && !profile.user.suspended) {
+    await emailAdmin({
+      subject: `${profile.user.name} finished onboarding — ready for review`,
+      heading: 'A student completed their onboarding',
+      bodyHtml: `<p><strong>${profile.user.name}</strong> just finished setting up their profile (bio, skills and portfolio) and is waiting for approval.</p><p style="color:#21326c99">Review them in Admin → Students and approve or send feedback.</p>`,
+      cta: { label: 'Open Lawnn admin', url: SITE_URL },
+    })
+  }
+
   return res.json(full)
 })
 

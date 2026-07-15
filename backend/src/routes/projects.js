@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { notify } from '../lib/notify.js'
+import { emailUser, emailAdmin, SITE_URL } from '../lib/email.js'
 import { signPrivateRead } from './uploads.js'
 import { safeUrl, nonNegativeInt, clampText } from '../lib/sanitize.js'
 
@@ -209,7 +210,43 @@ router.post('/', requireAuth, requireRole('client', 'admin'), async (req, res) =
     include: { skills: true, attachments: true },
   })
 
+  if (project.status === 'pending') {
+    await emailAdmin({
+      subject: `New project pending review: "${project.title}"`,
+      heading: 'A client posted a new project',
+      bodyHtml: `<p><strong>${project.title}</strong> — ${budgetInt} EGP</p><p style="color:#21326c99">It's waiting for your approval before it goes live on the board.</p>`,
+      cta: { label: 'Open Lawnn admin', url: SITE_URL },
+    })
+  }
+
   return res.status(201).json(project)
+})
+
+// ── POST /projects/:id/reject ─────────────────────────────────────────────────
+// Admin rejects a pending project with a reason: notifies + emails the client,
+// then removes the project.
+router.post('/:id/reject', requireAuth, requireRole('admin'), async (req, res) => {
+  const reason = clampText(req.body.reason, 1000)
+  if (!reason) return res.status(400).json({ error: 'A rejection reason is required' })
+  const project = await prisma.project.findUnique({ where: { id: req.params.id } })
+  if (!project) return res.status(404).json({ error: 'Project not found' })
+
+  await notify(project.clientId, {
+    type: 'info',
+    title: `Your project "${project.title}" wasn't approved`,
+    body: reason,
+    link: 'projects',
+  })
+  await emailUser(project.clientId, {
+    subject: `Your project "${project.title}" wasn't approved`,
+    heading: 'Your project needs a few changes',
+    bodyHtml: `<p>Thanks for posting "<strong>${project.title}</strong>". We weren't able to approve it as-is. Here's why:</p>
+      <blockquote style="border-left:3px solid #ff9044;margin:12px 0;padding:6px 14px;background:#ff90440d">${reason}</blockquote>
+      <p>You're welcome to adjust it and post again.</p>`,
+    cta: { label: 'Post a new project', url: SITE_URL },
+  })
+  await prisma.project.delete({ where: { id: project.id } })
+  return res.json({ ok: true })
 })
 
 // ── PATCH /projects/:id/status ────────────────────────────────────────────────
@@ -239,6 +276,12 @@ router.patch('/:id/status', requireAuth, requireRole('admin'), async (req, res) 
       title: `Your project "${project.title}" is now live`,
       body: 'Students can now see it and apply.',
       link: 'projects',
+    })
+    await emailUser(project.clientId, {
+      subject: `Your project "${project.title}" is now live 🎉`,
+      heading: 'Your project is approved',
+      bodyHtml: `<p>"<strong>${project.title}</strong>" has been approved and is now live on the board. Students can see it and apply — we'll email you when the first application comes in.</p>`,
+      cta: { label: 'View your projects', url: SITE_URL },
     })
   }
   return res.json(project)
@@ -288,6 +331,17 @@ router.post('/:id/applications', requireAuth, requireRole('student'), async (req
     title: `New application on "${project.title}"`,
     body: 'A student applied — review the applications.',
     link: 'projects',
+  })
+  await emailUser(project.clientId, {
+    subject: `New application on "${project.title}"`,
+    heading: 'You have a new applicant',
+    bodyHtml: `<p>A student just applied to your project "<strong>${project.title}</strong>". Log in to review their application, note and portfolio.</p>`,
+    cta: { label: 'Review applications', url: SITE_URL },
+  })
+  await emailAdmin({
+    subject: `New application on "${project.title}"`,
+    heading: 'A student applied to a project',
+    bodyHtml: `<p>A student applied to "<strong>${project.title}</strong>".</p>`,
   })
 
   return res.status(201).json(application)
@@ -355,6 +409,12 @@ router.post('/:id/applications/:appId/accept', requireAuth, async (req, res) => 
     body: 'Head to My Projects — the client will arrange the deposit to get started.',
     link: 'projects',
   })
+  await emailUser(application.userId, {
+    subject: `You were hired for "${project.title}"! 🎉`,
+    heading: "You've been hired",
+    bodyHtml: `<p>Congratulations! You were selected for "<strong>${project.title}</strong>". Head to My Projects — the client will arrange the deposit to get you started.</p>`,
+    cta: { label: 'Go to My Projects', url: SITE_URL },
+  })
 
   return res.status(201).json(updated)
 })
@@ -379,6 +439,18 @@ router.post('/:id/applications/:appId/reject', requireAuth, async (req, res) => 
   }
 
   const updated = await prisma.application.update({ where: { id: appId }, data: { status: 'rejected' } })
+  await notify(application.userId, {
+    type: 'info',
+    title: 'Update on your application',
+    body: "Your application wasn't selected this time. Keep applying — new projects are posted regularly.",
+    link: 'jobs',
+  })
+  await emailUser(application.userId, {
+    subject: 'Update on your Lawnn application',
+    heading: 'An update on your application',
+    bodyHtml: `<p>Thanks for applying. The client went with another applicant this time — but don't be discouraged. New projects are posted regularly, and your next opportunity could be around the corner.</p>`,
+    cta: { label: 'Browse open jobs', url: SITE_URL },
+  })
   return res.json(updated)
 })
 
@@ -456,11 +528,16 @@ router.post('/:id/advance', requireAuth, async (req, res) => {
   if (nextStatus === 'in_progress') {
     await notify(t, { type: 'money', title: `Deposit confirmed for "${title}"`, body: 'Lawnn confirmed the deposit — you can start the work.', link: 'projects' })
     await notify(c, { type: 'check', title: `"${title}" has started`, body: 'We confirmed your deposit and notified the student.', link: 'projects' })
+    await emailUser(t, { subject: `Deposit confirmed — you can start "${title}"`, heading: 'The deposit is confirmed', bodyHtml: `<p>Lawnn confirmed the client's deposit for "<strong>${title}</strong>". You're clear to start the work.</p>`, cta: { label: 'Open the project', url: SITE_URL } })
+    await emailUser(c, { subject: `"${title}" has started`, heading: 'Your project is underway', bodyHtml: `<p>We confirmed your deposit and notified the student to begin "<strong>${title}</strong>".</p>`, cta: { label: 'View project', url: SITE_URL } })
   } else if (nextStatus === 'delivered') {
     await notify(c, { type: 'bag', title: `Delivery submitted for "${title}"`, body: 'Review it and arrange the final payment.', link: 'projects' })
+    await emailUser(c, { subject: `Delivery submitted for "${title}"`, heading: 'Your delivery is ready to review', bodyHtml: `<p>The student submitted their work for "<strong>${title}</strong>". Review it and arrange the final payment.</p>`, cta: { label: 'Review delivery', url: SITE_URL } })
   } else if (nextStatus === 'completed') {
     await notify(t, { type: 'money', title: `Final payment confirmed for "${title}"`, body: 'Lawnn will pay out your earnings.', link: 'projects' })
     await notify(c, { type: 'check', title: `"${title}" is complete`, body: 'Thanks — the project is now complete.', link: 'projects' })
+    await emailUser(t, { subject: `Final payment confirmed for "${title}" 🎉`, heading: 'Payment confirmed', bodyHtml: `<p>Lawnn confirmed the final payment for "<strong>${title}</strong>". Your earnings will be paid out — great work!</p>`, cta: { label: 'View project', url: SITE_URL } })
+    await emailUser(c, { subject: `"${title}" is complete`, heading: 'Project complete', bodyHtml: `<p>"<strong>${title}</strong>" is now complete. Thanks for using Lawnn — consider leaving the student a review.</p>`, cta: { label: 'Leave a review', url: SITE_URL } })
   }
 
   return res.json(updated)
@@ -598,6 +675,12 @@ router.post('/:id/reviews', requireAuth, async (req, res) => {
     title: 'You received a review',
     body: `${rating}★ on "${project.title}"`,
     link: 'projects',
+  })
+  await emailUser(recipientId, {
+    subject: `You received a ${rating}★ review on "${project.title}"`,
+    heading: 'You got a new review',
+    bodyHtml: `<p>Someone left you a <strong>${rating}★</strong> review on "<strong>${project.title}</strong>". Reviews build your reputation and help you get hired — nice work!</p>`,
+    cta: { label: 'View your profile', url: SITE_URL },
   })
 
   return res.status(201).json(review)

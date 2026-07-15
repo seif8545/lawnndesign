@@ -5,6 +5,8 @@ import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
 import { normalizeEmail, validatePassword, generatePassword, clampText } from '../lib/sanitize.js'
 import { notify } from '../lib/notify.js'
+import { emailUser, SITE_URL } from '../lib/email.js'
+import { runJobDigest } from '../lib/jobDigest.js'
 
 const router = Router()
 
@@ -198,7 +200,50 @@ router.post('/students/:id/approve', async (req, res) => {
     body: 'Welcome aboard — your profile is now live and you can start applying to jobs.',
     link: 'jobs',
   })
+  await emailUser(student.id, {
+    subject: 'Your Lawnn profile is approved! 🎉',
+    heading: "You're in — your profile is live",
+    bodyHtml: `<p>Welcome aboard! The Lawnn team has reviewed and approved your profile. You now appear in the talent directory and can apply to client projects.</p>`,
+    cta: { label: 'Browse open jobs', url: SITE_URL },
+  })
   return res.json({ ok: true })
+})
+
+// ── POST /admin/students/:id/reject ───────────────────────────────────────────
+// Reject a student's onboarding with a reason: notifies + emails them the reason
+// and suspends the account (reversible — an admin can un-suspend later).
+router.post('/students/:id/reject', async (req, res) => {
+  const reason = clampText(req.body.reason, 1000)
+  if (!reason) return res.status(400).json({ error: 'A rejection reason is required' })
+  const student = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, role: true },
+  })
+  if (!student || student.role !== 'student') return res.status(404).json({ error: 'Student not found' })
+
+  await prisma.user.update({ where: { id: student.id }, data: { approved: false, suspended: true } })
+  await notify(student.id, {
+    type: 'info',
+    title: 'Update on your Lawnn onboarding',
+    body: reason,
+    link: 'home',
+  })
+  await emailUser(student.id, {
+    subject: 'Update on your Lawnn onboarding',
+    heading: 'An update on your onboarding',
+    bodyHtml: `<p>Thank you for setting up your Lawnn profile. After review, we aren't able to approve it as it stands right now. Here's the feedback from our team:</p>
+      <blockquote style="border-left:3px solid #ff9044;margin:12px 0;padding:6px 14px;background:#ff90440d">${reason}</blockquote>
+      <p>We'd genuinely love to see you on Lawnn — once you've addressed the above, reply to this email and we'll take another look.</p>`,
+  })
+  return res.json({ ok: true })
+})
+
+// ── POST /admin/run-job-digest ────────────────────────────────────────────────
+// Send the open-jobs digest to all approved students right now. (Also runnable on
+// a schedule via scripts/runDigest.js.) Returns a summary.
+router.post('/run-job-digest', async (req, res) => {
+  const result = await runJobDigest()
+  return res.json(result)
 })
 
 // ── GET /admin/users ──────────────────────────────────────────────────────────
