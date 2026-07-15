@@ -39,7 +39,7 @@ import requests   # pip install requests
 # 1) FULL STUDENTS — full access (feed + apply to jobs). (Name, email) pairs.
 # ─────────────────────────────────────────────────────────────────────────────
 FULL_STUDENTS = [
-    ("Seif",                                 "seifomaraly123@gmail.com"),
+    ("Seif",                                 "seifomaraly123+lawnn@gmail.com"),
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
