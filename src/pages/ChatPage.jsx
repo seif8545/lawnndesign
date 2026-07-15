@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { CheckCircle, ChevronLeft, File as FileIcon, Lock, MessageSquare, MessageSquareText, Paperclip, Search, Send, Shield, X } from 'lucide-react';
 import { conversations as convApi, uploadFile } from '../lib/api.js';
 import { getSocket } from '../lib/socket.js';
+import { checkMessage, CHAT_BLOCK_NOTICE } from '../lib/chatFilter.js';
 import { Avatar } from '../components/ui.jsx';
 import { AdminStartConversation } from './AdminPage.jsx';
 
@@ -129,14 +130,20 @@ export function ChatPage({ currentUser }) {
       }
     };
 
+    const handleRejected = ({ reason }) => {
+      toast.error(CHAT_BLOCK_NOTICE[reason] || 'That message can’t be sent.');
+    };
+
     socket.on('message', handleMessage);
     socket.on('typing', handleTyping);
     socket.on('messages_read', handleMessagesRead);
+    socket.on('message_rejected', handleRejected);
 
     return () => {
       socket.off('message', handleMessage);
       socket.off('typing', handleTyping);
       socket.off('messages_read', handleMessagesRead);
+      socket.off('message_rejected', handleRejected);
     };
   }, [activeConvo?.id, isAdmin]);
 
@@ -144,6 +151,8 @@ export function ChatPage({ currentUser }) {
   const sendMessage = useCallback(() => {
     const socket = getSocket();
     if (!message.trim() || !activeConvo || !socket || !amParticipant(activeConvo)) return;
+    const check = checkMessage(message.trim());
+    if (check.blocked) { toast.error(CHAT_BLOCK_NOTICE[check.reason]); return; }
     socket.emit('send_message', { conversationId: activeConvo.id, content: message.trim() });
     setMessage('');
     textareaRef.current?.focus();
@@ -155,6 +164,8 @@ export function ChatPage({ currentUser }) {
     const f = fileList?.[0];
     const socket = getSocket();
     if (!f || !activeConvo || !socket || !amParticipant(activeConvo)) return;
+    const captionCheck = checkMessage(message.trim());
+    if (captionCheck.blocked) { toast.error(CHAT_BLOCK_NOTICE[captionCheck.reason]); return; }
     setAttaching(true);
     try {
       const r = await uploadFile(f, 'chat');

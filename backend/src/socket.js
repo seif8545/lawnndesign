@@ -2,6 +2,7 @@ import { Server } from 'socket.io'
 import jwt from 'jsonwebtoken'
 import prisma from './lib/prisma.js'
 import { safeUrl } from './lib/sanitize.js'
+import { checkMessage } from './lib/chatFilter.js'
 import { signPrivateRead } from './routes/uploads.js'
 import { cookieAuthEnabled, readCookie, SESSION_COOKIE } from './lib/cookies.js'
 
@@ -87,6 +88,15 @@ export function initSocket(httpServer) {
         // Cap message length. Socket payloads bypass the REST express.json('1mb')
         // limit, so without this a client could persist arbitrarily large strings.
         const body = content.trim().slice(0, 5000)
+
+        // Content rules: block phone numbers + off-site payment/contact keywords.
+        // The client blocks these pre-send; this is the server-side backstop so
+        // a direct socket call can't bypass it. Tell the sender why.
+        const check = checkMessage(body)
+        if (check.blocked) {
+          socket.emit('message_rejected', { reason: check.reason })
+          return
+        }
 
         // Verify sender is a participant (client, student, or the admin on an
         // admin-initiated thread). Admins observing others' threads can't send.
