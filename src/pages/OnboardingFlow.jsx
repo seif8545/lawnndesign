@@ -119,7 +119,7 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
           </div>
         </div>
       ),
-      cta: 'Next: Add your skills →',
+      cta: draft.bio.trim() ? 'Next: Add your skills →' : 'Write a short bio to continue',
     },
     // Step 2: Skills — full inline browser
     {
@@ -203,7 +203,7 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
           </div>
         );
       })(),
-      cta: 'Next: Add your portfolio →',
+      cta: draft.tags.length > 0 ? 'Next: Add your portfolio →' : 'Add at least one skill to continue',
     },
     // Step 3: Portfolio — required before finishing
     {
@@ -355,11 +355,18 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
   const current = steps[step];
   const isLast = step === totalSteps - 1;
 
-  // Students must upload at least one portfolio piece before they can finish.
-  const portfolioBlocked = isStudent && isLast && !(draft.portfolio || []).some(p => p.imageUrl || p.pdfUrl);
+  // Students can't advance past a step without meeting it: bio (step 1), at
+  // least one skill (step 2), at least one portfolio piece (step 3). This must
+  // match the backend's profileComplete() rule — otherwise a student can finish
+  // the modal but never reach admin review, and it reopens every session.
+  const stepBlocked = isStudent && (
+    (step === 1 && !draft.bio.trim()) ||
+    (step === 2 && draft.tags.length === 0) ||
+    (isLast && !(draft.portfolio || []).some(p => p.imageUrl || p.pdfUrl))
+  );
 
   const handleNext = () => {
-    if (portfolioBlocked) return;
+    if (stepBlocked) return;
     if (isLast) {
       if (isStudent) handleStudentDone();
       else onDone();
@@ -409,7 +416,7 @@ export function OnboardingFlow({ currentUser, talents, onUpdateTalent, onDone })
         <div className="px-6 pb-6 pt-2 flex-shrink-0 space-y-2">
           <button
             onClick={handleNext}
-            disabled={portfolioBlocked}
+            disabled={stepBlocked}
             className="w-full py-3.5 rounded-2xl font-semibold text-white hover:opacity-90 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: isLast ? '#16a34a' : '#ff9044' }}
           >
