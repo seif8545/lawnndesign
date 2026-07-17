@@ -24,12 +24,16 @@ router.get('/', optionalAuth, async (req, res) => {
       ...(skill && {
         skills: { some: { skill: { contains: skill, mode: 'insensitive' } } },
       }),
-      // Hide suspended + not-yet-approved students from everyone but admins;
-      // keep the name search.
-      user: {
-        ...(isAdmin ? {} : { suspended: false, approved: true }),
-        ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
-      },
+      ...(search ? { user: { name: { contains: search, mode: 'insensitive' } } } : {}),
+      // Visibility: everyone sees approved, non-suspended students; admins see
+      // all. A signed-in user ALWAYS gets their own profile back — the app's
+      // onboarding + pending-review flow depends on finding it in this list.
+      ...(isAdmin ? {} : {
+        OR: [
+          { user: { suspended: false, approved: true } },
+          ...(req.user ? [{ userId: req.user.id }] : []),
+        ],
+      }),
     },
     include: {
       user: { select: { id: true, name: true, initials: true, avatarColor: true, approved: true } },
