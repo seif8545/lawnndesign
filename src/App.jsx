@@ -64,12 +64,16 @@ export default function App() {
   // Lifted mutable state so edits propagate across all views
   const [talents, setTalents]                   = useState([]);
 
-  // Load real talent profiles from the backend.
-  useEffect(() => {
-    profiles.list()
+  // Load real talent profiles from the backend. Re-fetched whenever the signed-in
+  // user changes: the anonymous fetch at page load can't include an unapproved
+  // student's own profile, and the onboarding + pending-review flow depends on
+  // finding it after login.
+  const refreshTalents = useCallback(() => {
+    return profiles.list()
       .then(list => setTalents(list.map(mapApiProfile)))
       .catch(err => console.warn('[talents] failed to load:', err.message));
   }, []);
+  useEffect(() => { refreshTalents(); }, [refreshTalents, currentUser]);
 
   // Reusable Projects board refresher — open projects accepting applications.
   // Admin sees pending ones via the board endpoint's visibility; split locally.
