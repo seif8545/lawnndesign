@@ -155,6 +155,9 @@ export function AdminUsersTab() {
     setStudents(s => s.filter(u => u.id !== id));
   };
 
+  // Which student row is expanded to show their bio/skills/portfolio for review.
+  const [expandedId, setExpandedId] = useState(null);
+
   const handleApprove = async (id) => {
     try {
       await adminApi.approveStudent(id);
@@ -333,37 +336,76 @@ export function AdminUsersTab() {
         students.map(user => {
           const complete = !!(user.profile?.bio?.trim() && (user.profile?.skills?.length > 0) && (user.profile?.portfolio || []).some(p => p.imageUrl || p.pdfUrl));
           return (
-          <div key={user.id} className="bg-white rounded-2xl border border-[#21326c]/10 p-4 flex flex-wrap items-center gap-3 sm:gap-4">
-            <Avatar initials={user.initials} color={user.avatarColor} imageUrl={user.profile?.avatar} size="md" />
-            <div className="flex-1 min-w-[150px]">
-              <p className="font-semibold text-[#21326c] text-sm">{user.name}</p>
-              <p className="text-xs text-[#21326c]/60 truncate">{user.email}</p>
-              {user.profile?.university && <p className="text-xs text-[#21326c]/40 truncate">{user.profile.university} · {user.profile.dept}</p>}
-            </div>
-            {user.suspended ? (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#db963015', color: '#db9630' }}>Suspended</span>
-            ) : user.approved ? (
-              <span className="flex items-center gap-1 text-xs text-[#21326c]/50 flex-shrink-0">
-                <BadgeCheck size={13} className="text-[#21326c]" /> Verified Student
-              </span>
-            ) : complete ? (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#ff904420', color: '#c4622d' }}>Pending review</span>
-                <button onClick={() => handleApprove(user.id)}
-                  className="text-xs font-semibold px-3 py-1 rounded-full text-white hover:opacity-90 transition-all"
-                  style={{ background: '#16a34a' }}>Approve</button>
-                <button onClick={() => handleRejectStudent(user.id)}
-                  className="text-xs font-semibold px-3 py-1 rounded-full hover:opacity-90 transition-all"
-                  style={{ background: '#dc262615', color: '#dc2626' }}>Reject</button>
+          <div key={user.id} className="bg-white rounded-2xl border border-[#21326c]/10 p-4">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <Avatar initials={user.initials} color={user.avatarColor} imageUrl={user.profile?.avatar} size="md" />
+              <div className="flex-1 min-w-[150px]">
+                <p className="font-semibold text-[#21326c] text-sm">{user.name}</p>
+                <p className="text-xs text-[#21326c]/60 truncate">{user.email}</p>
+                {user.profile?.university && <p className="text-xs text-[#21326c]/40 truncate">{user.profile.university} · {user.profile.dept}</p>}
               </div>
-            ) : (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#21326c10', color: '#21326c99' }}>Onboarding incomplete</span>
+              {user.suspended ? (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#db963015', color: '#db9630' }}>Suspended</span>
+              ) : user.approved ? (
+                <span className="flex items-center gap-1 text-xs text-[#21326c]/50 flex-shrink-0">
+                  <BadgeCheck size={13} className="text-[#21326c]" /> Verified Student
+                </span>
+              ) : complete ? (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#ff904420', color: '#c4622d' }}>Pending review</span>
+                  <button onClick={() => handleApprove(user.id)}
+                    className="text-xs font-semibold px-3 py-1 rounded-full text-white hover:opacity-90 transition-all"
+                    style={{ background: '#16a34a' }}>Approve</button>
+                  <button onClick={() => handleRejectStudent(user.id)}
+                    className="text-xs font-semibold px-3 py-1 rounded-full hover:opacity-90 transition-all"
+                    style={{ background: '#dc262615', color: '#dc2626' }}>Reject</button>
+                </div>
+              ) : (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#21326c10', color: '#21326c99' }}>Onboarding incomplete</span>
+              )}
+              <button onClick={() => setExpandedId(expandedId === user.id ? null : user.id)}
+                className="text-xs font-semibold px-3 py-1 rounded-full border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-all flex-shrink-0">
+                {expandedId === user.id ? 'Hide' : 'Review'}
+              </button>
+              <SuspendButton user={user} isStudent={true} />
+              <button onClick={() => handleDelete(user.id, user.name)}
+                className="flex-shrink-0 text-[#21326c]/20 hover:text-red-400 transition-colors">
+                <Trash2 size={15} />
+              </button>
+            </div>
+
+            {/* Inline review panel: everything the admin needs to judge the profile. */}
+            {expandedId === user.id && (
+              <div className="mt-4 pt-4 border-t border-[#21326c]/10 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold text-[#21326c]/50 uppercase tracking-wide mb-1">Bio</p>
+                  <p className="text-sm text-[#21326c] leading-relaxed whitespace-pre-line">{user.profile?.bio?.trim() || <span className="italic text-[#21326c]/40">No bio yet</span>}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#21326c]/50 uppercase tracking-wide mb-1">Skills</p>
+                  {user.profile?.skills?.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {user.profile.skills.map(s => <span key={s.id || s.skill} className="tag-pill">{s.skill}</span>)}
+                    </div>
+                  ) : <p className="text-sm italic text-[#21326c]/40">No skills yet</p>}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-[#21326c]/50 uppercase tracking-wide mb-1">Portfolio</p>
+                  {(user.profile?.portfolio || []).filter(p => p.imageUrl || p.pdfUrl).length > 0 ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      {user.profile.portfolio.filter(p => p.imageUrl || p.pdfUrl).map(p => (
+                        <a key={p.id} href={p.imageUrl || p.pdfUrl} target="_blank" rel="noopener noreferrer"
+                          className="block rounded-xl overflow-hidden border border-[#21326c]/15 aspect-square bg-[#21326c]/5 hover:opacity-80 transition-opacity">
+                          {p.imageUrl
+                            ? <img src={p.imageUrl} alt={p.label || 'portfolio piece'} className="w-full h-full object-cover" />
+                            : <span className="w-full h-full flex items-center justify-center text-[10px] text-[#21326c]/60 px-1 text-center break-all">{p.pdfName || p.label || 'PDF'}</span>}
+                        </a>
+                      ))}
+                    </div>
+                  ) : <p className="text-sm italic text-[#21326c]/40">No portfolio uploads yet</p>}
+                </div>
+              </div>
             )}
-            <SuspendButton user={user} isStudent={true} />
-            <button onClick={() => handleDelete(user.id, user.name)}
-              className="flex-shrink-0 text-[#21326c]/20 hover:text-red-400 transition-colors">
-              <Trash2 size={15} />
-            </button>
           </div>
           );
         })
