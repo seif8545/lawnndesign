@@ -5,7 +5,7 @@
 // or on demand from the admin panel.
 
 import prisma from './prisma.js'
-import { sendEmail, emailLayout, emailEnabled, SITE_URL } from './email.js'
+import { sendEmail, emailLayout, emailEnabled, escapeHtml as esc, SITE_URL } from './email.js'
 
 export async function runJobDigest() {
   if (!emailEnabled()) return { skipped: 'email-disabled' }
@@ -26,7 +26,7 @@ export async function runJobDigest() {
   })
 
   const jobsHtml = jobs.map(j =>
-    `<li style="margin-bottom:8px"><strong>${j.title}</strong> — ${j.budget} EGP <span style="color:#21326c99">· ${j.category || ''}</span></li>`
+    `<li style="margin-bottom:8px"><strong>${esc(j.title)}</strong> — ${j.budget} EGP <span style="color:#21326c99">· ${esc(j.category || '')}</span></li>`
   ).join('')
   const bodyHtml = `<p>Here are the latest open projects on Lawnn right now:</p><ul style="padding-left:18px;margin:12px 0">${jobsHtml}</ul>`
   const heading = `${jobs.length} open project${jobs.length !== 1 ? 's' : ''} waiting for you`

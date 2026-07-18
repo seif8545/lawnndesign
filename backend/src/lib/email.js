@@ -21,6 +21,15 @@ export function emailEnabled() {
   return Boolean(process.env.BREVO_API_KEY)
 }
 
+// Escape user-controlled text before interpolating it into email HTML. Without
+// this, a user named "<a href=…>" gets live markup inside a DKIM-signed email
+// from our domain — a phishing vector. Wrap EVERY dynamic value in bodyHtml.
+export function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+  ))
+}
+
 // Branded HTML wrapper. `cta` is an optional { label, url } button.
 export function emailLayout(heading, bodyHtml, cta) {
   const button = cta

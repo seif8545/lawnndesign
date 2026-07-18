@@ -333,9 +333,9 @@ export function AdminUsersTab() {
         students.map(user => {
           const complete = !!(user.profile?.bio?.trim() && (user.profile?.skills?.length > 0) && (user.profile?.portfolio || []).some(p => p.imageUrl || p.pdfUrl));
           return (
-          <div key={user.id} className="bg-white rounded-2xl border border-[#21326c]/10 p-4 flex items-center gap-4">
+          <div key={user.id} className="bg-white rounded-2xl border border-[#21326c]/10 p-4 flex flex-wrap items-center gap-3 sm:gap-4">
             <Avatar initials={user.initials} color={user.avatarColor} imageUrl={user.profile?.avatar} size="md" />
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-[150px]">
               <p className="font-semibold text-[#21326c] text-sm">{user.name}</p>
               <p className="text-xs text-[#21326c]/60 truncate">{user.email}</p>
               {user.profile?.university && <p className="text-xs text-[#21326c]/40 truncate">{user.profile.university} · {user.profile.dept}</p>}

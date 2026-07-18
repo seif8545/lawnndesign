@@ -8,7 +8,7 @@ import { hashPassword, verifyPassword } from '../lib/password.js'
 import { cooldownMs, waitMessage } from '../lib/loginThrottle.js'
 import { turnstileEnabled, verifyTurnstile, CAPTCHA_AFTER_FAILURES } from '../lib/turnstile.js'
 import { notify } from '../lib/notify.js'
-import { emailAdmin, SITE_URL } from '../lib/email.js'
+import { emailAdmin, escapeHtml as esc, SITE_URL } from '../lib/email.js'
 import { cookieAuthEnabled, setSessionCookies, clearSessionCookies } from '../lib/cookies.js'
 
 const router = Router()
@@ -118,7 +118,7 @@ router.post('/register', async (req, res) => {
   await emailAdmin({
     subject: `New client sign-up: ${user.name}`,
     heading: 'A new client joined Lawnn',
-    bodyHtml: `<p><strong>${user.name}</strong> (${user.email}) just created a client account.</p>`,
+    bodyHtml: `<p><strong>${esc(user.name)}</strong> (${esc(user.email)}) just created a client account.</p>`,
     cta: { label: 'Open Lawnn admin', url: SITE_URL },
   })
 

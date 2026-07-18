@@ -5,7 +5,7 @@ import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
 import { normalizeEmail, validatePassword, generatePassword, clampText } from '../lib/sanitize.js'
 import { notify } from '../lib/notify.js'
-import { emailUser, SITE_URL } from '../lib/email.js'
+import { emailUser, escapeHtml as esc, SITE_URL } from '../lib/email.js'
 import { runJobDigest } from '../lib/jobDigest.js'
 
 const router = Router()
@@ -210,8 +210,9 @@ router.post('/students/:id/approve', async (req, res) => {
 })
 
 // ── POST /admin/students/:id/reject ───────────────────────────────────────────
-// Reject a student's onboarding with a reason: notifies + emails them the reason
-// and suspends the account (reversible — an admin can un-suspend later).
+// Reject a student's onboarding with a reason: notifies + emails them the reason.
+// Deliberately does NOT suspend — the student keeps access so they can improve
+// their profile and be re-reviewed. Suspension stays a separate action.
 router.post('/students/:id/reject', async (req, res) => {
   const reason = clampText(req.body.reason, 1000)
   if (!reason) return res.status(400).json({ error: 'A rejection reason is required' })
@@ -221,7 +222,7 @@ router.post('/students/:id/reject', async (req, res) => {
   })
   if (!student || student.role !== 'student') return res.status(404).json({ error: 'Student not found' })
 
-  await prisma.user.update({ where: { id: student.id }, data: { approved: false, suspended: true } })
+  await prisma.user.update({ where: { id: student.id }, data: { approved: false } })
   await notify(student.id, {
     type: 'info',
     title: 'Update on your Lawnn onboarding',
@@ -232,8 +233,8 @@ router.post('/students/:id/reject', async (req, res) => {
     subject: 'Update on your Lawnn onboarding',
     heading: 'An update on your onboarding',
     bodyHtml: `<p>Thank you for setting up your Lawnn profile. After review, we aren't able to approve it as it stands right now. Here's the feedback from our team:</p>
-      <blockquote style="border-left:3px solid #ff9044;margin:12px 0;padding:6px 14px;background:#ff90440d">${reason}</blockquote>
-      <p>We'd genuinely love to see you on Lawnn — once you've addressed the above, reply to this email and we'll take another look.</p>`,
+      <blockquote style="border-left:3px solid #ff9044;margin:12px 0;padding:6px 14px;background:#ff90440d">${esc(reason)}</blockquote>
+      <p>We'd genuinely love to see you on Lawnn. Your account stays active — log in, update your profile with the feedback above in mind, then reply to this email and we'll take another look.</p>`,
   })
   return res.json({ ok: true })
 })

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole, optionalAuth } from '../middleware/requireAuth.js'
 import { safeUrl, clampText, nonNegativeInt } from '../lib/sanitize.js'
-import { emailAdmin, SITE_URL } from '../lib/email.js'
+import { emailAdmin, escapeHtml as esc, SITE_URL } from '../lib/email.js'
 
 const router = Router()
 
@@ -206,7 +206,7 @@ router.patch('/:id', requireAuth, requireRole('student', 'admin'), async (req, r
     await emailAdmin({
       subject: `${profile.user.name} finished onboarding — ready for review`,
       heading: 'A student completed their onboarding',
-      bodyHtml: `<p><strong>${profile.user.name}</strong> just finished setting up their profile (bio, skills and portfolio) and is waiting for approval.</p><p style="color:#21326c99">Review them in Admin → Students and approve or send feedback.</p>`,
+      bodyHtml: `<p><strong>${esc(profile.user.name)}</strong> just finished setting up their profile (bio, skills and portfolio) and is waiting for approval.</p><p style="color:#21326c99">Review them in Admin → Students and approve or send feedback.</p>`,
       cta: { label: 'Open Lawnn admin', url: SITE_URL },
     })
   }
