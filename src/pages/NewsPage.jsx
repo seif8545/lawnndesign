@@ -3,14 +3,26 @@ import {
   AlignCenter, AlignLeft, AlignRight, ArrowRight, Bold, BookOpen,
   ChevronLeft, Heading1, Heading2, Heading3, Image as ImageIcon,
   Italic, Link, List, ListOrdered, Minus, Palette, Pen, Plus,
-  Quote, Strikethrough, Trash2, Type, Underline, X,
+  Quote, Strikethrough, Trash2, Type, Underline, Upload, X,
 } from 'lucide-react';
 import { news as newsApi, uploadFile } from '../lib/api.js';
 import { Modal } from '../components/ui.jsx';
 import { EMPTY_NEWS_FORM, NEWS_CATEGORIES, NEWS_COLORS } from '../lib/constants.js';
 import { toast } from '../lib/toast.js';
 
-// ─── TEXT COLOUR SWATCHES ────────────────────────────────────────────────────
+// ─── ACCENT COLOUR (auto from category, no user picker) ──────────────────────
+const CATEGORY_COLORS = {
+  'Career Advice': '#c4622d',
+  'Business':      '#21326c',
+  'Industry':      '#db9630',
+  'Legal':         '#3c8762',
+  'Design':        '#a84f22',
+  'Technology':    '#5ea580',
+};
+const accentOf = (post) =>
+  post.color || CATEGORY_COLORS[post.category] || '#21326c';
+
+// ─── TEXT COLOUR SWATCHES (for the editor toolbar) ───────────────────────────
 const TEXT_COLORS = [
   { label: 'Navy',   color: '#21326c' },
   { label: 'Terra',  color: '#c4622d' },
@@ -30,21 +42,30 @@ const isBodyEmpty = (html) => !html || html.replace(/<[^>]*>/g, '').trim() === '
 const escHtml = (t) =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** Convert old block format -> HTML string for the editor */
+/** Pull the cover photo URL out of the body array (first block if type=cover). */
+const getCoverPhoto = (body) =>
+  (body || []).find(b => b.type === 'cover')?.url || '';
+
+/** Convert stored body blocks -> HTML string for the rich editor (skip cover block). */
 const bodyToHtml = (body) => {
   if (!body || body.length === 0) return '';
-  return body.map(block => {
-    if (block.type === 'html')    return block.html || '';
-    if (block.type === 'heading') return `<h2>${escHtml(block.text || '')}</h2>`;
-    if (block.type === 'list')    return `<ul>${(block.items || []).map(i => `<li>${escHtml(i)}</li>`).join('')}</ul>`;
-    return `<p>${escHtml(block.text || '')}</p>`;
-  }).join('\n');
+  return body
+    .filter(b => b.type !== 'cover')
+    .map(block => {
+      if (block.type === 'html')    return block.html || '';
+      if (block.type === 'heading') return `<h2>${escHtml(block.text || '')}</h2>`;
+      if (block.type === 'list')    return `<ul>${(block.items || []).map(i => `<li>${escHtml(i)}</li>`).join('')}</ul>`;
+      return `<p>${escHtml(block.text || '')}</p>`;
+    })
+    .join('\n');
 };
 
-/** Convert editor HTML -> body array the backend stores */
-const htmlToBody = (html) => {
-  if (isBodyEmpty(html)) return [];
-  return [{ type: 'html', html }];
+/** Convert editor HTML + cover URL -> body array the backend stores. */
+const htmlToBody = (html, coverPhotoUrl) => {
+  const blocks = [];
+  if (coverPhotoUrl) blocks.push({ type: 'cover', url: coverPhotoUrl });
+  if (!isBodyEmpty(html)) blocks.push({ type: 'html', html });
+  return blocks;
 };
 
 // ─── RICH TEXT EDITOR ────────────────────────────────────────────────────────
@@ -57,7 +78,6 @@ function RichTextEditor({ value, onChange }) {
   const savedRange   = useRef(null);
   const [uploading,  setUploading]  = useState(false);
 
-  // Sync external value -> DOM (only when it actually changed from outside)
   useEffect(() => {
     if (editorRef.current && value !== lastValueRef.current) {
       editorRef.current.innerHTML = value || '';
@@ -96,7 +116,6 @@ function RichTextEditor({ value, onChange }) {
     sel?.addRange(r);
   };
 
-  // Link
   const openLink = () => {
     saveRange();
     setLinkUrl('');
@@ -110,7 +129,6 @@ function RichTextEditor({ value, onChange }) {
     editorRef.current?.focus();
     const url = /^https?:\/\//i.test(linkUrl.trim()) ? linkUrl.trim() : `https://${linkUrl.trim()}`;
     document.execCommand('createLink', false, url);
-    // Make it open in a new tab
     const sel = window.getSelection();
     const anchor = sel?.anchorNode?.parentElement?.closest('a')
       || editorRef.current?.querySelector(`a[href="${url}"]`);
@@ -121,7 +139,6 @@ function RichTextEditor({ value, onChange }) {
     savedRange.current = null;
   };
 
-  // Image
   const insertImage = async (file) => {
     if (!file) return;
     setUploading(true);
@@ -182,7 +199,7 @@ function RichTextEditor({ value, onChange }) {
 
         <Sep />
 
-        {/* Colour picker */}
+        {/* Text colour picker */}
         <div className="relative">
           <Btn
             onClick={() => { saveRange(); setShowColors(c => !c); setShowLink(false); }}
@@ -239,7 +256,7 @@ function RichTextEditor({ value, onChange }) {
         {/* Link */}
         <Btn onClick={openLink} title="Insert / edit link"><Link size={13} /></Btn>
 
-        {/* Image upload */}
+        {/* Inline image */}
         <label
           title="Insert image"
           className="min-w-[28px] h-7 px-1.5 rounded flex items-center justify-center transition-all hover:bg-[#21326c]/10 text-[#21326c]/60 hover:text-[#21326c] cursor-pointer"
@@ -248,13 +265,8 @@ function RichTextEditor({ value, onChange }) {
             ? <span className="text-[9px] font-bold text-[#21326c]/50 animate-pulse">…</span>
             : <ImageIcon size={13} />
           }
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={uploading}
-            onChange={e => insertImage(e.target.files?.[0])}
-          />
+          <input type="file" accept="image/*" className="hidden" disabled={uploading}
+            onChange={e => insertImage(e.target.files?.[0])} />
         </label>
 
         {/* HR */}
@@ -277,19 +289,13 @@ function RichTextEditor({ value, onChange }) {
             autoFocus
             className="flex-1 text-sm bg-transparent outline-none text-[#21326c] placeholder:text-[#21326c]/28"
           />
-          <button
-            type="button"
-            onMouseDown={(e) => { e.preventDefault(); insertLink(); }}
+          <button type="button" onMouseDown={(e) => { e.preventDefault(); insertLink(); }}
             className="px-3 py-1 rounded-lg text-white text-xs font-semibold hover:opacity-90 flex-shrink-0"
-            style={{ background: '#21326c' }}
-          >
+            style={{ background: '#21326c' }}>
             Insert
           </button>
-          <button
-            type="button"
-            onClick={() => setShowLink(false)}
-            className="p-1 rounded hover:bg-[#21326c]/10 text-[#21326c]/35 flex-shrink-0"
-          >
+          <button type="button" onClick={() => setShowLink(false)}
+            className="p-1 rounded hover:bg-[#21326c]/10 text-[#21326c]/35 flex-shrink-0">
             <X size={12} />
           </button>
         </div>
@@ -309,9 +315,70 @@ function RichTextEditor({ value, onChange }) {
   );
 }
 
+// ─── COVER PHOTO UPLOADER ────────────────────────────────────────────────────
+function CoverPhotoUploader({ url, onChange }) {
+  const [uploading, setUploading] = useState(false);
+
+  const upload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const result = await uploadFile(file, 'site');
+      onChange(result.url);
+    } catch (e) {
+      toast.error(`Cover photo upload failed: ${e.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (url) {
+    return (
+      <div className="relative rounded-2xl overflow-hidden border border-[#21326c]/15 group">
+        <img src={url} alt="Cover" className="w-full h-52 object-cover" />
+        <div className="absolute inset-0 bg-[#21326c]/0 group-hover:bg-[#21326c]/30 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+          <label className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-xl text-xs font-semibold text-[#21326c] cursor-pointer hover:bg-[#21326c]/5 shadow-md transition-all">
+            <Upload size={13} /> Replace
+            <input type="file" accept="image/*" className="hidden"
+              disabled={uploading} onChange={e => upload(e.target.files?.[0])} />
+          </label>
+          <button type="button" onClick={() => onChange('')}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 shadow-md transition-all">
+            <X size={13} /> Remove
+          </button>
+        </div>
+        {uploading && (
+          <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+            <span className="text-xs font-semibold text-[#21326c]/60 animate-pulse">Uploading…</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <label className="flex flex-col items-center justify-center gap-2 w-full h-40 rounded-2xl border-2 border-dashed border-[#21326c]/20 hover:border-[#21326c]/40 hover:bg-[#21326c]/[0.02] transition-all cursor-pointer group">
+      <div className="w-10 h-10 rounded-xl bg-[#21326c]/8 flex items-center justify-center group-hover:bg-[#21326c]/12 transition-all">
+        {uploading
+          ? <span className="text-xs font-bold text-[#21326c]/50 animate-pulse">…</span>
+          : <ImageIcon size={18} className="text-[#21326c]/40" />
+        }
+      </div>
+      <div className="text-center">
+        <p className="text-sm font-semibold text-[#21326c]/60">
+          {uploading ? 'Uploading…' : 'Add cover photo'}
+        </p>
+        <p className="text-xs text-[#21326c]/35 mt-0.5">Shown at the top of the article</p>
+      </div>
+      <input type="file" accept="image/*" className="hidden"
+        disabled={uploading} onChange={e => upload(e.target.files?.[0])} />
+    </label>
+  );
+}
+
 // ─── ARTICLE BODY BLOCK ──────────────────────────────────────────────────────
 export function ArticleBodyBlock({ block }) {
-  // Rich HTML stored by the new editor
+  if (block.type === 'cover') return null; // rendered separately as hero
   if (block.type === 'html') {
     return (
       <div
@@ -320,7 +387,6 @@ export function ArticleBodyBlock({ block }) {
       />
     );
   }
-  // Legacy block types (backward compat)
   if (block.type === 'heading') {
     return (
       <h2 className="font-display text-xl font-bold text-[#21326c] mt-8 mb-3 leading-snug">
@@ -340,9 +406,7 @@ export function ArticleBodyBlock({ block }) {
       </ul>
     );
   }
-  return (
-    <p className="text-[#21326c] text-base leading-loose mb-4">{block.text}</p>
-  );
+  return <p className="text-[#21326c] text-base leading-loose mb-4">{block.text}</p>;
 }
 
 // ─── NEWS PAGE ────────────────────────────────────────────────────────────────
@@ -361,12 +425,12 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
 
   const openEdit = post => {
     setForm({
-      title:    post.title,
-      excerpt:  post.excerpt,
-      bodyHtml: bodyToHtml(post.body),
-      category: post.category,
-      readTime: post.readTime,
-      color:    post.color,
+      title:         post.title,
+      excerpt:       post.excerpt,
+      bodyHtml:      bodyToHtml(post.body),
+      coverPhotoUrl: getCoverPhoto(post.body),
+      category:      post.category,
+      readTime:      post.readTime,
     });
     setEditingPost(post);
     setShowModal(true);
@@ -376,14 +440,15 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.excerpt.trim() || saving) return;
-    const body    = htmlToBody(form.bodyHtml);
+    const body    = htmlToBody(form.bodyHtml, form.coverPhotoUrl);
+    const accent  = CATEGORY_COLORS[form.category] || '#21326c';
     const payload = {
       title:    form.title,
       excerpt:  form.excerpt,
       body,
       category: form.category,
       readTime: form.readTime,
-      color:    form.color,
+      color:    accent,
     };
     setSaving(true);
     try {
@@ -417,34 +482,54 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
 
   // ── ARTICLE READER ──
   if (selectedArticle) {
-    const post = newsPosts.find(p => p.id === selectedArticle.id) || selectedArticle;
+    const post      = newsPosts.find(p => p.id === selectedArticle.id) || selectedArticle;
+    const accent    = accentOf(post);
+    const coverUrl  = getCoverPhoto(post.body);
+
     return (
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
         <button
           onClick={() => setSelectedArticle(null)}
-          className="flex items-center gap-1.5 text-sm text-[#21326c] hover:opacity-70 transition-opacity mb-8"
+          className="flex items-center gap-1.5 text-sm text-[#21326c] hover:opacity-70 transition-opacity mb-6"
         >
           <ChevronLeft size={16} /> Back to News
         </button>
 
-        <div
-          className="h-2 rounded-full mb-8"
-          style={{ background: `linear-gradient(90deg, ${post.color}, ${post.color}66)` }}
-        />
+        {/* Cover photo or colour bar */}
+        {coverUrl ? (
+          <div className="rounded-2xl overflow-hidden mb-8 shadow-md">
+            <img
+              src={coverUrl}
+              alt={post.title}
+              className="w-full object-cover"
+              style={{ maxHeight: '380px' }}
+            />
+          </div>
+        ) : (
+          <div
+            className="h-2 rounded-full mb-8"
+            style={{ background: `linear-gradient(90deg, ${accent}, ${accent}66)` }}
+          />
+        )}
 
+        {/* Meta */}
         <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: `${post.color}15`, color: post.color }}>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+            style={{ background: `${accent}15`, color: accent }}>
             {post.category}
           </span>
           <span className="text-xs text-[#21326c]/50">{post.readTime}</span>
         </div>
 
+        {/* Title */}
         <h1 className="font-display text-3xl sm:text-4xl font-bold text-[#21326c] leading-tight mb-4">
           {post.title}
         </h1>
 
+        {/* Byline */}
         <div className="flex items-center gap-3 mb-8 pb-8 border-b border-[#21326c]/10">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: post.color }}>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
+            style={{ background: accent }}>
             L
           </div>
           <div>
@@ -453,10 +538,8 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
           </div>
           {isAdmin && (
             <div className="ml-auto flex gap-1">
-              <button
-                onClick={() => openEdit(post)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors"
-              >
+              <button onClick={() => openEdit(post)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors">
                 <Pen size={11} /> Edit
               </button>
               {deleteConfirm === post.id ? (
@@ -466,10 +549,8 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
                   <button onClick={() => setDeleteConfirm(null)} className="text-xs text-[#21326c]/50 px-1">No</button>
                 </div>
               ) : (
-                <button
-                  onClick={() => setDeleteConfirm(post.id)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-100 text-red-400 hover:bg-red-50 transition-colors"
-                >
+                <button onClick={() => setDeleteConfirm(post.id)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-100 text-red-400 hover:bg-red-50 transition-colors">
                   <Trash2 size={11} /> Delete
                 </button>
               )}
@@ -477,22 +558,22 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
           )}
         </div>
 
+        {/* Body */}
         <div className="prose-lawnn">
           <p className="text-lg font-medium text-[#21326c] leading-relaxed mb-6 opacity-80">{post.excerpt}</p>
           {(post.body || []).map((block, i) => (
             <ArticleBodyBlock key={i} block={block} />
           ))}
-          {(!post.body || post.body.length === 0) && (
+          {(!post.body || post.body.filter(b => b.type !== 'cover').length === 0) && (
             <p className="text-[#21326c]/40 italic text-sm">No article body has been written yet.</p>
           )}
         </div>
 
+        {/* Footer */}
         <div className="mt-12 pt-8 border-t border-[#21326c]/10 flex items-center justify-between">
           <span className="text-xs text-[#21326c]/40">{post.author} · {post.date}</span>
-          <button
-            onClick={() => setSelectedArticle(null)}
-            className="text-xs font-semibold text-[#21326c] flex items-center gap-1 hover:opacity-70 transition-opacity"
-          >
+          <button onClick={() => setSelectedArticle(null)}
+            className="text-xs font-semibold text-[#21326c] flex items-center gap-1 hover:opacity-70 transition-opacity">
             <ChevronLeft size={12} /> All articles
           </button>
         </div>
@@ -513,11 +594,9 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
           <p className="text-sm text-[#21326c]">Resources, guides, and industry updates for Egypt's creative community</p>
         </div>
         {isAdmin && (
-          <button
-            onClick={openCreate}
+          <button onClick={openCreate}
             className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white transition-all hover:opacity-90 flex-shrink-0"
-            style={{ background: '#ff9044' }}
-          >
+            style={{ background: '#ff9044' }}>
             <Plus size={15} /> Write Article
           </button>
         )}
@@ -532,64 +611,70 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
       )}
 
       <div className="grid gap-6">
-        {newsPosts.map((post, i) => (
-          <article
-            key={post.id}
-            className={`bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden group cursor-pointer ${i === 0 ? 'lg:flex' : ''}`}
-            onClick={() => setSelectedArticle(post)}
-          >
-            <div
-              className={`${i === 0 ? 'lg:w-64 flex-shrink-0 h-48 lg:h-auto' : 'h-36'} flex items-center justify-center flex-shrink-0`}
-              style={{ background: `linear-gradient(135deg, ${post.color}22, ${post.color}66)` }}
+        {newsPosts.map((post, i) => {
+          const accent   = accentOf(post);
+          const coverUrl = getCoverPhoto(post.body);
+          return (
+            <article
+              key={post.id}
+              className={`bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden group cursor-pointer ${i === 0 ? 'lg:flex' : ''}`}
+              onClick={() => setSelectedArticle(post)}
             >
-              <BookOpen size={30} style={{ color: post.color }} className="opacity-30" />
-            </div>
-            <div className="p-6 flex-1 relative">
-              {isAdmin && (
-                <div className="absolute top-4 right-4 flex gap-1" onClick={e => e.stopPropagation()}>
-                  <button
-                    onClick={() => openEdit(post)}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[#21326c]/10 transition-colors"
-                    title="Edit article"
-                  >
-                    <Pen size={13} className="text-[#21326c]" />
-                  </button>
-                  {deleteConfirm === post.id ? (
-                    <div className="flex items-center gap-1 bg-white border border-red-100 rounded-lg px-2 py-1 shadow-sm">
-                      <span className="text-xs text-red-500 font-medium">Delete?</span>
-                      <button onClick={() => handleDelete(post.id)} className="text-xs font-bold text-red-500 hover:text-red-700 px-1">Yes</button>
-                      <button onClick={() => setDeleteConfirm(null)} className="text-xs text-[#21326c]/50 hover:text-[#21326c] px-1">No</button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setDeleteConfirm(post.id)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors"
-                      title="Delete article"
-                    >
-                      <X size={13} className="text-[#21326c]/40 hover:text-red-400" />
+              {/* Thumbnail — cover photo or gradient */}
+              <div
+                className={`${i === 0 ? 'lg:w-64 flex-shrink-0 h-48 lg:h-auto' : 'h-40'} relative flex items-center justify-center flex-shrink-0 overflow-hidden`}
+                style={coverUrl ? {} : { background: `linear-gradient(135deg, ${accent}22, ${accent}66)` }}
+              >
+                {coverUrl
+                  ? <img src={coverUrl} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  : <BookOpen size={30} style={{ color: accent }} className="opacity-30" />
+                }
+              </div>
+
+              <div className="p-6 flex-1 relative">
+                {isAdmin && (
+                  <div className="absolute top-4 right-4 flex gap-1" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => openEdit(post)}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[#21326c]/10 transition-colors"
+                      title="Edit article">
+                      <Pen size={13} className="text-[#21326c]" />
                     </button>
-                  )}
+                    {deleteConfirm === post.id ? (
+                      <div className="flex items-center gap-1 bg-white border border-red-100 rounded-lg px-2 py-1 shadow-sm">
+                        <span className="text-xs text-red-500 font-medium">Delete?</span>
+                        <button onClick={() => handleDelete(post.id)} className="text-xs font-bold text-red-500 hover:text-red-700 px-1">Yes</button>
+                        <button onClick={() => setDeleteConfirm(null)} className="text-xs text-[#21326c]/50 hover:text-[#21326c] px-1">No</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDeleteConfirm(post.id)}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors"
+                        title="Delete article">
+                        <X size={13} className="text-[#21326c]/40 hover:text-red-400" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: `${accent}15`, color: accent }}>
+                    {post.category}
+                  </span>
+                  <span className="text-xs text-[#21326c]/60">{post.readTime}</span>
                 </div>
-              )}
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: `${post.color}15`, color: post.color }}>
-                  {post.category}
-                </span>
-                <span className="text-xs text-[#21326c]/60">{post.readTime}</span>
+                <h2 className="font-display text-xl font-bold text-[#21326c] mb-2 group-hover:opacity-75 transition-opacity leading-snug pr-16">
+                  {post.title}
+                </h2>
+                <p className="text-sm text-[#21326c] leading-relaxed mb-4">{post.excerpt}</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#21326c]/60">{post.author} · {post.date}</span>
+                  <span className="text-xs font-semibold text-[#21326c] flex items-center gap-1 group-hover:gap-2 transition-all">
+                    Read article <ArrowRight size={12} />
+                  </span>
+                </div>
               </div>
-              <h2 className="font-display text-xl font-bold text-[#21326c] mb-2 group-hover:opacity-75 transition-opacity leading-snug pr-16">
-                {post.title}
-              </h2>
-              <p className="text-sm text-[#21326c] leading-relaxed mb-4">{post.excerpt}</p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-[#21326c]/60">{post.author} · {post.date}</span>
-                <span className="text-xs font-semibold text-[#21326c] flex items-center gap-1 group-hover:gap-2 transition-all">
-                  Read article <ArrowRight size={12} />
-                </span>
-              </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
 
       <Modal open={showModal} onClose={closeModal} title={editingPost ? 'Edit Article' : 'Write New Article'} wide>
@@ -599,10 +684,23 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
   );
 }
 
-// ─── ARTICLE FORM with rich text editor ──────────────────────────────────────
+// ─── ARTICLE FORM ─────────────────────────────────────────────────────────────
 export function NewsArticleForm({ form, setForm, onSave, editingPost, saving }) {
   return (
     <div className="space-y-5">
+
+      {/* Cover photo — top of the form, mirrors article layout */}
+      <div>
+        <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">
+          Cover Photo <span className="font-normal normal-case text-[#21326c]/40">— optional</span>
+        </label>
+        <CoverPhotoUploader
+          url={form.coverPhotoUrl || ''}
+          onChange={url => setForm(f => ({ ...f, coverPhotoUrl: url }))}
+        />
+      </div>
+
+      {/* Title */}
       <div>
         <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">Title *</label>
         <input
@@ -614,6 +712,7 @@ export function NewsArticleForm({ form, setForm, onSave, editingPost, saving }) 
         />
       </div>
 
+      {/* Excerpt */}
       <div>
         <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">
           Excerpt * <span className="font-normal normal-case text-[#21326c]/40">— shown on the news card</span>
@@ -627,16 +726,16 @@ export function NewsArticleForm({ form, setForm, onSave, editingPost, saving }) 
         />
       </div>
 
+      {/* Body */}
       <div>
-        <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">
-          Article Body *
-        </label>
+        <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">Article Body *</label>
         <RichTextEditor
           value={form.bodyHtml || ''}
           onChange={html => setForm(f => ({ ...f, bodyHtml: html }))}
         />
       </div>
 
+      {/* Category + Read time */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">Category</label>
@@ -660,25 +759,7 @@ export function NewsArticleForm({ form, setForm, onSave, editingPost, saving }) 
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-1.5">Card Colour</label>
-        <div className="flex gap-2">
-          {NEWS_COLORS.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setForm(f => ({ ...f, color: c }))}
-              className="w-8 h-8 rounded-lg transition-transform hover:scale-110"
-              style={{
-                background: c,
-                outline: form.color === c ? `3px solid ${c}` : 'none',
-                outlineOffset: '2px',
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
+      {/* Publish */}
       <button
         onClick={onSave}
         disabled={saving || !form.title.trim() || !form.excerpt.trim() || isBodyEmpty(form.bodyHtml)}
