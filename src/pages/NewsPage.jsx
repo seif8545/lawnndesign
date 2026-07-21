@@ -517,101 +517,112 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
 
   // ── ARTICLE READER ──
   if (selectedArticle) {
-    const post      = newsPosts.find(p => p.id === selectedArticle.id) || selectedArticle;
-    const accent    = accentOf(post);
-    const coverUrl  = getCoverPhoto(post.body);
+    const post     = newsPosts.find(p => p.id === selectedArticle.id) || selectedArticle;
+    const accent   = accentOf(post);
+    const coverUrl = getCoverPhoto(post.body);
 
     return (
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 animate-fade-in">
-        <button
-          onClick={() => setSelectedArticle(null)}
-          className="flex items-center gap-1.5 text-sm text-[#21326c] hover:opacity-70 transition-opacity mb-6"
-        >
-          <ChevronLeft size={16} /> Back to News
-        </button>
+      <div className="animate-fade-in pb-20">
 
-        {/* Cover photo or colour bar */}
-        {coverUrl ? (
-          <div className="rounded-2xl overflow-hidden mb-8 shadow-md">
-            <img
-              src={coverUrl}
-              alt={post.title}
-              className="w-full block"
-              style={{ objectFit: 'contain' }}
-            />
-          </div>
-        ) : (
-          <div
-            className="h-2 rounded-full mb-8"
-            style={{ background: `linear-gradient(90deg, ${accent}, ${accent}66)` }}
-          />
-        )}
-
-        {/* Meta */}
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-            style={{ background: `${accent}15`, color: accent }}>
-            {post.category}
-          </span>
-          <span className="text-xs text-[#21326c]/50">{post.readTime}</span>
-        </div>
-
-        {/* Title */}
-        <h1 className="font-display text-3xl sm:text-4xl font-bold text-[#21326c] leading-tight mb-4">
-          {post.title}
-        </h1>
-
-        {/* Byline */}
-        <div className="flex items-center gap-3 mb-8 pb-8 border-b border-[#21326c]/10">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-            style={{ background: accent }}>
-            L
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[#21326c]">{post.author}</p>
-            <p className="text-xs text-[#21326c]/50">{post.date}</p>
-          </div>
-          {isAdmin && (
-            <div className="ml-auto flex gap-1">
-              <button onClick={() => openEdit(post)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors">
-                <Pen size={11} /> Edit
-              </button>
-              {deleteConfirm === post.id ? (
-                <div className="flex items-center gap-1 border border-red-100 rounded-lg px-2 py-1 bg-white shadow-sm">
-                  <span className="text-xs text-red-500 font-medium">Delete?</span>
-                  <button onClick={() => handleDelete(post.id)} className="text-xs font-bold text-red-500 hover:text-red-700 px-1">Yes</button>
-                  <button onClick={() => setDeleteConfirm(null)} className="text-xs text-[#21326c]/50 px-1">No</button>
-                </div>
-              ) : (
-                <button onClick={() => setDeleteConfirm(post.id)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-100 text-red-400 hover:bg-red-50 transition-colors">
-                  <Trash2 size={11} /> Delete
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Body */}
-        <div className="prose-lawnn">
-          <p className="text-lg font-medium text-[#21326c] leading-relaxed mb-6 opacity-80">{post.excerpt}</p>
-          {(post.body || []).map((block, i) => (
-            <ArticleBodyBlock key={i} block={block} />
-          ))}
-          {(!post.body || post.body.filter(b => b.type !== 'cover').length === 0) && (
-            <p className="text-[#21326c]/40 italic text-sm">No article body has been written yet.</p>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="mt-12 pt-8 border-t border-[#21326c]/10 flex items-center justify-between">
-          <span className="text-xs text-[#21326c]/40">{post.author} · {post.date}</span>
-          <button onClick={() => setSelectedArticle(null)}
-            className="text-xs font-semibold text-[#21326c] flex items-center gap-1 hover:opacity-70 transition-opacity">
-            <ChevronLeft size={12} /> All articles
+        {/* ── Back nav ── */}
+        <div className="max-w-5xl mx-auto px-4 sm:px-8 pt-6 pb-2">
+          <button
+            onClick={() => setSelectedArticle(null)}
+            className="flex items-center gap-1.5 text-sm text-[#21326c]/60 hover:text-[#21326c] transition-colors"
+          >
+            <ChevronLeft size={15} /> Back to News
           </button>
         </div>
+
+        {/* ── Cover image (wide) ── */}
+        {coverUrl ? (
+          <div className="max-w-5xl mx-auto px-4 sm:px-8 mb-10 mt-4">
+            <div className="rounded-3xl overflow-hidden shadow-xl">
+              <img src={coverUrl} alt={post.title} className="w-full block" />
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-5xl mx-auto px-4 sm:px-8 mt-4 mb-10">
+            <div className="h-1.5 rounded-full" style={{ background: `linear-gradient(90deg, ${accent}, ${accent}55)` }} />
+          </div>
+        )}
+
+        {/* ── Reading column ── */}
+        <article className="max-w-2xl mx-auto px-4 sm:px-6">
+
+          {/* Category + read time */}
+          <div className="flex items-center gap-2 mb-5">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
+              style={{ background: `${accent}15`, color: accent }}>
+              {post.category}
+            </span>
+            <span className="text-xs text-[#21326c]/40">{post.readTime}</span>
+          </div>
+
+          {/* Title */}
+          <h1 className="font-display text-3xl sm:text-[2.6rem] font-bold text-[#21326c] leading-tight mb-5">
+            {post.title}
+          </h1>
+
+          {/* Excerpt / lede */}
+          {post.excerpt && (
+            <p className="text-lg text-[#21326c]/70 leading-relaxed mb-8 font-medium border-l-4 pl-4"
+              style={{ borderColor: accent }}>
+              {post.excerpt}
+            </p>
+          )}
+
+          {/* Byline */}
+          <div className="flex items-center gap-3 mb-10 pb-8 border-b border-[#21326c]/10">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+              style={{ background: accent }}>
+              L
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[#21326c]">{post.author}</p>
+              <p className="text-xs text-[#21326c]/45">{post.date}</p>
+            </div>
+            {isAdmin && (
+              <div className="ml-auto flex gap-1.5">
+                <button onClick={() => openEdit(post)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors">
+                  <Pen size={11} /> Edit
+                </button>
+                {deleteConfirm === post.id ? (
+                  <div className="flex items-center gap-1 border border-red-100 rounded-lg px-2 py-1 bg-white shadow-sm">
+                    <span className="text-xs text-red-500 font-medium">Delete?</span>
+                    <button onClick={() => handleDelete(post.id)} className="text-xs font-bold text-red-500 hover:text-red-700 px-1">Yes</button>
+                    <button onClick={() => setDeleteConfirm(null)} className="text-xs text-[#21326c]/50 px-1">No</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setDeleteConfirm(post.id)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-100 text-red-400 hover:bg-red-50 transition-colors">
+                    <Trash2 size={11} /> Delete
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Body blocks */}
+          <div>
+            {(post.body || []).map((block, i) => (
+              <ArticleBodyBlock key={i} block={block} />
+            ))}
+            {(!post.body || post.body.filter(b => b.type !== 'cover').length === 0) && (
+              <p className="text-[#21326c]/40 italic text-sm">No article body has been written yet.</p>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="mt-16 pt-8 border-t border-[#21326c]/10 flex items-center justify-between">
+            <span className="text-xs text-[#21326c]/35">{post.author} · {post.date}</span>
+            <button onClick={() => setSelectedArticle(null)}
+              className="flex items-center gap-1 text-xs font-semibold text-[#21326c] hover:opacity-70 transition-opacity">
+              <ChevronLeft size={12} /> All articles
+            </button>
+          </div>
+        </article>
 
         <Modal open={showModal} onClose={closeModal} title="Edit Article" wide>
           <NewsArticleForm form={form} setForm={setForm} onSave={handleSave} editingPost={editingPost} saving={saving} />
