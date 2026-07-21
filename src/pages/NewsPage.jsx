@@ -441,7 +441,9 @@ export function ArticleBodyBlock({ block }) {
       </ul>
     );
   }
-  return <p className="text-[#21326c] text-base leading-loose mb-4">{block.text}</p>;
+  return <p className="text-[#21326c] text-base md:text-lg leading-relaxed mb-6">
+  {block.text}
+</p>;
 }
 
 // ─── NEWS PAGE ────────────────────────────────────────────────────────────────
@@ -525,8 +527,7 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
       <div className="w-full animate-fade-in pb-20">
 
         {/* Single column — fills the container on mobile, centered on wide screens */}
-        <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-6">
-
+<div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 sm:px-6 pt-8">
           {/* Back nav */}
           <button
             onClick={() => setSelectedArticle(null)}
