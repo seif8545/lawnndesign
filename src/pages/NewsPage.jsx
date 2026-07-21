@@ -536,8 +536,8 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
             <img
               src={coverUrl}
               alt={post.title}
-              className="w-full object-cover"
-              style={{ maxHeight: '380px' }}
+              className="w-full block"
+              style={{ objectFit: 'contain' }}
             />
           </div>
         ) : (
