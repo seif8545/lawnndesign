@@ -522,36 +522,31 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
     const coverUrl = getCoverPhoto(post.body);
 
     return (
-      <div className="animate-fade-in pb-20">
+      <div className="w-full animate-fade-in pb-20">
 
-        {/* ── Back nav ── */}
-        <div className="max-w-5xl mx-auto px-4 sm:px-8 pt-6 pb-2">
+        {/* Single column — fills the container on mobile, centered on wide screens */}
+        <div className="w-full max-w-2xl mx-auto px-4 sm:px-6 pt-6">
+
+          {/* Back nav */}
           <button
             onClick={() => setSelectedArticle(null)}
-            className="flex items-center gap-1.5 text-sm text-[#21326c]/60 hover:text-[#21326c] transition-colors"
+            className="flex items-center gap-1.5 text-sm text-[#21326c]/55 hover:text-[#21326c] transition-colors mb-6"
           >
             <ChevronLeft size={15} /> Back to News
           </button>
-        </div>
 
-        {/* ── Cover image (wide) ── */}
-        {coverUrl ? (
-          <div className="max-w-5xl mx-auto px-4 sm:px-8 mb-10 mt-4">
-            <div className="rounded-3xl overflow-hidden shadow-xl">
+          {/* Cover image — full width of the column */}
+          {coverUrl ? (
+            <div className="w-full rounded-2xl overflow-hidden shadow-lg mb-8">
               <img src={coverUrl} alt={post.title} className="w-full block" />
             </div>
-          </div>
-        ) : (
-          <div className="max-w-5xl mx-auto px-4 sm:px-8 mt-4 mb-10">
-            <div className="h-1.5 rounded-full" style={{ background: `linear-gradient(90deg, ${accent}, ${accent}55)` }} />
-          </div>
-        )}
-
-        {/* ── Reading column ── */}
-        <article className="max-w-2xl mx-auto px-4 sm:px-6">
+          ) : (
+            <div className="h-1.5 w-full rounded-full mb-8"
+              style={{ background: `linear-gradient(90deg, ${accent}, ${accent}55)` }} />
+          )}
 
           {/* Category + read time */}
-          <div className="flex items-center gap-2 mb-5">
+          <div className="flex items-center gap-2 mb-4">
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
               style={{ background: `${accent}15`, color: accent }}>
               {post.category}
@@ -560,30 +555,30 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
           </div>
 
           {/* Title */}
-          <h1 className="font-display text-3xl sm:text-[2.6rem] font-bold text-[#21326c] leading-tight mb-5">
+          <h1 className="font-display text-2xl sm:text-4xl font-bold text-[#21326c] leading-tight mb-5">
             {post.title}
           </h1>
 
           {/* Excerpt / lede */}
           {post.excerpt && (
-            <p className="text-lg text-[#21326c]/70 leading-relaxed mb-8 font-medium border-l-4 pl-4"
+            <p className="text-base sm:text-lg text-[#21326c]/70 leading-relaxed mb-7 font-medium border-l-4 pl-4"
               style={{ borderColor: accent }}>
               {post.excerpt}
             </p>
           )}
 
           {/* Byline */}
-          <div className="flex items-center gap-3 mb-10 pb-8 border-b border-[#21326c]/10">
+          <div className="flex items-center gap-3 mb-8 pb-7 border-b border-[#21326c]/10">
             <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
               style={{ background: accent }}>
               L
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-[#21326c]">{post.author}</p>
               <p className="text-xs text-[#21326c]/45">{post.date}</p>
             </div>
             {isAdmin && (
-              <div className="ml-auto flex gap-1.5">
+              <div className="ml-auto flex gap-1.5 flex-shrink-0">
                 <button onClick={() => openEdit(post)}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#21326c]/20 text-[#21326c] hover:bg-[#21326c]/5 transition-colors">
                   <Pen size={11} /> Edit
@@ -615,14 +610,14 @@ export function NewsPage({ newsPosts, currentUser, refreshNews }) {
           </div>
 
           {/* Footer */}
-          <div className="mt-16 pt-8 border-t border-[#21326c]/10 flex items-center justify-between">
+          <div className="mt-14 pt-7 border-t border-[#21326c]/10 flex items-center justify-between">
             <span className="text-xs text-[#21326c]/35">{post.author} · {post.date}</span>
             <button onClick={() => setSelectedArticle(null)}
               className="flex items-center gap-1 text-xs font-semibold text-[#21326c] hover:opacity-70 transition-opacity">
               <ChevronLeft size={12} /> All articles
             </button>
           </div>
-        </article>
+        </div>
 
         <Modal open={showModal} onClose={closeModal} title="Edit Article" wide>
           <NewsArticleForm form={form} setForm={setForm} onSave={handleSave} editingPost={editingPost} saving={saving} />
