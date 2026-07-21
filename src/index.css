@@ -193,3 +193,59 @@ h1, h2, h3 {
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+
+/* ─── Rich text editor + rendered article body ─────────────────────────────── */
+.rich-editor, .rich-content {
+  font-family: 'DM Sans', sans-serif;
+  color: #21326c;
+}
+.rich-editor:focus { outline: none; }
+.rich-editor h1, .rich-content h1 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.5rem; font-weight: 700; color: #21326c;
+  margin: 1.25rem 0 0.5rem; line-height: 1.3;
+}
+.rich-editor h2, .rich-content h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.25rem; font-weight: 700; color: #21326c;
+  margin: 1.1rem 0 0.4rem; line-height: 1.3;
+}
+.rich-editor h3, .rich-content h3 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.05rem; font-weight: 600; color: #21326c;
+  margin: 1rem 0 0.35rem; line-height: 1.35;
+}
+.rich-editor p, .rich-content p {
+  color: #21326c; line-height: 1.8; margin-bottom: 0.75rem;
+}
+.rich-editor ul, .rich-content ul {
+  list-style-type: disc; padding-left: 1.5rem; margin: 0.75rem 0;
+}
+.rich-editor ol, .rich-content ol {
+  list-style-type: decimal; padding-left: 1.5rem; margin: 0.75rem 0;
+}
+.rich-editor li, .rich-content li {
+  color: #21326c; line-height: 1.7; margin-bottom: 0.2rem;
+}
+.rich-editor a, .rich-content a {
+  color: #2563eb; text-decoration: underline; text-underline-offset: 2px;
+}
+.rich-editor a:hover, .rich-content a:hover { color: #1d4ed8; }
+.rich-editor blockquote, .rich-content blockquote {
+  border-left: 3px solid #c4622d; padding: 0.5rem 0.5rem 0.5rem 1rem;
+  color: #21326c; font-style: italic; margin: 1rem 0;
+  background: rgba(196,98,45,0.04); border-radius: 0 8px 8px 0;
+}
+.rich-editor hr, .rich-content hr {
+  border: none; border-top: 1px solid rgba(33,50,108,0.15); margin: 1.5rem 0;
+}
+.rich-editor img, .rich-content img {
+  max-width: 100%; border-radius: 10px; margin: 10px 0;
+  display: block; box-shadow: 0 4px 12px rgba(33,50,108,0.1);
+}
+.rich-editor b, .rich-editor strong,
+.rich-content b, .rich-content strong { font-weight: 700; }
+.rich-editor i, .rich-editor em,
+.rich-content i, .rich-content em { font-style: italic; }
+.rich-editor u, .rich-content u { text-decoration: underline; }
+.rich-editor s, .rich-content s, .rich-editor strike, .rich-content strike { text-decoration: line-through; }
