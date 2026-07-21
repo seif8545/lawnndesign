@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { BookOpen, Briefcase, ChevronDown, Droplets, Grid, Home, KeyRound, LogOut, Menu, MessageSquare, Package, Plus, Shield, ShoppingBag, UserCheck, Users } from 'lucide-react';
 import { Avatar, NotificationPanel } from './ui.jsx';
 
-export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, onChangePassword, notifications = [], onMarkNotifRead, onMarkAllNotifRead }) {
+export function TopNav({ view, setView, currentUser, onLoginClick, onClientSignupClick, onLogout, onChangePassword, notifications = [], onMarkNotifRead, onMarkAllNotifRead }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -93,13 +93,20 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, onC
                   Log In
                 </button>
                 <button
-                  onClick={onLoginClick}
+                  onClick={onClientSignupClick}
+                  className="hidden sm:flex text-sm font-medium text-[#21326c] px-3 py-2 border border-[#21326c]/20 rounded-lg hover:bg-[#21326c]/5 transition-colors"
+                >
+                  Client Sign up
+                </button>
+                <a
+                  href="https://docs.google.com/forms/d/e/1FAIpQLScm-OxEG4iucDm8NreNmvsSaXARH0KJE3Al8JZ8e53AlsmvEw/viewform"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-4 py-2 rounded text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
                   style={{ background: '#ff9044' }}
                 >
-                  <Plus size={15} />
-                  <span className="hidden sm:inline">Post a Project</span>
-                </button>
+                  <span className="hidden sm:inline">Student Sign up</span>
+                </a>
               </>
             ) : (
               <div className="flex items-center gap-2">
@@ -192,13 +199,33 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, onC
               </button>
             ))}
             {!currentUser && (
-              <button
-                onClick={() => { onLoginClick(); setMenuOpen(false); }}
-                className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium flex-shrink-0 bg-[#21326c]/5 text-[#21326c]"
-              >
-                <Users size={16} />
-                Log In
-              </button>
+              <>
+                <button
+                  onClick={() => { onLoginClick(); setMenuOpen(false); }}
+                  className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium flex-shrink-0 bg-[#21326c]/5 text-[#21326c]"
+                >
+                  <KeyRound size={16} />
+                  Log In
+                </button>
+                <button
+                  onClick={() => { onClientSignupClick?.(); setMenuOpen(false); }}
+                  className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium flex-shrink-0 bg-[#21326c]/5 text-[#21326c]"
+                >
+                  <Briefcase size={16} />
+                  Client Sign up
+                </button>
+                <a
+                  href="https://docs.google.com/forms/d/e/1FAIpQLScm-OxEG4iucDm8NreNmvsSaXARH0KJE3Al8JZ8e53AlsmvEw/viewform"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-xs font-medium flex-shrink-0 text-white"
+                  style={{ background: '#ff9044' }}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <UserCheck size={16} />
+                  Student Sign up
+                </a>
+              </>
             )}
           </div>
         )}
@@ -206,5 +233,3 @@ export function TopNav({ view, setView, currentUser, onLoginClick, onLogout, onC
     </header>
   );
 }
-
-// ─── VIEW 1: HOME PAGE ────────────────────────────────────────────────────────
