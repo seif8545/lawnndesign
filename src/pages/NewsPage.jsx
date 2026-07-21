@@ -318,9 +318,10 @@ function RichTextEditor({ value, onChange }) {
 // ─── COVER PHOTO UPLOADER ────────────────────────────────────────────────────
 function CoverPhotoUploader({ url, onChange }) {
   const [uploading, setUploading] = useState(false);
+  const [dragging,  setDragging]  = useState(false);
 
   const upload = async (file) => {
-    if (!file) return;
+    if (!file || !file.type.startsWith('image/')) return;
     setUploading(true);
     try {
       const result = await uploadFile(file, 'site');
@@ -332,21 +333,49 @@ function CoverPhotoUploader({ url, onChange }) {
     }
   };
 
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) upload(file);
+  };
+  const onDragOver = (e) => { e.preventDefault(); setDragging(true); };
+  const onDragLeave = () => setDragging(false);
+
   if (url) {
     return (
-      <div className="relative rounded-2xl overflow-hidden border border-[#21326c]/15 group">
-        <img src={url} alt="Cover" className="w-full h-52 object-cover" />
-        <div className="absolute inset-0 bg-[#21326c]/0 group-hover:bg-[#21326c]/30 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-          <label className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-xl text-xs font-semibold text-[#21326c] cursor-pointer hover:bg-[#21326c]/5 shadow-md transition-all">
+      <div
+        className="relative rounded-2xl overflow-hidden border border-[#21326c]/15 group"
+        onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
+      >
+        {/* Full image — no fixed height, no cropping */}
+        <img src={url} alt="Cover" className="w-full block" style={{ objectFit: 'contain' }} />
+
+        {/* Hover overlay — semi-dark tint */}
+        <div className="absolute inset-0 bg-[#21326c]/0 group-hover:bg-[#21326c]/40 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+          {/* Replace — transparent glass button */}
+          <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white cursor-pointer
+                            bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/30 shadow transition-all">
             <Upload size={13} /> Replace
             <input type="file" accept="image/*" className="hidden"
               disabled={uploading} onChange={e => upload(e.target.files?.[0])} />
           </label>
+          {/* Remove — transparent glass button, red tint */}
           <button type="button" onClick={() => onChange('')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white rounded-xl text-xs font-semibold text-red-500 hover:bg-red-50 shadow-md transition-all">
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-red-300 cursor-pointer
+                       bg-white/15 hover:bg-red-500/30 backdrop-blur-sm border border-white/30 shadow transition-all">
             <X size={13} /> Remove
           </button>
         </div>
+
+        {/* Drag-over highlight */}
+        {dragging && (
+          <div className="absolute inset-0 border-2 border-dashed border-[#21326c]/60 rounded-2xl bg-[#21326c]/10 flex items-center justify-center">
+            <span className="text-sm font-semibold text-[#21326c]/70">Drop to replace</span>
+          </div>
+        )}
+
+        {/* Upload spinner */}
         {uploading && (
           <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
             <span className="text-xs font-semibold text-[#21326c]/60 animate-pulse">Uploading…</span>
@@ -357,7 +386,13 @@ function CoverPhotoUploader({ url, onChange }) {
   }
 
   return (
-    <label className="flex flex-col items-center justify-center gap-2 w-full h-40 rounded-2xl border-2 border-dashed border-[#21326c]/20 hover:border-[#21326c]/40 hover:bg-[#21326c]/[0.02] transition-all cursor-pointer group">
+    <label
+      className={`flex flex-col items-center justify-center gap-2 w-full h-40 rounded-2xl border-2 border-dashed transition-all cursor-pointer group
+        ${dragging
+          ? 'border-[#21326c]/60 bg-[#21326c]/[0.05]'
+          : 'border-[#21326c]/20 hover:border-[#21326c]/40 hover:bg-[#21326c]/[0.02]'}`}
+      onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
+    >
       <div className="w-10 h-10 rounded-xl bg-[#21326c]/8 flex items-center justify-center group-hover:bg-[#21326c]/12 transition-all">
         {uploading
           ? <span className="text-xs font-bold text-[#21326c]/50 animate-pulse">…</span>
@@ -366,9 +401,9 @@ function CoverPhotoUploader({ url, onChange }) {
       </div>
       <div className="text-center">
         <p className="text-sm font-semibold text-[#21326c]/60">
-          {uploading ? 'Uploading…' : 'Add cover photo'}
+          {uploading ? 'Uploading…' : dragging ? 'Drop to add cover' : 'Add cover photo'}
         </p>
-        <p className="text-xs text-[#21326c]/35 mt-0.5">Shown at the top of the article</p>
+        <p className="text-xs text-[#21326c]/35 mt-0.5">Click to browse or drag & drop</p>
       </div>
       <input type="file" accept="image/*" className="hidden"
         disabled={uploading} onChange={e => upload(e.target.files?.[0])} />
