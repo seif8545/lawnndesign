@@ -88,151 +88,259 @@ export function PasswordRequirements({ password }) {
   );
 }
 
+// screen: ‘login’ | ‘role-pick’ | ‘student-info’ | ‘client-signup’
 export function LoginModal({ open, onClose, onLogin }) {
-  const [mode, setMode]         = useState('login'); // 'login' | 'register'
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName]         = useState('');
-  const [role, setRole]         = useState('student');
-  const [error, setError]       = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [captchaRequired, setCaptchaRequired] = useState(false);
-  const [captchaToken, setCaptchaToken]       = useState('');
-  const [captchaKey, setCaptchaKey]           = useState(0); // bump to remount → fresh challenge
+  const [screen, setScreen] = useState(‘login’);
 
-  const reset = () => {
-    setEmail(''); setPassword(''); setName(''); setError(''); setLoading(false);
-    setCaptchaRequired(false); setCaptchaToken('');
+  // Login fields
+  const [email, setEmail]       = useState(‘’);
+  const [password, setPassword] = useState(‘’);
+  const [loginError, setLoginError]     = useState(‘’);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [captchaRequired, setCaptchaRequired] = useState(false);
+  const [captchaToken, setCaptchaToken]       = useState(‘’);
+  const [captchaKey, setCaptchaKey]           = useState(0);
+
+  // Client signup fields
+  const [regName, setRegName]         = useState(‘’);
+  const [regEmail, setRegEmail]       = useState(‘’);
+  const [regPassword, setRegPassword] = useState(‘’);
+  const [regError, setRegError]       = useState(‘’);
+  const [regLoading, setRegLoading]   = useState(false);
+  const [regCaptchaToken, setRegCaptchaToken] = useState(‘’);
+  const [regCaptchaKey, setRegCaptchaKey]     = useState(0);
+
+  const resetAll = () => {
+    setScreen(‘login’);
+    setEmail(‘’); setPassword(‘’); setLoginError(‘’); setLoginLoading(false);
+    setCaptchaRequired(false); setCaptchaToken(‘’);
+    setRegName(‘’); setRegEmail(‘’); setRegPassword(‘’); setRegError(‘’);
+    setRegLoading(false); setRegCaptchaToken(‘’);
   };
 
-  const switchMode = m => { setMode(m); setError(''); };
+  const handleClose = () => { resetAll(); onClose(); };
 
+  // ── LOGIN ──
   const handleLogin = async () => {
-    setError(''); setLoading(true);
+    setLoginError(‘’); setLoginLoading(true);
     try {
       const { token, user } = await authApi.login(email, password, captchaToken || undefined);
       setToken(token);
       onLogin(user);
-      onClose();
-      reset();
+      handleClose();
     } catch (e) {
-      setError(e.message);
+      setLoginError(e.message);
       if (e.data?.captchaRequired) {
-        // Show (or refresh) the CAPTCHA — the just-used token is now spent.
         setCaptchaRequired(true);
-        setCaptchaToken('');
+        setCaptchaToken(‘’);
         setCaptchaKey(k => k + 1);
       }
     } finally {
-      setLoading(false);
+      setLoginLoading(false);
     }
   };
 
+  // ── CLIENT REGISTER ──
   const handleRegister = async () => {
-    if (!passwordValid(password)) { setError('Please choose a password that meets all the requirements.'); return; }
-    setError(''); setLoading(true);
+    if (!passwordValid(regPassword)) { setRegError(‘Please choose a password that meets all the requirements.’); return; }
+    if (!regCaptchaToken) { setRegError(‘Please complete the verification below.’); return; }
+    setRegError(‘’); setRegLoading(true);
     try {
-      const { token, user } = await authApi.register({ email, password, name, role: 'client', turnstileToken: captchaToken || undefined });
+      const { token, user } = await authApi.register({
+        email: regEmail,
+        password: regPassword,
+        name: regName,
+        role: ‘client’,
+        turnstileToken: regCaptchaToken,
+      });
       setToken(token);
       onLogin(user);
-      onClose();
-      reset();
+      handleClose();
     } catch (e) {
-      setError(e.message);
-      // The just-used Turnstile token is single-use — remount for a fresh one.
-      setCaptchaToken('');
-      setCaptchaKey(k => k + 1);
+      setRegError(e.message);
+      setRegCaptchaToken(‘’);
+      setRegCaptchaKey(k => k + 1);
     } finally {
-      setLoading(false);
+      setRegLoading(false);
     }
   };
 
-  const handleKey = e => e.key === 'Enter' && (mode === 'login' ? handleLogin() : handleRegister());
+  const inputCls = ‘w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:outline-none focus:ring-2 focus:ring-[#21326c]/40 transition-all placeholder:text-[#21326c]/35’;
 
-  return (
-    <Modal open={open} onClose={onClose} title={mode === 'login' ? 'Sign In to Lawnn' : 'Create a Client Account'}>
-      <div className="space-y-4">
-
-        {/* Tab toggle */}
-        <div className="flex rounded-xl overflow-hidden border border-[#21326c]/15">
-          {['login', 'register'].map(m => (
-            <button key={m} onClick={() => switchMode(m)}
-              className={`flex-1 py-2 text-sm font-semibold transition-colors ${mode === m ? 'text-white' : 'text-[#21326c]/60 hover:text-[#21326c]'}`}
-              style={mode === m ? { background: '#21326c' } : {}}>
-              {m === 'login' ? 'Sign In' : 'Sign Up'}
-            </button>
-          ))}
-        </div>
-
-        {/* Register-only: client name + info note */}
-        {mode === 'register' && (
-          <>
-            <div className="rounded-xl p-3 text-xs text-[#21326c] leading-relaxed border border-[#21326c]/20" style={{ background: '#21326c08' }}>
-              <strong>Are you a student?</strong> Apply now using our <a href="https://docs.google.com/forms/d/e/1FAIpQLScm-OxEG4iucDm8NreNmvsSaXARH0KJE3Al8JZ8e53AlsmvEw/viewform" target="_blank" rel="noopener noreferrer" className="font-semibold underline">application form</a>. Once you're accepted, we'll email your sign-in credentials — then use the <strong>Sign In</strong> tab.
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Full Name</label>
-              <input type="text" placeholder="e.g. Ahmed Hassan" value={name}
-                onChange={e => { setName(e.target.value); setError(''); }} onKeyDown={handleKey}
-                className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
-            </div>
-          </>
-        )}
-
-        {/* Email */}
+  // ── SCREEN: LOGIN ──
+  const screenLogin = (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Email</label>
+        <input type="email" placeholder="your@email.com" value={email} autoComplete="email"
+          onChange={e => { setEmail(e.target.value); setLoginError(‘’); }}
+          onKeyDown={e => e.key === ‘Enter’ && handleLogin()}
+          className={inputCls} />
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Password</label>
+        <input type="password" placeholder="Enter your password" value={password} autoComplete="current-password"
+          onChange={e => { setPassword(e.target.value); setLoginError(‘’); }}
+          onKeyDown={e => e.key === ‘Enter’ && handleLogin()}
+          className={inputCls} />
+      </div>
+      {loginError && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 leading-relaxed">{loginError}</p>
+      )}
+      {captchaRequired && (
         <div>
-          <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Email</label>
-          <input type="email" placeholder="your@email.com" value={email}
-            onChange={e => { setEmail(e.target.value); setError(''); }} onKeyDown={handleKey}
-            className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+          <p className="text-xs text-[#21326c]/60 mb-1.5">Please confirm you’re human to continue:</p>
+          <TurnstileWidget key={captchaKey} onToken={setCaptchaToken} />
         </div>
+      )}
+      <button
+        onClick={handleLogin}
+        disabled={!email || !password || loginLoading || (captchaRequired && !captchaToken)}
+        className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ background: ‘#ff9044’ }}
+      >
+        {loginLoading ? ‘Signing in…’ : ‘Sign In’}
+      </button>
+      <p className="text-center text-xs text-[#21326c]/50">
+        Don’t have an account?{‘ ‘}
+        <span onClick={() => setScreen(‘role-pick’)}
+          className="font-semibold text-[#21326c] cursor-pointer underline underline-offset-2">
+          Sign up
+        </span>
+      </p>
+    </div>
+  );
 
-        {/* Password */}
+  // ── SCREEN: ROLE PICKER ──
+  const screenRolePick = (
+    <div className="space-y-3">
+      <p className="text-sm text-[#21326c]/60 text-center mb-2">How would you like to join Lawnn?</p>
+      <button
+        onClick={() => setScreen(‘client-signup’)}
+        className="w-full flex items-start gap-4 p-4 rounded-2xl border-2 border-[#21326c]/12 hover:border-[#21326c]/30 hover:bg-[#21326c]/[0.025] transition-all text-left group"
+      >
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 text-lg"
+          style={{ background: ‘#21326c0f’ }}>💼</div>
         <div>
-          <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Password</label>
-          <input type="password" placeholder={mode === 'register' ? 'Create a password' : 'Enter your password'} value={password}
-            onChange={e => { setPassword(e.target.value); setError(''); }} onKeyDown={handleKey}
-            className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
-          {mode === 'register' && <PasswordRequirements password={password} />}
+          <p className="text-sm font-bold text-[#21326c]">I’m a Client</p>
+          <p className="text-xs text-[#21326c]/50 mt-0.5 leading-relaxed">I want to hire Egyptian creative talent for my project.</p>
         </div>
+      </button>
+      <button
+        onClick={() => setScreen(‘student-info’)}
+        className="w-full flex items-start gap-4 p-4 rounded-2xl border-2 border-[#21326c]/12 hover:border-[#21326c]/30 hover:bg-[#21326c]/[0.025] transition-all text-left group"
+      >
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 text-lg"
+          style={{ background: ‘#21326c0f’ }}>🎨</div>
+        <div>
+          <p className="text-sm font-bold text-[#21326c]">I’m a Student / Creative</p>
+          <p className="text-xs text-[#21326c]/50 mt-0.5 leading-relaxed">I want to showcase my work and land real projects.</p>
+        </div>
+      </button>
+      <button onClick={() => setScreen(‘login’)}
+        className="w-full text-center text-xs text-[#21326c]/40 hover:text-[#21326c] transition-colors pt-1">
+        ← Back to Sign In
+      </button>
+    </div>
+  );
 
-        {error && (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 leading-relaxed">{error}</p>
-        )}
-
-        {/* CAPTCHA — appears only after repeated failed logins. */}
-        {mode === 'login' && captchaRequired && (
-          <div>
-            <p className="text-xs text-[#21326c]/60 mb-1.5">Please confirm you’re human to continue:</p>
-            <TurnstileWidget key={captchaKey} onToken={setCaptchaToken} />
-          </div>
-        )}
-
-        {/* CAPTCHA on sign-up — blocks bulk automated fake client accounts. */}
-        {mode === 'register' && (
-          <div>
-            <p className="text-xs text-[#21326c]/60 mb-1.5">Please confirm you’re human:</p>
-            <TurnstileWidget key={captchaKey} onToken={setCaptchaToken} />
-          </div>
-        )}
-
-        <button
-          onClick={mode === 'login' ? handleLogin : handleRegister}
-          disabled={!email || !password || (mode === 'register' && !name) || loading || (mode === 'login' && captchaRequired && !captchaToken)}
-          className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ background: '#ff9044' }}
-        >
-          {loading ? (mode === 'login' ? 'Signing in…' : 'Creating account…') : (mode === 'login' ? 'Sign In' : 'Create Account')}
-        </button>
-
-        <p className="text-center text-xs text-[#21326c]/50">
-          {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-          <span onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-            className="font-medium text-[#21326c] cursor-pointer underline underline-offset-2">
-            {mode === 'login' ? 'Sign up' : 'Sign in'}
-          </span>
+  // ── SCREEN: STUDENT INFO ──
+  const screenStudentInfo = (
+    <div className="space-y-5">
+      <div className="rounded-2xl p-5 text-center" style={{ background: ‘linear-gradient(135deg, #21326c0d, #21326c04)’ }}>
+        <div className="text-4xl mb-3">🎓</div>
+        <h3 className="font-display text-lg font-bold text-[#21326c] mb-2">Apply to Join as a Creative</h3>
+        <p className="text-sm text-[#21326c]/60 leading-relaxed">
+          Lawnn verifies every student before they join. Fill in the application and we’ll review it — once accepted, you’ll receive your login credentials by email.
         </p>
       </div>
+      <a
+        href="https://docs.google.com/forms/d/e/1FAIpQLScm-OxEG4iucDm8NreNmvsSaXARH0KJE3Al8JZ8e53AlsmvEw/viewform"
+        target="_blank" rel="noopener noreferrer"
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90"
+        style={{ background: ‘#ff9044’ }}
+      >
+        Apply Now →
+      </a>
+      <p className="text-center text-xs text-[#21326c]/45">
+        Already have your credentials?{‘ ‘}
+        <span onClick={() => setScreen(‘login’)} className="font-semibold text-[#21326c] cursor-pointer underline underline-offset-2">
+          Sign In
+        </span>
+      </p>
+      <button onClick={() => setScreen(‘role-pick’)}
+        className="w-full text-center text-xs text-[#21326c]/35 hover:text-[#21326c] transition-colors">
+        ← Back
+      </button>
+    </div>
+  );
+
+  // ── SCREEN: CLIENT SIGNUP ──
+  const screenClientSignup = (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Full Name</label>
+        <input type="text" placeholder="e.g. Ahmed Hassan" value={regName} autoComplete="name"
+          onChange={e => { setRegName(e.target.value); setRegError(‘’); }}
+          onKeyDown={e => e.key === ‘Enter’ && handleRegister()}
+          className={inputCls} />
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Email</label>
+        <input type="email" placeholder="your@email.com" value={regEmail} autoComplete="email"
+          onChange={e => { setRegEmail(e.target.value); setRegError(‘’); }}
+          onKeyDown={e => e.key === ‘Enter’ && handleRegister()}
+          className={inputCls} />
+      </div>
+      <div>
+        <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Password</label>
+        <input type="password" placeholder="Create a password" value={regPassword} autoComplete="new-password"
+          onChange={e => { setRegPassword(e.target.value); setRegError(‘’); }}
+          onKeyDown={e => e.key === ‘Enter’ && handleRegister()}
+          className={inputCls} />
+        <PasswordRequirements password={regPassword} />
+      </div>
+      <div>
+        <p className="text-xs text-[#21326c]/55 mb-1.5">Please confirm you’re human:</p>
+        <TurnstileWidget key={regCaptchaKey} onToken={setRegCaptchaToken} />
+      </div>
+      {regError && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 leading-relaxed">{regError}</p>
+      )}
+      <button
+        onClick={handleRegister}
+        disabled={!regName || !regEmail || !regPassword || !regCaptchaToken || regLoading}
+        className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ background: ‘#ff9044’ }}
+      >
+        {regLoading ? ‘Creating account…’ : ‘Create Account’}
+      </button>
+      <p className="text-center text-xs text-[#21326c]/45">
+        Already have an account?{‘ ‘}
+        <span onClick={() => setScreen(‘login’)} className="font-semibold text-[#21326c] cursor-pointer underline underline-offset-2">
+          Sign In
+        </span>
+      </p>
+      <button onClick={() => setScreen(‘role-pick’)}
+        className="w-full text-center text-xs text-[#21326c]/35 hover:text-[#21326c] transition-colors">
+        ← Back
+      </button>
+    </div>
+  );
+
+  const titles = {
+    ‘login’:         ‘Sign In to Lawnn’,
+    ‘role-pick’:     ‘Create an Account’,
+    ‘student-info’:  ‘Join as a Creative’,
+    ‘client-signup’: ‘Create a Client Account’,
+  };
+
+  return (
+    <Modal open={open} onClose={handleClose} title={titles[screen]}>
+      {screen === ‘login’         && screenLogin}
+      {screen === ‘role-pick’     && screenRolePick}
+      {screen === ‘student-info’  && screenStudentInfo}
+      {screen === ‘client-signup’ && screenClientSignup}
     </Modal>
   );
 }
