@@ -88,41 +88,41 @@ export function PasswordRequirements({ password }) {
   );
 }
 
-// screen: ‘login’ | ‘role-pick’ | ‘student-info’ | ‘client-signup’
+// screen: 'login' | 'role-pick' | 'student-info' | 'client-signup'
 export function LoginModal({ open, onClose, onLogin }) {
-  const [screen, setScreen] = useState(‘login’);
+  const [screen, setScreen] = useState('login');
 
   // Login fields
-  const [email, setEmail]       = useState(‘’);
-  const [password, setPassword] = useState(‘’);
-  const [loginError, setLoginError]     = useState(‘’);
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError]     = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [captchaRequired, setCaptchaRequired] = useState(false);
-  const [captchaToken, setCaptchaToken]       = useState(‘’);
+  const [captchaToken, setCaptchaToken]       = useState('');
   const [captchaKey, setCaptchaKey]           = useState(0);
 
   // Client signup fields
-  const [regName, setRegName]         = useState(‘’);
-  const [regEmail, setRegEmail]       = useState(‘’);
-  const [regPassword, setRegPassword] = useState(‘’);
-  const [regError, setRegError]       = useState(‘’);
+  const [regName, setRegName]         = useState('');
+  const [regEmail, setRegEmail]       = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regError, setRegError]       = useState('');
   const [regLoading, setRegLoading]   = useState(false);
-  const [regCaptchaToken, setRegCaptchaToken] = useState(‘’);
+  const [regCaptchaToken, setRegCaptchaToken] = useState('');
   const [regCaptchaKey, setRegCaptchaKey]     = useState(0);
 
   const resetAll = () => {
-    setScreen(‘login’);
-    setEmail(‘’); setPassword(‘’); setLoginError(‘’); setLoginLoading(false);
-    setCaptchaRequired(false); setCaptchaToken(‘’);
-    setRegName(‘’); setRegEmail(‘’); setRegPassword(‘’); setRegError(‘’);
-    setRegLoading(false); setRegCaptchaToken(‘’);
+    setScreen('login');
+    setEmail(''); setPassword(''); setLoginError(''); setLoginLoading(false);
+    setCaptchaRequired(false); setCaptchaToken('');
+    setRegName(''); setRegEmail(''); setRegPassword(''); setRegError('');
+    setRegLoading(false); setRegCaptchaToken('');
   };
 
   const handleClose = () => { resetAll(); onClose(); };
 
   // ── LOGIN ──
   const handleLogin = async () => {
-    setLoginError(‘’); setLoginLoading(true);
+    setLoginError(''); setLoginLoading(true);
     try {
       const { token, user } = await authApi.login(email, password, captchaToken || undefined);
       setToken(token);
@@ -132,7 +132,7 @@ export function LoginModal({ open, onClose, onLogin }) {
       setLoginError(e.message);
       if (e.data?.captchaRequired) {
         setCaptchaRequired(true);
-        setCaptchaToken(‘’);
+        setCaptchaToken('');
         setCaptchaKey(k => k + 1);
       }
     } finally {
@@ -142,15 +142,15 @@ export function LoginModal({ open, onClose, onLogin }) {
 
   // ── CLIENT REGISTER ──
   const handleRegister = async () => {
-    if (!passwordValid(regPassword)) { setRegError(‘Please choose a password that meets all the requirements.’); return; }
-    if (!regCaptchaToken) { setRegError(‘Please complete the verification below.’); return; }
-    setRegError(‘’); setRegLoading(true);
+    if (!passwordValid(regPassword)) { setRegError('Please choose a password that meets all the requirements.'); return; }
+    if (!regCaptchaToken) { setRegError('Please complete the verification below.'); return; }
+    setRegError(''); setRegLoading(true);
     try {
       const { token, user } = await authApi.register({
         email: regEmail,
         password: regPassword,
         name: regName,
-        role: ‘client’,
+        role: 'client',
         turnstileToken: regCaptchaToken,
       });
       setToken(token);
@@ -158,14 +158,14 @@ export function LoginModal({ open, onClose, onLogin }) {
       handleClose();
     } catch (e) {
       setRegError(e.message);
-      setRegCaptchaToken(‘’);
+      setRegCaptchaToken('');
       setRegCaptchaKey(k => k + 1);
     } finally {
       setRegLoading(false);
     }
   };
 
-  const inputCls = ‘w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:outline-none focus:ring-2 focus:ring-[#21326c]/40 transition-all placeholder:text-[#21326c]/35’;
+  const inputCls = 'w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:outline-none focus:ring-2 focus:ring-[#21326c]/40 transition-all placeholder:text-[#21326c]/35';
 
   // ── SCREEN: LOGIN ──
   const screenLogin = (
@@ -173,15 +173,15 @@ export function LoginModal({ open, onClose, onLogin }) {
       <div>
         <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Email</label>
         <input type="email" placeholder="your@email.com" value={email} autoComplete="email"
-          onChange={e => { setEmail(e.target.value); setLoginError(‘’); }}
-          onKeyDown={e => e.key === ‘Enter’ && handleLogin()}
+          onChange={e => { setEmail(e.target.value); setLoginError(''); }}
+          onKeyDown={e => e.key === 'Enter' && handleLogin()}
           className={inputCls} />
       </div>
       <div>
         <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Password</label>
         <input type="password" placeholder="Enter your password" value={password} autoComplete="current-password"
-          onChange={e => { setPassword(e.target.value); setLoginError(‘’); }}
-          onKeyDown={e => e.key === ‘Enter’ && handleLogin()}
+          onChange={e => { setPassword(e.target.value); setLoginError(''); }}
+          onKeyDown={e => e.key === 'Enter' && handleLogin()}
           className={inputCls} />
       </div>
       {loginError && (
@@ -189,7 +189,7 @@ export function LoginModal({ open, onClose, onLogin }) {
       )}
       {captchaRequired && (
         <div>
-          <p className="text-xs text-[#21326c]/60 mb-1.5">Please confirm you’re human to continue:</p>
+          <p className="text-xs text-[#21326c]/60 mb-1.5">Please confirm you're human to continue:</p>
           <TurnstileWidget key={captchaKey} onToken={setCaptchaToken} />
         </div>
       )}
@@ -197,13 +197,13 @@ export function LoginModal({ open, onClose, onLogin }) {
         onClick={handleLogin}
         disabled={!email || !password || loginLoading || (captchaRequired && !captchaToken)}
         className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ background: ‘#ff9044’ }}
+        style={{ background: '#ff9044' }}
       >
-        {loginLoading ? ‘Signing in…’ : ‘Sign In’}
+        {loginLoading ? 'Signing in…' : 'Sign In'}
       </button>
       <p className="text-center text-xs text-[#21326c]/50">
-        Don’t have an account?{‘ ‘}
-        <span onClick={() => setScreen(‘role-pick’)}
+        Don't have an account?{' '}
+        <span onClick={() => setScreen('role-pick')}
           className="font-semibold text-[#21326c] cursor-pointer underline underline-offset-2">
           Sign up
         </span>
@@ -216,28 +216,28 @@ export function LoginModal({ open, onClose, onLogin }) {
     <div className="space-y-3">
       <p className="text-sm text-[#21326c]/60 text-center mb-2">How would you like to join Lawnn?</p>
       <button
-        onClick={() => setScreen(‘client-signup’)}
+        onClick={() => setScreen('client-signup')}
         className="w-full flex items-start gap-4 p-4 rounded-2xl border-2 border-[#21326c]/12 hover:border-[#21326c]/30 hover:bg-[#21326c]/[0.025] transition-all text-left group"
       >
         <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 text-lg"
-          style={{ background: ‘#21326c0f’ }}>💼</div>
+          style={{ background: '#21326c0f' }}>💼</div>
         <div>
-          <p className="text-sm font-bold text-[#21326c]">I’m a Client</p>
+          <p className="text-sm font-bold text-[#21326c]">I'm a Client</p>
           <p className="text-xs text-[#21326c]/50 mt-0.5 leading-relaxed">I want to hire Egyptian creative talent for my project.</p>
         </div>
       </button>
       <button
-        onClick={() => setScreen(‘student-info’)}
+        onClick={() => setScreen('student-info')}
         className="w-full flex items-start gap-4 p-4 rounded-2xl border-2 border-[#21326c]/12 hover:border-[#21326c]/30 hover:bg-[#21326c]/[0.025] transition-all text-left group"
       >
         <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 text-lg"
-          style={{ background: ‘#21326c0f’ }}>🎨</div>
+          style={{ background: '#21326c0f' }}>🎨</div>
         <div>
-          <p className="text-sm font-bold text-[#21326c]">I’m a Student / Creative</p>
+          <p className="text-sm font-bold text-[#21326c]">I'm a Student / Creative</p>
           <p className="text-xs text-[#21326c]/50 mt-0.5 leading-relaxed">I want to showcase my work and land real projects.</p>
         </div>
       </button>
-      <button onClick={() => setScreen(‘login’)}
+      <button onClick={() => setScreen('login')}
         className="w-full text-center text-xs text-[#21326c]/40 hover:text-[#21326c] transition-colors pt-1">
         ← Back to Sign In
       </button>
@@ -247,28 +247,28 @@ export function LoginModal({ open, onClose, onLogin }) {
   // ── SCREEN: STUDENT INFO ──
   const screenStudentInfo = (
     <div className="space-y-5">
-      <div className="rounded-2xl p-5 text-center" style={{ background: ‘linear-gradient(135deg, #21326c0d, #21326c04)’ }}>
+      <div className="rounded-2xl p-5 text-center" style={{ background: 'linear-gradient(135deg, #21326c0d, #21326c04)' }}>
         <div className="text-4xl mb-3">🎓</div>
         <h3 className="font-display text-lg font-bold text-[#21326c] mb-2">Apply to Join as a Creative</h3>
         <p className="text-sm text-[#21326c]/60 leading-relaxed">
-          Lawnn verifies every student before they join. Fill in the application and we’ll review it — once accepted, you’ll receive your login credentials by email.
+          Lawnn verifies every student before they join. Fill in the application and we'll review it — once accepted, you'll receive your login credentials by email.
         </p>
       </div>
       <a
         href="https://docs.google.com/forms/d/e/1FAIpQLScm-OxEG4iucDm8NreNmvsSaXARH0KJE3Al8JZ8e53AlsmvEw/viewform"
         target="_blank" rel="noopener noreferrer"
         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90"
-        style={{ background: ‘#ff9044’ }}
+        style={{ background: '#ff9044' }}
       >
         Apply Now →
       </a>
       <p className="text-center text-xs text-[#21326c]/45">
-        Already have your credentials?{‘ ‘}
-        <span onClick={() => setScreen(‘login’)} className="font-semibold text-[#21326c] cursor-pointer underline underline-offset-2">
+        Already have your credentials?{' '}
+        <span onClick={() => setScreen('login')} className="font-semibold text-[#21326c] cursor-pointer underline underline-offset-2">
           Sign In
         </span>
       </p>
-      <button onClick={() => setScreen(‘role-pick’)}
+      <button onClick={() => setScreen('role-pick')}
         className="w-full text-center text-xs text-[#21326c]/35 hover:text-[#21326c] transition-colors">
         ← Back
       </button>
@@ -281,27 +281,27 @@ export function LoginModal({ open, onClose, onLogin }) {
       <div>
         <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Full Name</label>
         <input type="text" placeholder="e.g. Ahmed Hassan" value={regName} autoComplete="name"
-          onChange={e => { setRegName(e.target.value); setRegError(‘’); }}
-          onKeyDown={e => e.key === ‘Enter’ && handleRegister()}
+          onChange={e => { setRegName(e.target.value); setRegError(''); }}
+          onKeyDown={e => e.key === 'Enter' && handleRegister()}
           className={inputCls} />
       </div>
       <div>
         <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Email</label>
         <input type="email" placeholder="your@email.com" value={regEmail} autoComplete="email"
-          onChange={e => { setRegEmail(e.target.value); setRegError(‘’); }}
-          onKeyDown={e => e.key === ‘Enter’ && handleRegister()}
+          onChange={e => { setRegEmail(e.target.value); setRegError(''); }}
+          onKeyDown={e => e.key === 'Enter' && handleRegister()}
           className={inputCls} />
       </div>
       <div>
         <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Password</label>
         <input type="password" placeholder="Create a password" value={regPassword} autoComplete="new-password"
-          onChange={e => { setRegPassword(e.target.value); setRegError(‘’); }}
-          onKeyDown={e => e.key === ‘Enter’ && handleRegister()}
+          onChange={e => { setRegPassword(e.target.value); setRegError(''); }}
+          onKeyDown={e => e.key === 'Enter' && handleRegister()}
           className={inputCls} />
         <PasswordRequirements password={regPassword} />
       </div>
       <div>
-        <p className="text-xs text-[#21326c]/55 mb-1.5">Please confirm you’re human:</p>
+        <p className="text-xs text-[#21326c]/55 mb-1.5">Please confirm you're human:</p>
         <TurnstileWidget key={regCaptchaKey} onToken={setRegCaptchaToken} />
       </div>
       {regError && (
@@ -311,17 +311,17 @@ export function LoginModal({ open, onClose, onLogin }) {
         onClick={handleRegister}
         disabled={!regName || !regEmail || !regPassword || !regCaptchaToken || regLoading}
         className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ background: ‘#ff9044’ }}
+        style={{ background: '#ff9044' }}
       >
-        {regLoading ? ‘Creating account…’ : ‘Create Account’}
+        {regLoading ? 'Creating account…' : 'Create Account'}
       </button>
       <p className="text-center text-xs text-[#21326c]/45">
-        Already have an account?{‘ ‘}
-        <span onClick={() => setScreen(‘login’)} className="font-semibold text-[#21326c] cursor-pointer underline underline-offset-2">
+        Already have an account?{' '}
+        <span onClick={() => setScreen('login')} className="font-semibold text-[#21326c] cursor-pointer underline underline-offset-2">
           Sign In
         </span>
       </p>
-      <button onClick={() => setScreen(‘role-pick’)}
+      <button onClick={() => setScreen('role-pick')}
         className="w-full text-center text-xs text-[#21326c]/35 hover:text-[#21326c] transition-colors">
         ← Back
       </button>
@@ -329,18 +329,18 @@ export function LoginModal({ open, onClose, onLogin }) {
   );
 
   const titles = {
-    ‘login’:         ‘Sign In to Lawnn’,
-    ‘role-pick’:     ‘Create an Account’,
-    ‘student-info’:  ‘Join as a Creative’,
-    ‘client-signup’: ‘Create a Client Account’,
+    'login':         'Sign In to Lawnn',
+    'role-pick':     'Create an Account',
+    'student-info':  'Join as a Creative',
+    'client-signup': 'Create a Client Account',
   };
 
   return (
     <Modal open={open} onClose={handleClose} title={titles[screen]}>
-      {screen === ‘login’         && screenLogin}
-      {screen === ‘role-pick’     && screenRolePick}
-      {screen === ‘student-info’  && screenStudentInfo}
-      {screen === ‘client-signup’ && screenClientSignup}
+      {screen === 'login'         && screenLogin}
+      {screen === 'role-pick'     && screenRolePick}
+      {screen === 'student-info'  && screenStudentInfo}
+      {screen === 'client-signup' && screenClientSignup}
     </Modal>
   );
 }
@@ -502,8 +502,8 @@ export function ChangePasswordModal({ open, onClose, onChanged }) {
 
   const submit = async () => {
     if (!currentPassword)            { setError('Enter your current password.'); return; }
-    if (!passwordValid(password))    { setError('Your new password doesn’t meet the requirements below.'); return; }
-    if (password !== confirm)        { setError('The new passwords don’t match.'); return; }
+    if (!passwordValid(password))    { setError('Your new password doesn't meet the requirements below.'); return; }
+    if (password !== confirm)        { setError('The new passwords don't match.'); return; }
     if (password === currentPassword){ setError('Your new password must be different from your current one.'); return; }
     setError(''); setLoading(true);
     try {
@@ -559,7 +559,7 @@ export function ChangePasswordModal({ open, onClose, onChanged }) {
                 onKeyDown={e => e.key === 'Enter' && submit()}
                 className={inputCls} />
               {confirm && confirm !== password && (
-                <p className="text-xs text-red-600 mt-1.5">Passwords don’t match yet.</p>
+                <p className="text-xs text-red-600 mt-1.5">Passwords don't match yet.</p>
               )}
             </div>
             {error && (
