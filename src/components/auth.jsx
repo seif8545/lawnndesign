@@ -502,8 +502,8 @@ export function ChangePasswordModal({ open, onClose, onChanged }) {
 
   const submit = async () => {
     if (!currentPassword)            { setError('Enter your current password.'); return; }
-    if (!passwordValid(password))    { setError('Your new password doesn't meet the requirements below.'); return; }
-    if (password !== confirm)        { setError('The new passwords don't match.'); return; }
+    if (!passwordValid(password))    { setError('Your new password doesn\'t meet the requirements below.'); return; }
+    if (password !== confirm)        { setError('The new passwords don\'t match.'); return; }
     if (password === currentPassword){ setError('Your new password must be different from your current one.'); return; }
     setError(''); setLoading(true);
     try {
