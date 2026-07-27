@@ -39,6 +39,8 @@ router.get('/', optionalAuth, async (req, res) => {
       user: { select: { id: true, name: true, initials: true, avatarColor: true, approved: true } },
       skills: true,
       portfolio: { orderBy: { sortOrder: 'asc' } },
+      education: true,
+      experience: true,
     },
     orderBy: { rating: 'desc' },
     take: 200,
