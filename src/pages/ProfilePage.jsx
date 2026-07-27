@@ -71,7 +71,15 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
 
   const saveEdit = () => {
     if (!talent) return; // Guard against null talent
-    onUpdateTalent({ ...talent, ...editDraft });
+    // Fold in a row the student typed but never committed with "Add entry" —
+    // otherwise it sits in newEdu/newExp and is silently dropped on save.
+    const education  = [...(editDraft.education  || [])];
+    const experience = [...(editDraft.experience || [])];
+    if (newEdu.degree && newEdu.school)  education.push({ ...newEdu });
+    if (newExp.role   && newExp.company) experience.push({ ...newExp });
+    onUpdateTalent({ ...talent, ...editDraft, education, experience });
+    setNewEdu({ degree: '', school: '', years: '' });
+    setNewExp({ role: '', company: '', years: '' });
     setShowEditModal(false);
   };
 
