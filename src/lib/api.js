@@ -1,7 +1,9 @@
+import * as safeStorage from './safeStorage.js'
+
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 function getToken() {
-  return localStorage.getItem('lawnn_token')
+  return safeStorage.getItem('lawnn_token')
 }
 
 // Fired when an authenticated request is rejected with 401 (session expired or
@@ -16,12 +18,12 @@ export function onUnauthorized(fn) {
 }
 
 export function setToken(token) {
-  localStorage.setItem('lawnn_token', token)
+  safeStorage.setItem('lawnn_token', token)
   handlingUnauthorized = false
 }
 
 export function clearToken() {
-  localStorage.removeItem('lawnn_token')
+  safeStorage.removeItem('lawnn_token')
 }
 
 async function request(path, options = {}) {

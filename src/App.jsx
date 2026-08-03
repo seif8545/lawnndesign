@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { auth as authApi, clearToken, feed as feedApi, marketplace as marketplaceApi, news as newsApi, notifications as notifApi, onUnauthorized, profiles, projects as projectsApi, settings as settingsApi } from './lib/api.js';
+import * as safeStorage from './lib/safeStorage.js';
 import { toast } from './lib/toast.js';
 import { connectSocket, disconnectSocket } from './lib/socket.js';
 import { TopNav } from './components/TopNav.jsx';
@@ -54,7 +55,7 @@ export default function App() {
       window.history.replaceState({}, '', url.toString());
       return;
     }
-    const stored = localStorage.getItem('lawnn_token');
+    const stored = safeStorage.getItem('lawnn_token');
     if (!stored) return;
     authApi.me()
       .then(({ user }) => handleLogin(user))
@@ -179,14 +180,14 @@ export default function App() {
   const handleLogin = user => {
     setCurrentUser(user);
     // Connect socket with the stored JWT
-    const token = localStorage.getItem('lawnn_token');
+    const token = safeStorage.getItem('lawnn_token');
     if (token) connectSocket(token);
     // Notifications load via the refreshNotifications effect once currentUser is set.
     // Students are prompted whenever their profile is incomplete — driven by the
     // completeness effect once talent profiles load (reset the session flag here).
     // Clients keep one-time, per-device dismissal.
     setOnboardingDismissed(false);
-    const dismissed = localStorage.getItem(`lawnn_onboarding_done_${user.id}`);
+    const dismissed = safeStorage.getItem(`lawnn_onboarding_done_${user.id}`);
     if (!dismissed && user.role === 'client') {
       setShowOnboarding(true);
     }
@@ -416,7 +417,7 @@ export default function App() {
           talents={talents}
           onUpdateTalent={handleUpdateTalent}
           onDone={() => {
-            localStorage.setItem(`lawnn_onboarding_done_${currentUser.id}`, '1');
+            safeStorage.setItem(`lawnn_onboarding_done_${currentUser.id}`, '1');
             setShowOnboarding(false);
             setOnboardingDismissed(true);
           }}

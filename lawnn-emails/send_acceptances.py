@@ -39,36 +39,15 @@ import requests   # pip install requests
 # 1) FULL STUDENTS — full access (feed + apply to jobs). (Name, email) pairs.
 # ─────────────────────────────────────────────────────────────────────────────
 FULL_STUDENTS = [
-    ("Dunya Salah Eldin",                    "doniasalah954@gmail.com"),
-    ("Sama Tarek Ali",                       "tsama5796@gmail.com"),
-    ("Nour Mohamed Fathy Hussein Elkhouly",  "nourelkhouly30@gmail.com"),
-    ("Layla Mohamed Fathallah",              "layla.mohamed@icloud.com"),
-    ("Radwa Ashraf Muhammad",                "armyb2555@gmail.com"),
-    ("Menna Allah Abdelmaged Mostafa",       "magedmenna940@gmail.com"),
-    ("Shahd Hany Mohamed",                   "shahd005hany@gmail.com"),
-    ("Basmala Walid Abd El Mawla",           "basmallah.kareem04@eng-st.cu.edu.eg"),
-    ("Menna Sameh Abd El Fattah Hassan",     "mennasamehx70@gmail.com"),
-    ("Philopateer Alfred",                   "philotiktok73@gmail.com"),
-    ("Malak Fouad Elsawaf",                  "malakelsawaf6683@gmail.com"),
-    ("Gina Ahmed Mostafa",                   "ginabeshto0@gmail.com"),
-    ("Tasneem Hesham",                       "tasneemhesham749@gmail.com"),
-    ("Habiba Ayman",                         "habibaayman024@gmail.com"),
-    ("Basmalla Fayez",                       "basmallahfayez@gmail.com"),
-    ("Monaya Gomaa",                         "monayagomaa95@gmail.com"),
+    ("Raneem elhoreny",                    "Raneemelhoreny7@gmail.com"),
+    ("Omima Mohamed Kamal",                       "Omimakamal71@gmail.com")
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2) COMMUNITY STUDENTS — community access only (no job applications yet).
 # ─────────────────────────────────────────────────────────────────────────────
-COMMUNITY_STUDENTS = [
-    ("Shaza Khaled Mohamed",                 "shaza.khaled32@gmail.com"),
-    ("Enas Mohamed Shaban Mohamed Ali",      "shabanenas509@gmail.com"),
-    ("Ledya Wael Safwat Ramses",             "ledya.wael_1124@f_arts.helwan.edu.eg"),
-    ("Hana Samir Abass Ali",                 "hanasamirabass23122004@gmail.com"),
-    ("Salma Khaled Talat",                   "salmakhaled267k@gmail.com"),
-    ("Radwa Samir Mohamed Idris",            "radwasamir133@gmail.com"),
-    ("Basmala Abdallah Nabawy",              "bosyrosy2004@gmail.com"),
-]
+COMMUNITY_STUDENTS = []
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3) Your live site (where the invite link opens). No trailing slash.
