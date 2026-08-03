@@ -38,7 +38,7 @@ function signToken(user) {
     // requireAuth re-reads the live account every request — so this only bounds
     // the raw-token-theft window.) Tune via JWT_EXPIRES_IN; raise it if more
     // frequent re-logins are a problem before a refresh-token flow exists.
-    { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
   )
 }
 

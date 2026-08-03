@@ -182,6 +182,17 @@ export default function App() {
     // Connect socket with the stored JWT
     const token = safeStorage.getItem('lawnn_token');
     if (token) connectSocket(token);
+    // The browser is blocking every persistent store (Brave "block all cookies",
+    // private windows, some webviews), so the session lives in memory only and
+    // dies on reload. Say so once, rather than appearing to log them out at
+    // random with no explanation.
+    if (!safeStorage.isPersistent()) {
+      toast.info(
+        "Your browser is blocking site storage, so you'll be signed out if you " +
+        'reload. Allow cookies for lawnndesign.com (in Brave: tap the lion icon ' +
+        '→ Shields down) to stay signed in.',
+      );
+    }
     // Notifications load via the refreshNotifications effect once currentUser is set.
     // Students are prompted whenever their profile is incomplete — driven by the
     // completeness effect once talent profiles load (reset the session flag here).
