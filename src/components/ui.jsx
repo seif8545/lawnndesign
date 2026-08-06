@@ -270,10 +270,15 @@ export function StarRating({ rating }) {
   );
 }
 
-export function PortfolioBlock({ color, label, height = 'medium', imageUrl, pdfUrl, pdfName }) {
+export function PortfolioBlock({ color, label, height = 'medium', imageUrl, pdfUrl, pdfName, onClick }) {
   const heights = { short: 'h-24', medium: 'h-36', tall: 'h-48' };
   return (
     <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      title={onClick && (imageUrl || pdfUrl) ? `View ${label}` : undefined}
       className={`portfolio-card ${heights[height]} rounded-xl flex items-end p-3 cursor-pointer overflow-hidden relative`}
       style={imageUrl
         ? { backgroundImage: `url("${encodeURI(imageUrl).replace(/"/g, '%22')}")`, backgroundSize: 'cover', backgroundPosition: 'center' }

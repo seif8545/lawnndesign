@@ -18,6 +18,7 @@ const KINDS = {
   portfolio:        { bucket: PUBLIC_BUCKET,  folder: 'portfolio',      types: [...IMAGE_TYPES, ...DOC_TYPES] },
   feed:             { bucket: PUBLIC_BUCKET,  folder: 'feed',           types: IMAGE_TYPES },
   avatar:           { bucket: PUBLIC_BUCKET,  folder: 'avatar',         types: IMAGE_TYPES },
+  cover:            { bucket: PUBLIC_BUCKET,  folder: 'cover',          types: IMAGE_TYPES },
   'job-attachment': { bucket: PUBLIC_BUCKET,  folder: 'job-attachment', types: [...IMAGE_TYPES, ...DOC_TYPES] },
   marketplace:      { bucket: PUBLIC_BUCKET,  folder: 'marketplace',    types: IMAGE_TYPES },
   site:             { bucket: PUBLIC_BUCKET,  folder: 'site',           types: IMAGE_TYPES },

@@ -26,6 +26,7 @@ export function mapApiProfile(p) {
     initials:     p.user.initials,
     avatarColor:  p.user.avatarColor,
     avatar:       p.avatar,
+    coverPhoto:   p.coverPhoto,
     bio:          p.bio || '',
     university:   p.university || '',
     dept:         p.dept || '',
@@ -200,6 +201,7 @@ export function talentToApiBody(t) {
     year:         t.year,
     isGrad:       t.isGrad,
     avatar:       t.avatar,
+    coverPhoto:   t.coverPhoto,
     skills:       t.tags || [],
     portfolio:    (t.portfolio || []).map(p => ({
       label:    p.label,

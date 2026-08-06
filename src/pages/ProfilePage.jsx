@@ -1,6 +1,6 @@
 import { toast } from '../lib/toast.js';
 import { useState } from 'react';
-import { Briefcase, Camera, ChevronLeft, File, FileImage, GraduationCap, Image as ImageIcon, Info, MessageSquare, Pen, Plus, Send, Upload, Wallet, X } from 'lucide-react';
+import { Briefcase, Camera, ChevronLeft, File, FileImage, GraduationCap, Image as ImageIcon, Info, MessageSquare, Pen, Plus, Search, Send, Upload, Wallet, X } from 'lucide-react';
 import { conversations as convApi, profiles, uploadFile } from '../lib/api.js';
 import { AvailabilityBadge, Modal, PortfolioBlock, SkillPicker, StarRating, VerifiedBadge } from '../components/ui.jsx';
 import { AVAILABILITY, PALETTE_COLORS } from '../lib/constants.js';
@@ -8,6 +8,9 @@ import { AVAILABILITY, PALETTE_COLORS } from '../lib/constants.js';
 export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
   const [showEditModal, setShowEditModal]   = useState(false);
   const [startingChat, setStartingChat]     = useState(false);
+  // Portfolio piece currently open in the full-size lightbox (null = closed).
+  // Shared by the public grid and the edit modal's thumbnail list.
+  const [preview, setPreview]               = useState(null);
 
   const handleMessageClick = async () => {
     if (!currentUser || !talent?.userId) return;
@@ -29,6 +32,7 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
   const [newEdu, setNewEdu]       = useState({ degree: '', school: '', years: '' });
   const [newExp, setNewExp]       = useState({ role: '', company: '', years: '' });
   const [newPortItem, setNewPortItem] = useState({ label: '', color: '#21326c', h: 'medium' });
+  const [coverUploading, setCoverUploading] = useState(false);
 
   const isOwnProfile = currentUser?.role === 'student' && currentUser?.id === talent?.userId;
 
@@ -42,6 +46,7 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
       experience: talent.experience.map(e => ({ ...e })),
       portfolio: talent.portfolio.map(p => ({ ...p })),
       avatar: talent.avatar || null,
+      coverPhoto: talent.coverPhoto || null,
     });
     setShowEditModal(true);
   };
@@ -69,17 +74,38 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
     }
   };
 
+  const blankPortItem = { label: '', color: '#21326c', h: 'medium' };
+
+  // Build a portfolio row from the "new item" draft. Shared by the Add-item
+  // button and the save-time fold-in so the two can't drift apart.
+  const draftPortItem = () => ({ id: `p${Date.now()}`, ...newPortItem, label: newPortItem.label.trim(), imageUrl: null });
+
+  const addPortfolioItem = () => {
+    if (!newPortItem.label.trim()) {
+      toast.error('Give the piece a label first, then click Add item.');
+      return;
+    }
+    setEditDraft(d => ({ ...d, portfolio: [...(d.portfolio || []), draftPortItem()] }));
+    setNewPortItem(blankPortItem);
+  };
+
   const saveEdit = () => {
     if (!talent) return; // Guard against null talent
     // Fold in a row the student typed but never committed with "Add entry" —
-    // otherwise it sits in newEdu/newExp and is silently dropped on save.
+    // otherwise it sits in newEdu/newExp/newPortItem and is silently dropped on
+    // save. The portfolio case bit real students: "Add item" is a small text
+    // link sitting directly above the big orange Save button, so typing a label
+    // and hitting Save is the obvious move — and it used to lose the item.
     const education  = [...(editDraft.education  || [])];
     const experience = [...(editDraft.experience || [])];
+    const portfolio  = [...(editDraft.portfolio  || [])];
     if (newEdu.degree && newEdu.school)  education.push({ ...newEdu });
     if (newExp.role   && newExp.company) experience.push({ ...newExp });
-    onUpdateTalent({ ...talent, ...editDraft, education, experience });
+    if (newPortItem.label.trim())        portfolio.push(draftPortItem());
+    onUpdateTalent({ ...talent, ...editDraft, education, experience, portfolio });
     setNewEdu({ degree: '', school: '', years: '' });
     setNewExp({ role: '', company: '', years: '' });
+    setNewPortItem(blankPortItem);
     setShowEditModal(false);
   };
 
@@ -98,8 +124,15 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
 
       {/* Hero */}
       <div className="bg-white rounded-2xl border border-[#21326c]/10 overflow-hidden mb-6">
-        {/* Cover — avatar is absolutely positioned to straddle the bottom edge */}
-        <div className="relative h-32 sm:h-44" style={{ background: `linear-gradient(135deg, ${talent.avatarColor}33, ${talent.avatarColor}88)` }}>
+        {/* Cover — avatar is absolutely positioned to straddle the bottom edge.
+            Falls back to the avatar-colour gradient when no cover is uploaded. */}
+        <div
+          className="relative h-32 sm:h-44 bg-center bg-cover"
+          style={talent.coverPhoto
+            ? { backgroundImage: `url("${encodeURI(talent.coverPhoto).replace(/"/g, '%22')}")` }
+            : { background: `linear-gradient(135deg, ${talent.avatarColor}33, ${talent.avatarColor}88)` }
+          }
+        >
           <div
             className="absolute bottom-0 left-6 translate-y-1/2 w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 border-white flex items-center justify-center text-white text-xl sm:text-2xl font-bold shadow-lg flex-shrink-0 z-10 overflow-hidden"
             style={talent.avatar ? {} : { background: talent.avatarColor }}
@@ -227,7 +260,8 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
           </h3>
           <div className="masonry-grid">
             {talent.portfolio.map((item, i) => (
-              <PortfolioBlock key={item.id || i} color={item.color} label={item.label} height={item.h} imageUrl={item.imageUrl} pdfUrl={item.pdfUrl} pdfName={item.pdfName} />
+              <PortfolioBlock key={item.id || i} color={item.color} label={item.label} height={item.h} imageUrl={item.imageUrl} pdfUrl={item.pdfUrl} pdfName={item.pdfName}
+                onClick={item.imageUrl || item.pdfUrl ? () => setPreview(item) : undefined} />
             ))}
           </div>
         </div>
@@ -278,6 +312,64 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Cover Photo — the wide banner behind the profile header. Optional;
+            without one the header keeps its avatar-colour gradient. */}
+        <div>
+          <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Cover Photo</label>
+          <div
+            className="relative h-28 sm:h-32 rounded-xl border-2 border-[#21326c]/15 overflow-hidden bg-center bg-cover"
+            style={editDraft.coverPhoto
+              ? { backgroundImage: `url("${encodeURI(editDraft.coverPhoto).replace(/"/g, '%22')}")` }
+              : { background: `linear-gradient(135deg, ${talent.avatarColor}33, ${talent.avatarColor}88)` }
+            }
+          >
+            {!editDraft.coverPhoto && (
+              <div className="absolute inset-0 flex items-center justify-center text-xs text-[#21326c]/50">
+                No cover photo yet
+              </div>
+            )}
+            {coverUploading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-xs font-semibold text-[#21326c]">
+                Uploading…
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-2">
+            <label className={`cursor-pointer flex items-center gap-2 px-4 py-2 rounded-xl border border-[#21326c]/20 text-sm font-semibold text-[#21326c] hover:bg-[#21326c]/5 transition-colors w-fit ${coverUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+              <ImageIcon size={14} /> {editDraft.coverPhoto ? 'Change Cover' : 'Upload Cover'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={coverUploading}
+                onChange={async e => {
+                  const file = e.target.files[0];
+                  e.target.value = ''; // let the same file be re-picked after a failure
+                  if (!file) return;
+                  setCoverUploading(true);
+                  try {
+                    const r = await uploadFile(file, 'cover');
+                    setEditDraft(d => ({ ...d, coverPhoto: r.url }));
+                  } catch (err) {
+                    toast.error(`Cover upload failed: ${err.message}`);
+                  } finally {
+                    setCoverUploading(false);
+                  }
+                }}
+              />
+            </label>
+            {editDraft.coverPhoto && (
+              <button
+                onClick={() => setEditDraft(d => ({ ...d, coverPhoto: null }))}
+                className="text-xs text-red-400 hover:text-red-600 transition-colors flex items-center gap-1"
+              >
+                <X size={10} /> Remove cover
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-[#21326c]/40 mt-1.5">Wide image works best — roughly 3:1. Max 5&nbsp;MB.</p>
         </div>
 
         {/* Bio */}
@@ -415,28 +507,50 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                       <File size={16} color="white" opacity={0.9} />
                     </div>
                   )}
-                  {item.imageUrl && (
+                  {/* Click the thumbnail to open the full-size viewer. This used
+                      to be a remove-image button covering the whole thumbnail,
+                      which made "look at my piece" delete it instead. Removing
+                      now lives next to the status line below. */}
+                  {(item.imageUrl || item.pdfUrl) && (
                     <button
-                      onClick={() => setEditDraft(d => ({ ...d, portfolio: d.portfolio.map(p => p.id === item.id ? { ...p, imageUrl: null } : p) }))}
-                      className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity"
-                      title="Remove image"
+                      onClick={() => setPreview(item)}
+                      className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity"
+                      title={`View ${item.label}`}
                     >
-                      <X size={12} color="white" />
+                      <Search size={12} color="white" />
                     </button>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[#21326c] font-medium truncate">{item.label}</p>
+                  <input
+                    type="text"
+                    value={item.label}
+                    onChange={e => setEditDraft(d => ({ ...d, portfolio: d.portfolio.map(p => p.id === item.id ? { ...p, label: e.target.value } : p) }))}
+                    placeholder="Untitled piece"
+                    aria-label="Piece title"
+                    className="w-full bg-transparent text-sm text-[#21326c] font-medium rounded-md px-1 -mx-1 py-0.5 border border-transparent hover:border-[#21326c]/15 focus:bg-white focus:border-[#21326c]/30 focus:ring-1 focus:ring-[#21326c]/20 focus:outline-none transition-colors placeholder:text-[#21326c]/30 placeholder:font-normal"
+                  />
                   {!item.imageUrl && !item.pdfUrl && (
                     <label className="text-xs text-[#21326c]/40 hover:text-[#21326c] cursor-pointer flex items-center gap-1 mt-0.5 transition-colors">
                       <Upload size={10} /> Upload photo or PDF
                       <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => handlePortfolioImageUpload(item.id, e.target.files[0])} />
                     </label>
                   )}
-                  {item.imageUrl && <p className="text-xs text-green-600 mt-0.5">Photo uploaded ✓</p>}
+                  {item.imageUrl && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <button onClick={() => setPreview(item)}
+                        className="text-xs text-green-600 hover:underline">Photo uploaded ✓</button>
+                      <button
+                        onClick={() => setEditDraft(d => ({ ...d, portfolio: d.portfolio.map(p => p.id === item.id ? { ...p, imageUrl: null } : p) }))}
+                        className="text-[#21326c]/30 hover:text-red-400 transition-colors flex-shrink-0"
+                        title="Remove photo"
+                      ><X size={10} /></button>
+                    </div>
+                  )}
                   {item.pdfUrl && (
                     <div className="flex items-center gap-1 mt-0.5">
-                      <p className="text-xs text-green-600 truncate max-w-[110px]">PDF: {item.pdfName}</p>
+                      <button onClick={() => setPreview(item)}
+                        className="text-xs text-green-600 truncate max-w-[110px] hover:underline">PDF: {item.pdfName}</button>
                       <button
                         onClick={() => setEditDraft(d => ({ ...d, portfolio: d.portfolio.map(p => p.id === item.id ? { ...p, pdfUrl: null, pdfName: null } : p) }))}
                         className="text-[#21326c]/30 hover:text-red-400 transition-colors flex-shrink-0"
@@ -464,7 +578,7 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
                 style={{ background: c, outline: newPortItem.color === c ? `3px solid ${c}` : 'none', outlineOffset: '2px' }} />
             ))}
           </div>
-          <button onClick={() => { if (newPortItem.label) { setEditDraft(d => ({ ...d, portfolio: [...(d.portfolio || []), { id: `p${Date.now()}`, ...newPortItem, imageUrl: null }] })); setNewPortItem({ label: '', color: '#21326c', h: 'medium' }); } }}
+          <button onClick={addPortfolioItem}
             className="text-xs font-semibold text-[#21326c] hover:opacity-70 flex items-center gap-1">
             <Plus size={12} /> Add item
           </button>
@@ -476,6 +590,30 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
           Save Profile
         </button>
       </div>
+    </Modal>
+
+    {/* Full-size viewer for a portfolio piece. Opened from the public grid and
+        from the thumbnails in the edit modal. */}
+    <Modal open={!!preview} onClose={() => setPreview(null)} title={preview?.label || 'Portfolio piece'} wide>
+      {preview?.imageUrl && (
+        <img src={preview.imageUrl} alt={preview.label}
+          className="w-full max-h-[75vh] object-contain rounded-xl bg-[#21326c]/5" />
+      )}
+      {preview?.pdfUrl && !preview?.imageUrl && (
+        <div className="space-y-3">
+          <object data={preview.pdfUrl} type="application/pdf"
+            className="w-full h-[70vh] rounded-xl bg-[#21326c]/5">
+            {/* Mobile browsers generally refuse to inline-render PDFs. */}
+            <p className="text-sm text-[#21326c]/70 p-4">
+              This browser can't display the PDF inline — use the link below to open it.
+            </p>
+          </object>
+          <a href={preview.pdfUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#21326c] hover:opacity-70">
+            <File size={14} /> Open {preview.pdfName || 'PDF'} in a new tab
+          </a>
+        </div>
+      )}
     </Modal>
     </>
   );

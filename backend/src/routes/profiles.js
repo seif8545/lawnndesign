@@ -115,7 +115,7 @@ router.patch('/:id', requireAuth, requireRole('student', 'admin'), async (req, r
   }
 
   const {
-    bio, availability, hourlyRate, university, dept, year, isGrad, avatar,
+    bio, availability, hourlyRate, university, dept, year, isGrad, avatar, coverPhoto,
     skills, portfolio, education, experience,
   } = req.body
 
@@ -131,6 +131,7 @@ router.patch('/:id', requireAuth, requireRole('student', 'admin'), async (req, r
       ...(year !== undefined && { year: nonNegativeInt(year) }),
       ...(isGrad !== undefined && { isGrad }),
       ...(avatar !== undefined && { avatar: safeUrl(avatar) }),
+      ...(coverPhoto !== undefined && { coverPhoto: safeUrl(coverPhoto) }),
     },
   })
 

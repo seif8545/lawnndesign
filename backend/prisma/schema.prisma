@@ -122,6 +122,7 @@ model Profile {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   avatar       String?      // URL to uploaded photo
+  coverPhoto   String?      // URL to the wide banner image behind the profile header
   bio          String?      @db.Text
   university   String?
   dept         String?
