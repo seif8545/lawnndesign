@@ -33,6 +33,7 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
   const [newExp, setNewExp]       = useState({ role: '', company: '', years: '' });
   const [newPortItem, setNewPortItem] = useState({ label: '', color: '#21326c', h: 'medium' });
   const [coverUploading, setCoverUploading] = useState(false);
+  const [portUploading, setPortUploading] = useState(0); // files still uploading
 
   const isOwnProfile = currentUser?.role === 'student' && currentUser?.id === talent?.userId;
 
@@ -71,6 +72,40 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
       }));
     } catch (e) {
       toast.error(`Upload failed: ${e.message}`);
+    }
+  };
+
+  // Add pieces file-first: pick images/PDFs and each becomes a portfolio item in
+  // one step, titled from the filename (the same pattern onboarding uses, which
+  // is why initial upload always felt easy and later editing didn't). Titles stay
+  // editable on each row afterwards.
+  const handleAddPortfolioFiles = async files => {
+    const list = Array.from(files || []);
+    if (!list.length) return;
+    setPortUploading(list.length);
+    const added = [];
+    for (const file of list) {
+      try {
+        const r = await uploadFile(file, 'portfolio');
+        const isPdf = file.type === 'application/pdf';
+        added.push({
+          // Date.now() alone collides inside a tight loop, so add a random suffix.
+          id: `p${Date.now()}${Math.random().toString(36).slice(2, 7)}`,
+          label: file.name.replace(/\.[^.]+$/, '').slice(0, 40),
+          color: '#21326c',
+          h: 'medium',
+          imageUrl: isPdf ? null : r.url,
+          pdfUrl: isPdf ? r.url : null,
+          pdfName: isPdf ? file.name : null,
+        });
+      } catch (e) {
+        toast.error(`${file.name}: ${e.message}`);
+      } finally {
+        setPortUploading(n => n - 1);
+      }
+    }
+    if (added.length) {
+      setEditDraft(d => ({ ...d, portfolio: [...(d.portfolio || []), ...added] }));
     }
   };
 
@@ -480,6 +515,29 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
         {/* Portfolio items */}
         <div>
           <label className="block text-xs font-semibold text-[#21326c] uppercase tracking-wider mb-2">Portfolio Items</label>
+
+          {/* Primary way to add work: pick the files, titles come from the
+              filenames and stay editable on each row below. */}
+          <label className={`block cursor-pointer rounded-xl border-2 border-dashed border-[#21326c]/25 py-4 px-3 mb-3 text-center hover:border-[#ff9044] hover:text-[#ff9044] text-[#21326c]/60 transition-colors ${portUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+            {portUploading > 0 ? (
+              <span className="text-sm font-semibold">Uploading {portUploading} file{portUploading !== 1 ? 's' : ''}…</span>
+            ) : (
+              <>
+                <Plus size={18} className="mx-auto" />
+                <span className="block text-sm font-semibold mt-1">Add images or PDFs</span>
+                <span className="block text-xs mt-0.5">Pick several at once — each becomes a piece you can rename below</span>
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              multiple
+              className="hidden"
+              disabled={portUploading > 0}
+              onChange={e => { const f = e.target.files; e.target.value = ''; handleAddPortfolioFiles(f); }}
+            />
+          </label>
+
           <div className="space-y-2 mb-3">
             {(editDraft.portfolio || []).map((item, i) => (
               <div key={item.id || i} className="flex items-center gap-3 p-2 bg-[#21326c]/5 rounded-xl">
@@ -563,6 +621,9 @@ export function ProfilePage({ talent, setView, currentUser, onUpdateTalent }) {
               </div>
             ))}
           </div>
+          <p className="text-xs text-[#21326c]/40 mb-2 pt-1 border-t border-[#21326c]/10">
+            Or add a blank placeholder to upload into later — pick its title, size and colour:
+          </p>
           <div className="flex gap-2 items-center mb-2">
             <input type="text" placeholder="Item label" value={newPortItem.label} onChange={e => setNewPortItem(n => ({ ...n, label: e.target.value }))}
               className="flex-1 px-3 py-2 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] placeholder:text-[#21326c]/40" />

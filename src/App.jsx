@@ -35,6 +35,10 @@ export default function App() {
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [inviteToken, setInviteToken] = useState(null);
   const [focusPost, setFocusPost] = useState(null);
+  // Lets a pending/rejected student step off the review screen to keep working on
+  // their own profile. Without it they'd have only a Log out button — which also
+  // made SECURITY_REVIEW C4's "revise per the feedback and resubmit" impossible.
+  const [editingWhilePending, setEditingWhilePending] = useState(false);
 
   // First-load: detect an invite token in the URL, otherwise hydrate from stored JWT.
   useEffect(() => {
@@ -215,6 +219,7 @@ export default function App() {
     setNotifications([]);
     setShowOnboarding(false);
     setOnboardingDismissed(false);
+    setEditingWhilePending(false); // don't carry this into the next session
   };
 
   // Auto-logout when the API reports an expired/invalid session (401 on an
@@ -356,6 +361,35 @@ export default function App() {
     && !currentUser?.mustChangePassword
     && onboardingComplete;
 
+  // While pending, the student can still work on their own profile — add or remove
+  // portfolio pieces, rename them, update bio/skills. They stay walled off from the
+  // feed, directory and job board (no TopNav here), and the backend keeps enforcing
+  // the apply gate independently.
+  if (pendingApproval && editingWhilePending) {
+    return (
+      <div className="min-h-screen" style={{ background: '#fffcf4' }}>
+        <Toaster />
+        <div className="px-4 sm:px-6 py-3 text-sm flex flex-wrap items-center justify-between gap-3" style={{ background: '#ff904422' }}>
+          <span className="text-[#21326c]">
+            <strong>Under review.</strong> You can keep updating your portfolio — we'll see the latest version.
+          </span>
+          <button
+            onClick={() => setEditingWhilePending(false)}
+            className="font-semibold text-[#21326c] hover:opacity-70 underline whitespace-nowrap"
+          >
+            Done for now
+          </button>
+        </div>
+        <ProfilePage
+          talent={myTalent}
+          setView={() => setEditingWhilePending(false)}
+          currentUser={currentUser}
+          onUpdateTalent={handleUpdateTalent}
+        />
+      </div>
+    );
+  }
+
   if (pendingApproval) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center" style={{ background: '#fffcf4' }}>
@@ -368,7 +402,14 @@ export default function App() {
           <p className="text-sm text-[#21326c]/70 leading-relaxed mb-6">
             Thanks {currentUser?.name?.split(' ')[0] || 'there'}! The Lawnn team is reviewing your profile and portfolio. Once you're approved you'll appear in the talent directory and be able to apply to jobs — we'll email you as soon as you're in.
           </p>
-          <button onClick={handleLogout} className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90" style={{ background: '#21326c' }}>
+          <button
+            onClick={() => setEditingWhilePending(true)}
+            className="w-full py-3 rounded-xl font-semibold text-white transition-all hover:opacity-90 mb-3"
+            style={{ background: '#ff9044' }}
+          >
+            Update my profile &amp; portfolio
+          </button>
+          <button onClick={handleLogout} className="w-full py-3 rounded-xl font-semibold text-[#21326c] border border-[#21326c]/20 transition-all hover:bg-[#21326c]/5">
             Log out
           </button>
         </div>
