@@ -5,7 +5,7 @@ import prisma from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/requireAuth.js'
 import { normalizeEmail, validatePassword, generatePassword, clampText } from '../lib/sanitize.js'
 import { notify } from '../lib/notify.js'
-import { emailUser, escapeHtml as esc, SITE_URL } from '../lib/email.js'
+import { emailUser, emailEnabled, escapeHtml as esc, SITE_URL } from '../lib/email.js'
 import { runJobDigest } from '../lib/jobDigest.js'
 
 const router = Router()
@@ -13,7 +13,9 @@ const router = Router()
 // All admin routes require auth + admin role
 router.use(requireAuth, requireRole('admin'))
 
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+// 14 days, not 7: the original 7-day batch (Jul 2026) expired unclicked for 18
+// of 21 students. HANDOFF §8 flags the short window as a real risk for stragglers.
+const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000 // 14 days
 
 function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex')
@@ -28,10 +30,17 @@ function buildInviteUrl(token) {
 }
 
 // ── POST /admin/students ──────────────────────────────────────────────────────
-// Invite a new student. Admin does NOT set the password — the student does,
-// via the one-time setup link returned in the response.
+// Accept a student: creates the account + a one-time setup link, and emails them
+// the acceptance message (same flow as lawnn-emails/send_acceptances.py, but for
+// one person at a time from the admin panel). Admin never sets the password.
+//
+// `communityOnly: true` = community tier — can sign in, build a profile, comment
+// and engage, but cannot apply to jobs yet.
+//
+// The invite URL is also returned so the admin can copy it manually if Brevo
+// isn't configured or the send fails.
 router.post('/students', async (req, res) => {
-  const { university, dept, year, isGrad = false } = req.body
+  const { university, dept, year, isGrad = false, communityOnly = false } = req.body
   const name = clampText(req.body.name, 120)
   const email = normalizeEmail(req.body.email)
 
@@ -60,6 +69,7 @@ router.post('/students', async (req, res) => {
       name,
       role: 'student',
       initials,
+      communityOnly: Boolean(communityOnly),
       profile: {
         create: {
           university: university || '',
@@ -75,11 +85,47 @@ router.post('/students', async (req, res) => {
     include: { profile: true },
   })
 
+  const inviteUrl = buildInviteUrl(rawToken)
+  const first = esc(name.split(' ')[0] || 'there')
+  const days = Math.round(INVITE_TTL_MS / (24 * 60 * 60 * 1000))
+
+  // Same warmth as send_acceptances.py, in the shared branded layout. Every
+  // dynamic value goes through esc() — C3 in SECURITY_REVIEW.
+  const bodyHtml = communityOnly
+    ? `<p>Hi ${first},</p>
+       <p>We reviewed your work samples and we see so much potential in what you do. We are
+          thrilled to officially welcome you to Lawnn!</p>
+       <p>For now your account is set up for <strong>community access</strong>. You won't be able
+          to take on client work just yet, but you get full access to our resources, guides and
+          tools to help you level up and build a standout portfolio.</p>
+       <p>Once your portfolio reaches the standard needed for professional client projects, we'll
+          unlock your ability to start freelancing and making money.</p>
+       <p>Set up your account below to get started. This link is valid for ${days} days.</p>`
+    : `<p>Hi ${first},</p>
+       <p>We spent time looking through your portfolio, and we absolutely loved your work. We are
+          so thrilled to officially welcome you to the Lawnn community!</p>
+       <p>There's just one step left — set up your account below to build out your profile and get
+          full access to our community resources.</p>
+       <p>This link is valid for ${days} days.</p>`
+
+  await emailUser(user.id, {
+    subject: communityOnly
+      ? 'Welcome to the Lawnn community! 🎉'
+      : 'You are officially in! Welcome to Lawnn 🎉',
+    heading: communityOnly ? 'Welcome to Lawnn' : "You're in — welcome to Lawnn",
+    bodyHtml,
+    cta: { label: 'Set up your account', url: inviteUrl },
+  })
+
   const { password: _pw, ...safeUser } = user
   return res.status(201).json({
     user: safeUser,
-    inviteUrl: buildInviteUrl(rawToken),
+    inviteUrl,
     expiresAt: expiresAt.toISOString(),
+    // emailUser swallows its own failures by design, so we can't promise
+    // delivery — but we can tell the admin whether sending was even configured,
+    // which decides if they need to copy the link manually.
+    emailSent: emailEnabled(),
   })
 })
 

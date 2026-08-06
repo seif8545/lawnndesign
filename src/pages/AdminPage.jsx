@@ -56,16 +56,22 @@ export function PendingSection({ title, icon: Icon, color, items, onApprove, onR
   );
 }
 
+// No password field: the student sets their own via the emailed invite link.
+const BLANK_STUDENT_FORM = {
+  name: '', email: '', communityOnly: false, university: '', dept: '', year: '',
+};
+
 export function AdminUsersTab() {
   const [section, setSection]         = useState('students');
   const [students, setStudents]       = useState([]);
   const [clients, setClients]         = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [showCreate, setShowCreate]   = useState(false);
-  const [form, setForm]               = useState({ name: '', email: '', password: '', university: '', dept: '', year: '' });
+  const [form, setForm]               = useState(BLANK_STUDENT_FORM);
   const [creating, setCreating]       = useState(false);
   const [createError, setCreateError] = useState('');
-  const [createSuccess, setCreateSuccess] = useState('');
+  // { user, inviteUrl, expiresAt, emailSent } from POST /admin/students
+  const [createResult, setCreateResult] = useState(null);
 
   // Bulk / individual add-by-email
   const [bulkEmails, setBulkEmails]   = useState('');
@@ -86,15 +92,25 @@ export function AdminUsersTab() {
     ]).finally(() => setLoadingList(false));
   }, []);
 
+  // Accept a student: creates the account and emails them the acceptance +
+  // set-password link. No password is set here — the student chooses their own
+  // via the invite link, same as the send_acceptances.py flow.
   const handleCreate = async () => {
-    if (!form.name || !form.email || !form.password) { setCreateError('Name, email and password are required'); return; }
+    if (!form.name.trim() || !form.email.trim()) { setCreateError('Name and email are required'); return; }
     setCreating(true); setCreateError('');
     try {
-      const student = await adminApi.createStudent({ ...form, year: form.year ? parseInt(form.year) : undefined });
-      setStudents(s => [student, ...s]);
-      setCreateSuccess(`Account created for ${student.name}. Share these credentials with them: ${form.email} / ${form.password}`);
-      setForm({ name: '', email: '', password: '', university: '', dept: '', year: '' });
-      setTimeout(() => { setCreateSuccess(''); setShowCreate(false); }, 6000);
+      const res = await adminApi.createStudent({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        communityOnly: form.communityOnly,
+        university: form.university || undefined,
+        dept: form.dept || undefined,
+        year: form.year ? parseInt(form.year) : undefined,
+      });
+      // The route returns { user, inviteUrl, expiresAt, emailSent }.
+      if (res.user) setStudents(s => [res.user, ...s]);
+      setCreateResult(res);
+      setForm(BLANK_STUDENT_FORM);
     } catch (e) {
       setCreateError(e.message);
     } finally {
@@ -249,32 +265,74 @@ export function AdminUsersTab() {
             <Send size={14} /> {digestBusy ? 'Sending…' : 'Send job digest'}
           </button>
           <button
-            onClick={() => { setShowCreate(true); setCreateError(''); setCreateSuccess(''); }}
+            onClick={() => { setShowCreate(true); setCreateError(''); setCreateResult(null); }}
             className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-all"
             style={{ background: '#ff9044' }}
           >
-            <Plus size={14} /> Create Student Account
+            <Plus size={14} /> Accept a Student
           </button>
         </div>
       </div>
 
       {/* Create modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create Student Account" wide>
-        {createSuccess ? (
-          <div className="py-6 text-center space-y-3">
-            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto">
-              <CheckCircle size={28} className="text-green-500" />
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Accept a Student" wide>
+        {createResult ? (
+          <div className="py-4 space-y-4">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mx-auto">
+                <CheckCircle size={28} className="text-green-500" />
+              </div>
+              <p className="font-semibold text-[#21326c]">
+                {createResult.emailSent
+                  ? `Acceptance email sent to ${createResult.user?.name || 'them'}`
+                  : `Account created for ${createResult.user?.name || 'them'}`}
+              </p>
+              <p className="text-xs text-[#21326c]/60">
+                {createResult.emailSent
+                  ? 'They can set their password from the link in that email.'
+                  : 'Email sending is not configured on the server — send them the link below yourself.'}
+              </p>
             </div>
-            <p className="font-semibold text-[#21326c]">Account created!</p>
-            <div className="text-xs text-left bg-[#21326c]/5 rounded-xl p-4 leading-relaxed text-[#21326c] break-all">
-              {createSuccess}
+
+            <div className={`rounded-xl p-3 text-xs leading-relaxed border ${createResult.emailSent ? 'border-[#21326c]/15 bg-[#21326c]/5' : 'border-amber-300 bg-amber-50'}`}>
+              <p className="font-semibold text-[#21326c] mb-1">Set-up link{createResult.emailSent ? ' (backup copy)' : ''}</p>
+              <p className="text-[#21326c] break-all font-mono" style={{ fontSize: '11px' }}>{createResult.inviteUrl}</p>
+              <div className="flex items-center gap-3 mt-2">
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(createResult.inviteUrl); toast.success('Link copied'); }}
+                  className="font-semibold text-[#21326c] hover:opacity-70 underline"
+                >
+                  Copy link
+                </button>
+                {createResult.expiresAt && (
+                  <span className="text-[#21326c]/50">
+                    Expires {new Date(createResult.expiresAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
             </div>
-            <p className="text-xs text-[#21326c]/50">This message will close automatically.</p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setCreateResult(null); setCreateError(''); }}
+                className="flex-1 py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all"
+                style={{ background: '#ff9044' }}
+              >
+                Accept another
+              </button>
+              <button
+                onClick={() => { setCreateResult(null); setShowCreate(false); }}
+                className="flex-1 py-3 rounded-xl font-semibold text-[#21326c] border border-[#21326c]/20 hover:bg-[#21326c]/5 transition-all"
+              >
+                Done
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="rounded-xl p-3 text-xs text-[#21326c] leading-relaxed border border-[#21326c]/20" style={{ background: '#21326c08' }}>
-              Create an account for a student whose Google Form application you've accepted. Share the email and password with them directly — they'll be prompted to complete their profile on first login.
+              Accept a student whose application you've approved. They'll be emailed a welcome
+              message with a one-time link to set their own password — you don't set one for them.
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
@@ -290,10 +348,27 @@ export function AdminUsersTab() {
                   className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
               </div>
               <div className="col-span-2">
-                <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Temporary Password *</label>
-                <input type="text" placeholder="They can change this after signing in" value={form.password}
-                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-[#21326c]/20 text-[#21326c] text-sm focus:ring-2 focus:ring-[#21326c] transition-all placeholder:text-[#21326c]/40" />
+                <label className="block text-sm font-semibold text-[#21326c] mb-1.5">Access tier *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: false, label: 'Full access', hint: 'Can build a profile and apply to jobs' },
+                    { value: true,  label: 'Community',   hint: 'Can engage, but not apply to jobs yet' },
+                  ].map(opt => (
+                    <button
+                      key={String(opt.value)}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, communityOnly: opt.value }))}
+                      className={`text-left px-3 py-2.5 rounded-xl border transition-colors ${
+                        form.communityOnly === opt.value
+                          ? 'border-[#ff9044] bg-[#ff9044]/10'
+                          : 'border-[#21326c]/20 hover:bg-[#21326c]/5'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-[#21326c]">{opt.label}</span>
+                      <span className="block text-xs text-[#21326c]/50 leading-snug mt-0.5">{opt.hint}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-[#21326c] mb-1.5">University</label>
@@ -315,10 +390,10 @@ export function AdminUsersTab() {
               </div>
             </div>
             {createError && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{createError}</p>}
-            <button onClick={handleCreate} disabled={creating || !form.name || !form.email || !form.password}
+            <button onClick={handleCreate} disabled={creating || !form.name.trim() || !form.email.trim()}
               className="w-full py-3 rounded-xl font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50"
               style={{ background: '#ff9044' }}>
-              {creating ? 'Creating…' : 'Create Account & Copy Credentials'}
+              {creating ? 'Sending…' : 'Accept & Send Invite'}
             </button>
           </div>
         )}
